@@ -126,15 +126,35 @@ nonisolated enum AircraftNaming {
 
     // MARK: - Bundled DOC 8643 table
 
+    /// FAA wingspan / length in FEET for a designator, when the bundled
+    /// table carries them (~15% of designators). Either half may be nil.
+    struct DimensionsFeet: Equatable, Sendable {
+        let wingspan: Double?
+        let length: Double?
+    }
+
     /// designator → canonical name + type. Decoded once on first touch.
     /// Missing/corrupt resource degrades to an empty table — every
     /// lookup falls through to the string path; never crashes.
-    static let table: [String: CanonicalName] = {
+    static let table: [String: CanonicalName] = bundled.names
+
+    /// FAA wingspan / length (feet) for an ICAO typecode, nil when the
+    /// bundled table has neither. Feeds the card back's specs fallback
+    /// (TypeInfoStore) when Wikidata lacks the numbers.
+    static func dimensionsFeet(forTypecode typecode: String?) -> DimensionsFeet? {
+        guard let code = typecode?.trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased().nonEmpty else { return nil }
+        return bundled.dimensions[code]
+    }
+
+    /// The one decode of AircraftTypes.json, split into the name table and
+    /// the (sparser) dimensions table so the file is parsed only once.
+    private static let bundled: (names: [String: CanonicalName], dimensions: [String: DimensionsFeet]) = {
         guard let url = Bundle.main.url(forResource: "AircraftTypes", withExtension: "json"),
               let data = try? Data(contentsOf: url),
               let raw = try? JSONDecoder().decode([String: Entry].self, from: data)
-        else { return [:] }
-        return raw.mapValues {
+        else { return ([:], [:]) }
+        let names = raw.mapValues {
             CanonicalName(
                 make: $0.make,
                 model: $0.model,
@@ -142,6 +162,11 @@ nonisolated enum AircraftNaming {
                 rarity: $0.rarity.flatMap { Rarity(rawValue: $0) }
             )
         }
+        let dimensions = raw.compactMapValues { e -> DimensionsFeet? in
+            guard e.wingspanFt != nil || e.lengthFt != nil else { return nil }
+            return DimensionsFeet(wingspan: e.wingspanFt, length: e.lengthFt)
+        }
+        return (names, dimensions)
     }()
 
     private struct Entry: Decodable {
@@ -153,6 +178,9 @@ nonisolated enum AircraftNaming {
         /// Activity-rarity tier string. Optional for back-compat with
         /// JSON entries regenerated before this field was added.
         let rarity: String?
+        /// FAA aircraft characteristics, feet. Present on a subset only.
+        let wingspanFt: Double?
+        let lengthFt: Double?
     }
 
     // MARK: - Fallback: make

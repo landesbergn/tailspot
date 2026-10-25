@@ -190,7 +190,9 @@ struct SettingsScreen: View {
                           url: URL(string: "https://tailspot.app/attributions.html")!)
 
                 LabeledContent("Live aircraft data", value: "adsb.lol · adsb.fi")
-                LabeledContent("Photos", value: "Planespotters.net")
+                LabeledContent("Photos", value: "Planespotters.net · Wikimedia Commons")
+                // The card backs (2026-10-25): Wikipedia summaries + Wikidata specs.
+                LabeledContent("Aircraft info", value: "Wikipedia · Wikidata")
 
             } header: {
                 Text("ABOUT")

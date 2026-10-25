@@ -1,0 +1,3729 @@
+{
+  "entries": {
+    "f717": {
+      "entryId": "f717",
+      "firstFlightYear": 1998,
+      "lengthMeters": 37.8,
+      "numberBuilt": 156,
+      "photo": {
+        "artist": "Anna Zvereva from Tallinn, Estonia",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/d/d2/Delta_Air_Lines%2C_N991AT%2C_Boeing_717-23S_%2849593115578%29.jpg/960px-Delta_Air_Lines%2C_N991AT%2C_Boeing_717-23S_%2849593115578%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Delta_Air_Lines,_N991AT,_Boeing_717-23S_(49593115578).jpg"
+      },
+      "wikidataId": "Q6401",
+      "wikipediaTitle": "Boeing 717",
+      "wingspanMeters": 28.47
+    },
+    "f737-600": {
+      "entryId": "f737-600",
+      "photo": {
+        "artist": "Brorsson",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c6/SAS_Scandinavian_Airlines_Boeing_737-800_%28LN-RRJ%29_taking_off_from_Stockholm_-_Arlanda_Airport.jpg/960px-SAS_Scandinavian_Airlines_Boeing_737-800_%28LN-RRJ%29_taking_off_from_Stockholm_-_Arlanda_Airport.jpg",
+        "license": "CC BY-SA 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:SAS_Scandinavian_Airlines_Boeing_737-800_(LN-RRJ)_taking_off_from_Stockholm_-_Arlanda_Airport.jpg"
+      },
+      "wikidataId": "Q1084919",
+      "wikipediaTitle": "Boeing 737 Next Generation"
+    },
+    "f737-700": {
+      "entryId": "f737-700",
+      "photo": {
+        "artist": "Brorsson",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c6/SAS_Scandinavian_Airlines_Boeing_737-800_%28LN-RRJ%29_taking_off_from_Stockholm_-_Arlanda_Airport.jpg/960px-SAS_Scandinavian_Airlines_Boeing_737-800_%28LN-RRJ%29_taking_off_from_Stockholm_-_Arlanda_Airport.jpg",
+        "license": "CC BY-SA 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:SAS_Scandinavian_Airlines_Boeing_737-800_(LN-RRJ)_taking_off_from_Stockholm_-_Arlanda_Airport.jpg"
+      },
+      "wikidataId": "Q1084919",
+      "wikipediaTitle": "Boeing 737 Next Generation"
+    },
+    "f737-800": {
+      "entryId": "f737-800",
+      "photo": {
+        "artist": "Brorsson",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c6/SAS_Scandinavian_Airlines_Boeing_737-800_%28LN-RRJ%29_taking_off_from_Stockholm_-_Arlanda_Airport.jpg/960px-SAS_Scandinavian_Airlines_Boeing_737-800_%28LN-RRJ%29_taking_off_from_Stockholm_-_Arlanda_Airport.jpg",
+        "license": "CC BY-SA 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:SAS_Scandinavian_Airlines_Boeing_737-800_(LN-RRJ)_taking_off_from_Stockholm_-_Arlanda_Airport.jpg"
+      },
+      "wikidataId": "Q1084919",
+      "wikipediaTitle": "Boeing 737 Next Generation"
+    },
+    "f737-900": {
+      "entryId": "f737-900",
+      "photo": {
+        "artist": "Brorsson",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c6/SAS_Scandinavian_Airlines_Boeing_737-800_%28LN-RRJ%29_taking_off_from_Stockholm_-_Arlanda_Airport.jpg/960px-SAS_Scandinavian_Airlines_Boeing_737-800_%28LN-RRJ%29_taking_off_from_Stockholm_-_Arlanda_Airport.jpg",
+        "license": "CC BY-SA 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:SAS_Scandinavian_Airlines_Boeing_737-800_(LN-RRJ)_taking_off_from_Stockholm_-_Arlanda_Airport.jpg"
+      },
+      "wikidataId": "Q1084919",
+      "wikipediaTitle": "Boeing 737 Next Generation"
+    },
+    "f737-classic": {
+      "entryId": "f737-classic",
+      "firstFlightYear": 1984,
+      "numberBuilt": 1988,
+      "photo": {
+        "artist": "Dylan Ashe from San Jose, USA",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/5/5b/Classic_Colors_Southwest_Airlines_N648SW_Boeing_737-3H4_SJC.jpg/960px-Classic_Colors_Southwest_Airlines_N648SW_Boeing_737-3H4_SJC.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Classic_Colors_Southwest_Airlines_N648SW_Boeing_737-3H4_SJC.jpg"
+      },
+      "wikidataId": "Q2355950",
+      "wikipediaTitle": "Boeing 737 Classic"
+    },
+    "f737-max10": {
+      "entryId": "f737-max10",
+      "photo": {
+        "artist": "Mark Harkin",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/d/d9/C-FSJJ_%2843123199145%29.jpg/960px-C-FSJJ_%2843123199145%29.jpg",
+        "license": "CC BY 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:C-FSJJ_(43123199145).jpg"
+      },
+      "wikidataId": "Q139289",
+      "wikipediaTitle": "Boeing 737 MAX"
+    },
+    "f737-max8": {
+      "entryId": "f737-max8",
+      "photo": {
+        "artist": "Mark Harkin",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/d/d9/C-FSJJ_%2843123199145%29.jpg/960px-C-FSJJ_%2843123199145%29.jpg",
+        "license": "CC BY 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:C-FSJJ_(43123199145).jpg"
+      },
+      "wikidataId": "Q139289",
+      "wikipediaTitle": "Boeing 737 MAX"
+    },
+    "f737-max9": {
+      "entryId": "f737-max9",
+      "photo": {
+        "artist": "Mark Harkin",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/d/d9/C-FSJJ_%2843123199145%29.jpg/960px-C-FSJJ_%2843123199145%29.jpg",
+        "license": "CC BY 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:C-FSJJ_(43123199145).jpg"
+      },
+      "wikidataId": "Q139289",
+      "wikipediaTitle": "Boeing 737 MAX"
+    },
+    "f747-400": {
+      "entryId": "f747-400",
+      "firstFlightYear": 1988,
+      "lengthMeters": 70.66,
+      "numberBuilt": 694,
+      "photo": {
+        "artist": "Adrian Pingstone",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f3/Ba_b747-400_g-bnle_arp.jpg/960px-Ba_b747-400_g-bnle_arp.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Ba_b747-400_g-bnle_arp.jpg"
+      },
+      "wikidataId": "Q906937",
+      "wikipediaTitle": "Boeing 747-400",
+      "wingspanMeters": 64.44
+    },
+    "f747-8": {
+      "entryId": "f747-8",
+      "firstFlightYear": 2010,
+      "numberBuilt": 110,
+      "photo": {
+        "artist": "Kambui",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/b8/Lufthansa_Boeing_747-830_D-ABYL_%22Hessen%22_%2829613598941%29.jpg/960px-Lufthansa_Boeing_747-830_D-ABYL_%22Hessen%22_%2829613598941%29.jpg",
+        "license": "CC BY 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Lufthansa_Boeing_747-830_D-ABYL_%22Hessen%22_(29613598941).jpg"
+      },
+      "wikidataId": "Q8791",
+      "wikipediaTitle": "Boeing 747-8",
+      "wingspanMeters": 68.5
+    },
+    "f747-sp": {
+      "entryId": "f747-sp",
+      "firstFlightYear": 1975,
+      "numberBuilt": 45,
+      "photo": {
+        "artist": "Arpingstone",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/78/Bahrain.royal.flight.b747sp-21.a9c-hmh.arp.jpg/960px-Bahrain.royal.flight.b747sp-21.a9c-hmh.arp.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Bahrain.royal.flight.b747sp-21.a9c-hmh.arp.jpg"
+      },
+      "wikidataId": "Q2421517",
+      "wikipediaTitle": "Boeing 747SP"
+    },
+    "f757-200": {
+      "entryId": "f757-200",
+      "photo": {
+        "artist": "Dylan Ashe from San Jose, USA",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c8/American_Airlines_Boeing_757-200_N605AA_SJC.jpg/960px-American_Airlines_Boeing_757-200_N605AA_SJC.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:American_Airlines_Boeing_757-200_N605AA_SJC.jpg"
+      },
+      "wikidataId": "Q6418",
+      "wikipediaTitle": "Boeing 757"
+    },
+    "f757-300": {
+      "entryId": "f757-300",
+      "photo": {
+        "artist": "Dylan Ashe from San Jose, USA",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c8/American_Airlines_Boeing_757-200_N605AA_SJC.jpg/960px-American_Airlines_Boeing_757-200_N605AA_SJC.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:American_Airlines_Boeing_757-200_N605AA_SJC.jpg"
+      },
+      "wikidataId": "Q6418",
+      "wikipediaTitle": "Boeing 757"
+    },
+    "f767-200": {
+      "entryId": "f767-200",
+      "photo": {
+        "artist": "Richard Snyder from San Jose, CA, United States of America / Altair78",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/43/Delta_Air_Lines_B767-332_N130DL.jpg/960px-Delta_Air_Lines_B767-332_N130DL.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Delta_Air_Lines_B767-332_N130DL.jpg"
+      },
+      "wikidataId": "Q6423",
+      "wikipediaTitle": "Boeing 767"
+    },
+    "f767-300": {
+      "entryId": "f767-300",
+      "photo": {
+        "artist": "Richard Snyder from San Jose, CA, United States of America / Altair78",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/43/Delta_Air_Lines_B767-332_N130DL.jpg/960px-Delta_Air_Lines_B767-332_N130DL.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Delta_Air_Lines_B767-332_N130DL.jpg"
+      },
+      "wikidataId": "Q6423",
+      "wikipediaTitle": "Boeing 767"
+    },
+    "f767-400": {
+      "entryId": "f767-400",
+      "photo": {
+        "artist": "Richard Snyder from San Jose, CA, United States of America / Altair78",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/43/Delta_Air_Lines_B767-332_N130DL.jpg/960px-Delta_Air_Lines_B767-332_N130DL.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Delta_Air_Lines_B767-332_N130DL.jpg"
+      },
+      "wikidataId": "Q6423",
+      "wikipediaTitle": "Boeing 767"
+    },
+    "f777-200": {
+      "entryId": "f777-200",
+      "photo": {
+        "artist": "Aero Icarus from Zürich, Switzerland",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/3c/Cathay_Pacific_Boeing_777-200%3B_B-HNL%40HKG.jpg/960px-Cathay_Pacific_Boeing_777-200%3B_B-HNL%40HKG.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Cathay_Pacific_Boeing_777-200;_B-HNL@HKG.jpg"
+      },
+      "wikidataId": "Q6425",
+      "wikipediaTitle": "Boeing 777"
+    },
+    "f777-200lr": {
+      "entryId": "f777-200lr",
+      "photo": {
+        "artist": "Aero Icarus from Zürich, Switzerland",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/3c/Cathay_Pacific_Boeing_777-200%3B_B-HNL%40HKG.jpg/960px-Cathay_Pacific_Boeing_777-200%3B_B-HNL%40HKG.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Cathay_Pacific_Boeing_777-200;_B-HNL@HKG.jpg"
+      },
+      "wikidataId": "Q6425",
+      "wikipediaTitle": "Boeing 777"
+    },
+    "f777-300": {
+      "entryId": "f777-300",
+      "photo": {
+        "artist": "Aero Icarus from Zürich, Switzerland",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/3c/Cathay_Pacific_Boeing_777-200%3B_B-HNL%40HKG.jpg/960px-Cathay_Pacific_Boeing_777-200%3B_B-HNL%40HKG.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Cathay_Pacific_Boeing_777-200;_B-HNL@HKG.jpg"
+      },
+      "wikidataId": "Q6425",
+      "wikipediaTitle": "Boeing 777"
+    },
+    "f777-300er": {
+      "entryId": "f777-300er",
+      "photo": {
+        "artist": "Aero Icarus from Zürich, Switzerland",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/3c/Cathay_Pacific_Boeing_777-200%3B_B-HNL%40HKG.jpg/960px-Cathay_Pacific_Boeing_777-200%3B_B-HNL%40HKG.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Cathay_Pacific_Boeing_777-200;_B-HNL@HKG.jpg"
+      },
+      "wikidataId": "Q6425",
+      "wikipediaTitle": "Boeing 777"
+    },
+    "f777-9": {
+      "entryId": "f777-9",
+      "firstFlightYear": 2020,
+      "numberBuilt": 2,
+      "photo": {
+        "artist": "Dan Nevill from Seattle, WA, United States",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/37/777X_Roll-Out_%2840407373023%29_%28cropped%29.jpg/960px-777X_Roll-Out_%2840407373023%29_%28cropped%29.jpg",
+        "license": "CC BY 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:777X_Roll-Out_(40407373023)_(cropped).jpg"
+      },
+      "wikidataId": "Q17452796",
+      "wikipediaTitle": "Boeing 777X",
+      "wingspanMeters": 71.8
+    },
+    "f787-10": {
+      "entryId": "f787-10",
+      "photo": {
+        "artist": "Masakatsu Ukon",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/ff/All_Nippon_Airways%2C_Boeing_787-8_JA828A_NRT_%2823661189691%29.jpg/960px-All_Nippon_Airways%2C_Boeing_787-8_JA828A_NRT_%2823661189691%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:All_Nippon_Airways,_Boeing_787-8_JA828A_NRT_(23661189691).jpg"
+      },
+      "wikidataId": "Q6428",
+      "wikipediaTitle": "Boeing 787 Dreamliner"
+    },
+    "f787-8": {
+      "entryId": "f787-8",
+      "photo": {
+        "artist": "Masakatsu Ukon",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/ff/All_Nippon_Airways%2C_Boeing_787-8_JA828A_NRT_%2823661189691%29.jpg/960px-All_Nippon_Airways%2C_Boeing_787-8_JA828A_NRT_%2823661189691%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:All_Nippon_Airways,_Boeing_787-8_JA828A_NRT_(23661189691).jpg"
+      },
+      "wikidataId": "Q6428",
+      "wikipediaTitle": "Boeing 787 Dreamliner"
+    },
+    "f787-9": {
+      "entryId": "f787-9",
+      "photo": {
+        "artist": "Masakatsu Ukon",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/ff/All_Nippon_Airways%2C_Boeing_787-8_JA828A_NRT_%2823661189691%29.jpg/960px-All_Nippon_Airways%2C_Boeing_787-8_JA828A_NRT_%2823661189691%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:All_Nippon_Airways,_Boeing_787-8_JA828A_NRT_(23661189691).jpg"
+      },
+      "wikidataId": "Q6428",
+      "wikipediaTitle": "Boeing 787 Dreamliner"
+    },
+    "fa220-100": {
+      "entryId": "fa220-100",
+      "photo": {
+        "artist": "Romain COUPY",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/8c/Airbus_A220-300.jpg/960px-Airbus_A220-300.jpg",
+        "license": "CC BY-SA 4.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Airbus_A220-300.jpg"
+      },
+      "wikidataId": "Q426074",
+      "wikipediaTitle": "Airbus A220"
+    },
+    "fa220-300": {
+      "entryId": "fa220-300",
+      "photo": {
+        "artist": "Romain COUPY",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/8c/Airbus_A220-300.jpg/960px-Airbus_A220-300.jpg",
+        "license": "CC BY-SA 4.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Airbus_A220-300.jpg"
+      },
+      "wikidataId": "Q426074",
+      "wikipediaTitle": "Airbus A220"
+    },
+    "fa300": {
+      "entryId": "fa300",
+      "firstFlightYear": 1972,
+      "lengthMeters": 53.62,
+      "numberBuilt": 561,
+      "photo": {
+        "artist": "Aero Icarus from Zürich, Switzerland",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/1/1c/Iran_Air_Airbus_A300-605R%3B_EP-IBD%40FRA%3B06.07.2011_603ks_%285915220574%29.jpg/960px-Iran_Air_Airbus_A300-605R%3B_EP-IBD%40FRA%3B06.07.2011_603ks_%285915220574%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Iran_Air_Airbus_A300-605R;_EP-IBD@FRA;06.07.2011_603ks_(5915220574).jpg"
+      },
+      "wikidataId": "Q6437",
+      "wikipediaTitle": "Airbus A300",
+      "wingspanMeters": 44.84
+    },
+    "fa319": {
+      "entryId": "fa319",
+      "firstFlightYear": 1995,
+      "lengthMeters": 33.84,
+      "photo": {
+        "artist": "Anna Zvereva from Tallinn, Estonia",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/b4/Austrian_Airlines%2C_OE-LDB%2C_Airbus_A319-112_%2844341899432%29.jpg/960px-Austrian_Airlines%2C_OE-LDB%2C_Airbus_A319-112_%2844341899432%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Austrian_Airlines,_OE-LDB,_Airbus_A319-112_(44341899432).jpg"
+      },
+      "wikidataId": "Q3317803",
+      "wikipediaTitle": "Airbus A319"
+    },
+    "fa319neo": {
+      "entryId": "fa319neo",
+      "photo": {
+        "artist": "Pedro Aragão",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/9/90/Airbus_A320-271N_NEO_D-AVVA.jpg/960px-Airbus_A320-271N_NEO_D-AVVA.jpg",
+        "license": "CC BY-SA 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Airbus_A320-271N_NEO_D-AVVA.jpg"
+      },
+      "wikidataId": "Q6488",
+      "wikipediaTitle": "Airbus A320neo family"
+    },
+    "fa320": {
+      "entryId": "fa320",
+      "firstFlightYear": 1987,
+      "lengthMeters": 31.45,
+      "numberBuilt": 9693,
+      "photo": {
+        "artist": "Pedro Aragão",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c1/Airbus_A320-214%2C_Airbus_Industrie_JP7617615.jpg/960px-Airbus_A320-214%2C_Airbus_Industrie_JP7617615.jpg",
+        "license": "CC BY-SA 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Airbus_A320-214,_Airbus_Industrie_JP7617615.jpg"
+      },
+      "wikidataId": "Q6475",
+      "wikipediaTitle": "Airbus A320 family",
+      "wingspanMeters": 34.1
+    },
+    "fa320neo": {
+      "entryId": "fa320neo",
+      "photo": {
+        "artist": "Pedro Aragão",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/9/90/Airbus_A320-271N_NEO_D-AVVA.jpg/960px-Airbus_A320-271N_NEO_D-AVVA.jpg",
+        "license": "CC BY-SA 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Airbus_A320-271N_NEO_D-AVVA.jpg"
+      },
+      "wikidataId": "Q6488",
+      "wikipediaTitle": "Airbus A320neo family"
+    },
+    "fa321": {
+      "entryId": "fa321",
+      "firstFlightYear": 1993,
+      "photo": {
+        "artist": "Arpingstone",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/1/18/Lufthansa.a321-100.d-aire.arp.jpg/960px-Lufthansa.a321-100.d-aire.arp.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Lufthansa.a321-100.d-aire.arp.jpg"
+      },
+      "wikidataId": "Q3278675",
+      "wikipediaTitle": "Airbus A321"
+    },
+    "fa321neo": {
+      "entryId": "fa321neo",
+      "firstFlightYear": 2016,
+      "lengthMeters": 44.51,
+      "photo": {
+        "artist": "BriYYZ from Toronto, Canada",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/60/Airbus_Industrie_A321neo_D-AVXA_%2829428329122%29.jpg/960px-Airbus_Industrie_A321neo_D-AVXA_%2829428329122%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Airbus_Industrie_A321neo_D-AVXA_(29428329122).jpg"
+      },
+      "wikidataId": "Q30914140",
+      "wikipediaTitle": "Airbus A321neo"
+    },
+    "fa330-200": {
+      "entryId": "fa330-200",
+      "photo": {
+        "artist": "Ken Fielding",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/ff/F-WWCB_A330-203_Airbus_Industrie_TLS_27SEP13_%289972134676%29.jpg/960px-F-WWCB_A330-203_Airbus_Industrie_TLS_27SEP13_%289972134676%29.jpg",
+        "license": "CC BY-SA 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:F-WWCB_A330-203_Airbus_Industrie_TLS_27SEP13_(9972134676).jpg"
+      },
+      "wikidataId": "Q6478",
+      "wikipediaTitle": "Airbus A330"
+    },
+    "fa330-300": {
+      "entryId": "fa330-300",
+      "photo": {
+        "artist": "Ken Fielding",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/ff/F-WWCB_A330-203_Airbus_Industrie_TLS_27SEP13_%289972134676%29.jpg/960px-F-WWCB_A330-203_Airbus_Industrie_TLS_27SEP13_%289972134676%29.jpg",
+        "license": "CC BY-SA 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:F-WWCB_A330-203_Airbus_Industrie_TLS_27SEP13_(9972134676).jpg"
+      },
+      "wikidataId": "Q6478",
+      "wikipediaTitle": "Airbus A330"
+    },
+    "fa330-800": {
+      "entryId": "fa330-800",
+      "photo": {
+        "artist": "Alex Cheban",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/07/Airbus_A330neo_first_take-off_%28cropped%29.jpg/960px-Airbus_A330neo_first_take-off_%28cropped%29.jpg",
+        "license": "CC BY-SA 4.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Airbus_A330neo_first_take-off_(cropped).jpg"
+      },
+      "wikidataId": "Q18084618",
+      "wikipediaTitle": "Airbus A330neo"
+    },
+    "fa330-900": {
+      "entryId": "fa330-900",
+      "photo": {
+        "artist": "Alex Cheban",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/07/Airbus_A330neo_first_take-off_%28cropped%29.jpg/960px-Airbus_A330neo_first_take-off_%28cropped%29.jpg",
+        "license": "CC BY-SA 4.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Airbus_A330neo_first_take-off_(cropped).jpg"
+      },
+      "wikidataId": "Q18084618",
+      "wikipediaTitle": "Airbus A330neo"
+    },
+    "fa330-beluga-xl": {
+      "entryId": "fa330-beluga-xl",
+      "firstFlightYear": 2018,
+      "lengthMeters": 63.1,
+      "numberBuilt": 6,
+      "photo": {
+        "artist": "Julien Jeany",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/72/%22Beluga_XL%22_A330-743L_%28cropped%29.jpg/960px-%22Beluga_XL%22_A330-743L_%28cropped%29.jpg",
+        "license": "CC BY-SA 4.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:%22Beluga_XL%22_A330-743L_(cropped).jpg"
+      },
+      "wikidataId": "Q21814460",
+      "wikipediaTitle": "Airbus BelugaXL",
+      "wingspanMeters": 60.3
+    },
+    "fa340-200": {
+      "entryId": "fa340-200",
+      "photo": {
+        "artist": "Iberia Airlines",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/33/A340-600.jpg/960px-A340-600.jpg",
+        "license": "CC BY 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:A340-600.jpg"
+      },
+      "wikidataId": "Q6481",
+      "wikipediaTitle": "Airbus A340"
+    },
+    "fa340-300": {
+      "entryId": "fa340-300",
+      "photo": {
+        "artist": "Iberia Airlines",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/33/A340-600.jpg/960px-A340-600.jpg",
+        "license": "CC BY 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:A340-600.jpg"
+      },
+      "wikidataId": "Q6481",
+      "wikipediaTitle": "Airbus A340"
+    },
+    "fa340-600": {
+      "entryId": "fa340-600",
+      "photo": {
+        "artist": "Iberia Airlines",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/33/A340-600.jpg/960px-A340-600.jpg",
+        "license": "CC BY 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:A340-600.jpg"
+      },
+      "wikidataId": "Q6481",
+      "wikipediaTitle": "Airbus A340"
+    },
+    "fa350-1000": {
+      "entryId": "fa350-1000",
+      "photo": {
+        "artist": "Adam Moreira (AEMoreira042281)",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f2/Virgin_Atlantic_Airbus_A350-1041XWB_G-VLUX_%28Red_Velvet%29_approaching_JFK_Airport.jpg/960px-Virgin_Atlantic_Airbus_A350-1041XWB_G-VLUX_%28Red_Velvet%29_approaching_JFK_Airport.jpg",
+        "license": "CC BY-SA 4.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Virgin_Atlantic_Airbus_A350-1041XWB_G-VLUX_(Red_Velvet)_approaching_JFK_Airport.jpg"
+      },
+      "wikidataId": "Q6484",
+      "wikipediaTitle": "Airbus A350"
+    },
+    "fa350-900": {
+      "entryId": "fa350-900",
+      "photo": {
+        "artist": "Adam Moreira (AEMoreira042281)",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f2/Virgin_Atlantic_Airbus_A350-1041XWB_G-VLUX_%28Red_Velvet%29_approaching_JFK_Airport.jpg/960px-Virgin_Atlantic_Airbus_A350-1041XWB_G-VLUX_%28Red_Velvet%29_approaching_JFK_Airport.jpg",
+        "license": "CC BY-SA 4.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Virgin_Atlantic_Airbus_A350-1041XWB_G-VLUX_(Red_Velvet)_approaching_JFK_Airport.jpg"
+      },
+      "wikidataId": "Q6484",
+      "wikipediaTitle": "Airbus A350"
+    },
+    "fa380": {
+      "entryId": "fa380",
+      "firstFlightYear": 2005,
+      "lengthMeters": 72.72,
+      "numberBuilt": 251,
+      "photo": {
+        "artist": "Maarten Visser from Capelle aan den IJssel, Nederland",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/09/A6-EDY_A380_Emirates_31_jan_2013_jfk_%288442269364%29_%28cropped%29.jpg/960px-A6-EDY_A380_Emirates_31_jan_2013_jfk_%288442269364%29_%28cropped%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:A6-EDY_A380_Emirates_31_jan_2013_jfk_(8442269364)_(cropped).jpg"
+      },
+      "wikidataId": "Q5830",
+      "wikipediaTitle": "Airbus A380",
+      "wingspanMeters": 79.8
+    },
+    "farj21": {
+      "entryId": "farj21",
+      "firstFlightYear": 2008,
+      "numberBuilt": 89,
+      "photo": {
+        "artist": "Peng Chen",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/8b/China_ARJ-21.jpg/960px-China_ARJ-21.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:China_ARJ-21.jpg"
+      },
+      "wikidataId": "Q44654",
+      "wikipediaTitle": "Comac C909"
+    },
+    "farj85": {
+      "entryId": "farj85",
+      "firstFlightYear": 1981,
+      "lengthMeters": 26.16,
+      "numberBuilt": 394,
+      "photo": {
+        "artist": "Julian Herzog (Website)",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/85/Swiss_British_Aerospace_Avro_146-RJ100_HB-IXS_MUC_2015_01_crop.jpg/960px-Swiss_British_Aerospace_Avro_146-RJ100_HB-IXS_MUC_2015_01_crop.jpg",
+        "license": "CC BY 4.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Swiss_British_Aerospace_Avro_146-RJ100_HB-IXS_MUC_2015_01_crop.jpg"
+      },
+      "wikidataId": "Q589498",
+      "wikipediaTitle": "British Aerospace 146",
+      "wingspanMeters": 26.34
+    },
+    "fatr42": {
+      "entryId": "fatr42",
+      "firstFlightYear": 1984,
+      "lengthMeters": 22.67,
+      "photo": {
+        "artist": "Pieter van Marion from Netherlands",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/aa/D-BCRS_European_Air_Express_%28EAE%29_%282185550037%29.jpg/960px-D-BCRS_European_Air_Express_%28EAE%29_%282185550037%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:D-BCRS_European_Air_Express_(EAE)_(2185550037).jpg"
+      },
+      "wikidataId": "Q218637",
+      "wikipediaTitle": "ATR 42",
+      "wingspanMeters": 24.57
+    },
+    "fatr72": {
+      "entryId": "fatr72",
+      "firstFlightYear": 1988,
+      "numberBuilt": 1500,
+      "photo": {
+        "artist": "Ken Fielding",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/67/F-WWEZ_%28948%29_ATR.72-212A%28500%29_FlyFireFly_TLS_30AUG11_%286097869500%29_%28cropped%29.jpg/960px-F-WWEZ_%28948%29_ATR.72-212A%28500%29_FlyFireFly_TLS_30AUG11_%286097869500%29_%28cropped%29.jpg",
+        "license": "CC BY-SA 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:F-WWEZ_(948)_ATR.72-212A(500)_FlyFireFly_TLS_30AUG11_(6097869500)_(cropped).jpg"
+      },
+      "wikidataId": "Q219764",
+      "wikipediaTitle": "ATR 72"
+    },
+    "fav-p180": {
+      "entryId": "fav-p180",
+      "firstFlightYear": 1986,
+      "lengthMeters": 14.17,
+      "numberBuilt": 216,
+      "photo": {
+        "artist": "Tibboh at French Wikipedia",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/03/Piaggio_P-180_Avanti_Rennes_2010_%28cropped%29.jpg/960px-Piaggio_P-180_Avanti_Rennes_2010_%28cropped%29.jpg",
+        "license": "CC BY-SA 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Piaggio_P-180_Avanti_Rennes_2010_(cropped).jpg"
+      },
+      "wikidataId": "Q17912",
+      "wikipediaTitle": "Piaggio P.180 Avanti",
+      "wingspanMeters": 13.84
+    },
+    "fb350": {
+      "entryId": "fb350",
+      "wikidataId": "Q1094597",
+      "wikipediaTitle": "Beechcraft Super King Air"
+    },
+    "fbe10": {
+      "entryId": "fbe10",
+      "firstFlightYear": 1963,
+      "lengthMeters": 12.1,
+      "photo": {
+        "artist": "User:CambridgeBayWeather",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/5/5d/C-GSYN_Adlair_Aviation_Ltd_Beechcraft_King_Air_100_%28BE10%29_03.JPG/960px-C-GSYN_Adlair_Aviation_Ltd_Beechcraft_King_Air_100_%28BE10%29_03.JPG",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:C-GSYN_Adlair_Aviation_Ltd_Beechcraft_King_Air_100_(BE10)_03.JPG"
+      },
+      "wikidataId": "Q665708",
+      "wikipediaTitle": "Beechcraft King Air",
+      "wingspanMeters": 13.98
+    },
+    "fbe20": {
+      "entryId": "fbe20",
+      "wikidataId": "Q1094597",
+      "wikipediaTitle": "Beechcraft Super King Air"
+    },
+    "fbe36": {
+      "entryId": "fbe36",
+      "firstFlightYear": 1945,
+      "lengthMeters": 8.13,
+      "photo": {
+        "artist": "Bill Larkins",
+        "imageURL": "https://upload.wikimedia.org/wikipedia/commons/4/48/Beech_Bonanza_Takeoff_%285517383917%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Beech_Bonanza_Takeoff_(5517383917).jpg"
+      },
+      "wikidataId": "Q673649",
+      "wikipediaTitle": "Beechcraft Bonanza",
+      "wingspanMeters": 10.21
+    },
+    "fbe58": {
+      "entryId": "fbe58",
+      "firstFlightYear": 1960,
+      "lengthMeters": 9.09,
+      "photo": {
+        "artist": "San Diego Air & Space Museum Archives",
+        "imageURL": "https://upload.wikimedia.org/wikipedia/commons/d/d0/Beechcraft_Baron_58.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Beechcraft_Baron_58.jpg"
+      },
+      "wikidataId": "Q814002",
+      "wikipediaTitle": "Beechcraft Baron",
+      "wingspanMeters": 11.53
+    },
+    "fbe60": {
+      "entryId": "fbe60",
+      "firstFlightYear": 1966,
+      "lengthMeters": 10.31,
+      "numberBuilt": 596,
+      "photo": {
+        "artist": "Brian LynchBlack Eagle",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/82/Duke2.jpg/960px-Duke2.jpg",
+        "license": "CC BY-SA 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Duke2.jpg"
+      },
+      "wikidataId": "Q814001",
+      "wikipediaTitle": "Beechcraft Duke",
+      "wingspanMeters": 11.96
+    },
+    "fbe76": {
+      "entryId": "fbe76",
+      "firstFlightYear": 1974,
+      "lengthMeters": 8.84,
+      "numberBuilt": 437,
+      "photo": {
+        "artist": "Akradecki Alan Radecki",
+        "imageURL": "https://upload.wikimedia.org/wikipedia/commons/4/4c/Ntps-be76-N5410M-090123-02-cr8.jpg",
+        "license": "CC BY-SA 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Ntps-be76-N5410M-090123-02-cr8.jpg"
+      },
+      "wikidataId": "Q2893628",
+      "wikipediaTitle": "Beechcraft Duchess",
+      "wingspanMeters": 11.59
+    },
+    "fbt34": {
+      "entryId": "fbt34",
+      "firstFlightYear": 1948,
+      "lengthMeters": 7.9,
+      "photo": {
+        "artist": "PHCS R. L. LAWSON",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/d/db/T-34B-1.jpg/960px-T-34B-1.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:T-34B-1.jpg"
+      },
+      "wikidataId": "Q2343923",
+      "wikipediaTitle": "Beechcraft T-34 Mentor",
+      "wingspanMeters": 10.0
+    },
+    "fc-cj": {
+      "entryId": "fc-cj",
+      "firstFlightYear": 1991,
+      "numberBuilt": 400,
+      "photo": {
+        "artist": "Adrian Pingstone",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/09/Cessna_525_citationjet_g-sfcj_arp.jpg/960px-Cessna_525_citationjet_g-sfcj_arp.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Cessna_525_citationjet_g-sfcj_arp.jpg"
+      },
+      "wikidataId": "Q1608823",
+      "wikipediaTitle": "Cessna CitationJet/M2"
+    },
+    "fc-classic": {
+      "entryId": "fc-classic",
+      "firstFlightYear": 1987,
+      "photo": {
+        "artist": "Adrian Pingstone",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/46/Cessna_uc-35a_citation_560_ultra_v_arp.jpg/960px-Cessna_uc-35a_citation_560_ultra_v_arp.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Cessna_uc-35a_citation_560_ultra_v_arp.jpg"
+      },
+      "wikidataId": "Q911668",
+      "wikipediaTitle": "Cessna Citation V"
+    },
+    "fc-longitude": {
+      "entryId": "fc-longitude",
+      "firstFlightYear": 2016,
+      "photo": {
+        "artist": "Anna Zvereva from Tallinn, Estonia",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/45/Textron_Aviation%2C_N707CL%2C_Cessna_700_Citation_Longitude_%2831378962178%29.jpg/960px-Textron_Aviation%2C_N707CL%2C_Cessna_700_Citation_Longitude_%2831378962178%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Textron_Aviation,_N707CL,_Cessna_700_Citation_Longitude_(31378962178).jpg"
+      },
+      "wikidataId": "Q5065573",
+      "wikipediaTitle": "Cessna Citation Longitude"
+    },
+    "fc-mustang": {
+      "entryId": "fc-mustang",
+      "firstFlightYear": 2005,
+      "numberBuilt": 472,
+      "photo": {
+        "artist": "Juergen Lehle",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c3/Cessna_Citation_Mustang_N416CM.jpg/960px-Cessna_Citation_Mustang_N416CM.jpg",
+        "license": "CC BY 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Cessna_Citation_Mustang_N416CM.jpg"
+      },
+      "wikidataId": "Q1057385",
+      "wikipediaTitle": "Cessna Citation Mustang"
+    },
+    "fc-sovereign": {
+      "entryId": "fc-sovereign",
+      "firstFlightYear": 2002,
+      "photo": {
+        "artist": "Rafael Luiz Canossa",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/01/Cessna_Citation_Sovereign_Rafael_Luiz_%2814725958464%29.jpg/960px-Cessna_Citation_Sovereign_Rafael_Luiz_%2814725958464%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Cessna_Citation_Sovereign_Rafael_Luiz_(14725958464).jpg"
+      },
+      "wikidataId": "Q848809",
+      "wikipediaTitle": "Cessna Citation Sovereign"
+    },
+    "fc-xls": {
+      "entryId": "fc-xls",
+      "firstFlightYear": 1996,
+      "numberBuilt": 575,
+      "photo": {
+        "artist": "Adrian Pingstone",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/43/Cessna.560xl.citation.excel.arp.jpg/960px-Cessna.560xl.citation.excel.arp.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Cessna.560xl.citation.excel.arp.jpg"
+      },
+      "wikidataId": "Q673038",
+      "wikipediaTitle": "Cessna Citation Excel"
+    },
+    "fc140": {
+      "entryId": "fc140",
+      "firstFlightYear": 1945,
+      "numberBuilt": 7664,
+      "photo": {
+        "artist": "Tomás Del Coro from Fabulous Las Vegas, Nevada, USA",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/b3/N2422V_1948_CESSNA_140_s_n_14669_%2849509431121%29.jpg/960px-N2422V_1948_CESSNA_140_s_n_14669_%2849509431121%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:N2422V_1948_CESSNA_140_s_n_14669_(49509431121).jpg"
+      },
+      "wikidataId": "Q1057084",
+      "wikipediaTitle": "Cessna 140"
+    },
+    "fc152": {
+      "entryId": "fc152",
+      "firstFlightYear": 1957,
+      "lengthMeters": 7.34,
+      "numberBuilt": 23949,
+      "wikidataId": "Q1057117",
+      "wikipediaTitle": "Cessna 150",
+      "wingspanMeters": 9.97
+    },
+    "fc162": {
+      "entryId": "fc162",
+      "firstFlightYear": 2006,
+      "numberBuilt": 192,
+      "photo": {
+        "artist": "FlugKerl2",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/9/90/Cessna_162_Riddle.jpg/960px-Cessna_162_Riddle.jpg",
+        "license": "CC BY-SA 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Cessna_162_Riddle.jpg"
+      },
+      "wikidataId": "Q1057063",
+      "wikipediaTitle": "Cessna 162 Skycatcher"
+    },
+    "fc170": {
+      "entryId": "fc170",
+      "firstFlightYear": 1948,
+      "lengthMeters": 7.61,
+      "numberBuilt": 5174,
+      "photo": {
+        "artist": "John Karns",
+        "imageURL": "https://upload.wikimedia.org/wikipedia/commons/0/0f/Cessna170B_orange.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Cessna170B_orange.jpg"
+      },
+      "wikidataId": "Q767382",
+      "wikipediaTitle": "Cessna 170",
+      "wingspanMeters": 10.9
+    },
+    "fc172": {
+      "entryId": "fc172",
+      "firstFlightYear": 1955,
+      "lengthMeters": 8.2,
+      "numberBuilt": 44000,
+      "photo": {
+        "artist": "Alan Wilson from Stilton, Peterborough, Cambs, UK",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/ca/Cessna_172S_Skyhawk_%E2%80%98G-JMKE%E2%80%99_%2845077563364%29.jpg/960px-Cessna_172S_Skyhawk_%E2%80%98G-JMKE%E2%80%99_%2845077563364%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Cessna_172S_Skyhawk_%E2%80%98G-JMKE%E2%80%99_(45077563364).jpg"
+      },
+      "wikidataId": "Q244479",
+      "wikipediaTitle": "Cessna 172",
+      "wingspanMeters": 10.92
+    },
+    "fc177": {
+      "entryId": "fc177",
+      "firstFlightYear": 1966,
+      "lengthMeters": 8.31,
+      "numberBuilt": 4295,
+      "photo": {
+        "artist": "Alan Wilson from Stilton, Peterborough, Cambs, UK",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/36/Cessna_F.177RG_Cardinal_RG_%E2%80%98G-BAIS%E2%80%99_%2845850483461%29.jpg/960px-Cessna_F.177RG_Cardinal_RG_%E2%80%98G-BAIS%E2%80%99_%2845850483461%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Cessna_F.177RG_Cardinal_RG_%E2%80%98G-BAIS%E2%80%99_(45850483461).jpg"
+      },
+      "wikidataId": "Q1057100",
+      "wikipediaTitle": "Cessna 177 Cardinal",
+      "wingspanMeters": 10.82
+    },
+    "fc182": {
+      "entryId": "fc182",
+      "firstFlightYear": 1956,
+      "lengthMeters": 8.57,
+      "numberBuilt": 25000,
+      "photo": {
+        "artist": "AlfvanBeem",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/4b/PH-PAC_Cessna_F182Q.JPG/960px-PH-PAC_Cessna_F182Q.JPG",
+        "license": "CC0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:PH-PAC_Cessna_F182Q.JPG"
+      },
+      "wikidataId": "Q686708",
+      "wikipediaTitle": "Cessna 182 Skylane",
+      "wingspanMeters": 10.92
+    },
+    "fc185": {
+      "entryId": "fc185",
+      "firstFlightYear": 1960,
+      "lengthMeters": 7.85,
+      "numberBuilt": 4400,
+      "photo": {
+        "artist": "User:CambridgeBayWeather",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/e/ec/C-FFXO_Cessna_Skywagon_II_185_%28C185%29_03.JPG/960px-C-FFXO_Cessna_Skywagon_II_185_%28C185%29_03.JPG",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:C-FFXO_Cessna_Skywagon_II_185_(C185)_03.JPG"
+      },
+      "wikidataId": "Q1057123",
+      "wikipediaTitle": "Cessna 185 Skywagon",
+      "wingspanMeters": 10.92
+    },
+    "fc195": {
+      "entryId": "fc195",
+      "firstFlightYear": 1945,
+      "photo": {
+        "artist": "Adrian Pingstone (Arpingstone)",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c3/Cessna_195_businessliner_g-btbj_of_1952_arp.jpg/960px-Cessna_195_businessliner_g-btbj_of_1952_arp.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Cessna_195_businessliner_g-btbj_of_1952_arp.jpg"
+      },
+      "wikidataId": "Q1057137",
+      "wikipediaTitle": "Cessna 195"
+    },
+    "fc206": {
+      "entryId": "fc206",
+      "lengthMeters": 9.68,
+      "photo": {
+        "artist": "Arpingstone",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/9/91/Cessna.206h.stationair2.arp.jpg/960px-Cessna.206h.stationair2.arp.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Cessna.206h.stationair2.arp.jpg"
+      },
+      "wikidataId": "Q1057183",
+      "wikipediaTitle": "Cessna 206",
+      "wingspanMeters": 10.92
+    },
+    "fc208": {
+      "entryId": "fc208",
+      "firstFlightYear": 1982,
+      "lengthMeters": 11.46,
+      "numberBuilt": 1500,
+      "photo": {
+        "artist": "FlugKerl2",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/9/97/AOPA-GrandCaravan.jpg/960px-AOPA-GrandCaravan.jpg",
+        "license": "CC BY-SA 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:AOPA-GrandCaravan.jpg"
+      },
+      "wikidataId": "Q1056131",
+      "wikipediaTitle": "Cessna 208 Caravan",
+      "wingspanMeters": 15.88
+    },
+    "fc210": {
+      "entryId": "fc210",
+      "photo": {
+        "artist": "Tomás Del Coro from Las Vegas, Nevada, USA",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f8/1976_Cessna_210L_N732GD_%285359315231%29.jpg/960px-1976_Cessna_210L_N732GD_%285359315231%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:1976_Cessna_210L_N732GD_(5359315231).jpg"
+      },
+      "wikidataId": "Q15829786",
+      "wikipediaTitle": "Cessna 210 Centurion"
+    },
+    "fc310": {
+      "entryId": "fc310",
+      "photo": {
+        "artist": "Ahunt",
+        "imageURL": "https://upload.wikimedia.org/wikipedia/commons/a/a8/Cessna310JC-FRYZ.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Cessna310JC-FRYZ.jpg"
+      },
+      "wikidataId": "Q1057187",
+      "wikipediaTitle": "Cessna 310"
+    },
+    "fc320": {
+      "entryId": "fc320",
+      "photo": {
+        "artist": "Ahunt",
+        "imageURL": "https://upload.wikimedia.org/wikipedia/commons/a/a8/Cessna310JC-FRYZ.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Cessna310JC-FRYZ.jpg"
+      },
+      "wikidataId": "Q1057187",
+      "wikipediaTitle": "Cessna 310"
+    },
+    "fc337": {
+      "entryId": "fc337",
+      "firstFlightYear": 1961,
+      "lengthMeters": 9.07,
+      "numberBuilt": 2993,
+      "photo": {
+        "artist": "bomberpilot",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/d/d2/Cessna_337_%288735367365%29.jpg/960px-Cessna_337_%288735367365%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Cessna_337_(8735367365).jpg"
+      },
+      "wikidataId": "Q1057388",
+      "wikipediaTitle": "Cessna Skymaster",
+      "wingspanMeters": 11.63
+    },
+    "fc400": {
+      "entryId": "fc400",
+      "firstFlightYear": 2000,
+      "photo": {
+        "artist": "Jeroen Stroes Aviation Photography from Netherlands",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/4d/N259JA_%2840881422651%29.jpg/960px-N259JA_%2840881422651%29.jpg",
+        "license": "CC BY 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:N259JA_(40881422651).jpg"
+      },
+      "wikidataId": "Q1057177",
+      "wikipediaTitle": "Cessna 400"
+    },
+    "fc402": {
+      "entryId": "fc402",
+      "lengthMeters": 11.0,
+      "numberBuilt": 1535,
+      "photo": {
+        "artist": "Ahunt at English Wikipedia",
+        "imageURL": "https://upload.wikimedia.org/wikipedia/commons/e/e1/Cessna402C-FFAP02.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Cessna402C-FFAP02.jpg"
+      },
+      "wikidataId": "Q1057203",
+      "wikipediaTitle": "Cessna 402",
+      "wingspanMeters": 12.15
+    },
+    "fc414": {
+      "entryId": "fc414",
+      "firstFlightYear": 1968,
+      "numberBuilt": 1070,
+      "photo": {
+        "artist": "AirSafetyGuy at English Wikipedia",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c7/PH-MZL_Cessna_414_Chancellor_%28EHMZ_1990-08-20%29.jpg/960px-PH-MZL_Cessna_414_Chancellor_%28EHMZ_1990-08-20%29.jpg",
+        "license": "CC BY-SA 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:PH-MZL_Cessna_414_Chancellor_(EHMZ_1990-08-20).jpg"
+      },
+      "wikidataId": "Q1057233",
+      "wikipediaTitle": "Cessna 414"
+    },
+    "fc421": {
+      "entryId": "fc421",
+      "firstFlightYear": 1965,
+      "lengthMeters": 11.09,
+      "numberBuilt": 1901,
+      "photo": {
+        "artist": "Cory W. Watts from Madison, Wisconsin, United States of America",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f1/Cessna_421_Golden_Eagle_%28293274079%29.jpg/960px-Cessna_421_Golden_Eagle_%28293274079%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Cessna_421_Golden_Eagle_(293274079).jpg"
+      },
+      "wikidataId": "Q164293",
+      "wikipediaTitle": "Cessna 421 Golden Eagle",
+      "wingspanMeters": 12.53
+    },
+    "fc425": {
+      "entryId": "fc425",
+      "firstFlightYear": 1978,
+      "lengthMeters": 10.9,
+      "numberBuilt": 236,
+      "wikidataId": "Q1057259",
+      "wikipediaTitle": "Cessna 425",
+      "wingspanMeters": 13.45
+    },
+    "fc441": {
+      "entryId": "fc441",
+      "firstFlightYear": 1974,
+      "lengthMeters": 11.89,
+      "numberBuilt": 362,
+      "photo": {
+        "artist": "Tomás Del Coro from Las Vegas, Nevada, USA",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/64/N326RS_1983_Cessna_441Conquest_II_C-N_441-0326_-_Ias_Air_%286832531090%29.jpg/960px-N326RS_1983_Cessna_441Conquest_II_C-N_441-0326_-_Ias_Air_%286832531090%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:N326RS_1983_Cessna_441Conquest_II_C-N_441-0326_-_Ias_Air_(6832531090).jpg"
+      },
+      "wikidataId": "Q1057265",
+      "wikipediaTitle": "Cessna 441 Conquest II",
+      "wingspanMeters": 15.04
+    },
+    "fc919": {
+      "entryId": "fc919",
+      "firstFlightYear": 2017,
+      "numberBuilt": 30,
+      "photo": {
+        "artist": "Weimeng at www.airliners.net",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/8b/COMAC_B-001A_May_2017.jpg/960px-COMAC_B-001A_May_2017.jpg",
+        "license": "CC BY-SA 4.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:COMAC_B-001A_May_2017.jpg"
+      },
+      "wikidataId": "Q429894",
+      "wikipediaTitle": "Comac C919",
+      "wingspanMeters": 33.6
+    },
+    "fcb-beechjet": {
+      "entryId": "fcb-beechjet",
+      "lengthMeters": 13.15,
+      "photo": {
+        "artist": "YSSYguy at English Wikipedia",
+        "imageURL": "https://upload.wikimedia.org/wikipedia/commons/7/71/Beechjet_400A_%28VH-IPG%29.jpg",
+        "license": "CC BY-SA 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Beechjet_400A_(VH-IPG).jpg"
+      },
+      "wikidataId": "Q1591669",
+      "wikipediaTitle": "Hawker 400",
+      "wingspanMeters": 13.25
+    },
+    "fcb-hawker": {
+      "entryId": "fcb-hawker",
+      "firstFlightYear": 1983,
+      "lengthMeters": 15.6,
+      "numberBuilt": 643,
+      "photo": {
+        "artist": "Dmitry A. Mottl",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/62/Raytheon_Hawker-800XP.jpg/960px-Raytheon_Hawker-800XP.jpg",
+        "license": "CC BY-SA 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Raytheon_Hawker-800XP.jpg"
+      },
+      "wikidataId": "Q485226",
+      "wikipediaTitle": "Hawker 800",
+      "wingspanMeters": 15.66
+    },
+    "fcb-learjet": {
+      "entryId": "fcb-learjet",
+      "photo": {
+        "artist": "MilborneOne at English Wikipedia",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/34/Learjet45-gama.jpg/960px-Learjet45-gama.jpg",
+        "license": "CC BY-SA 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Learjet45-gama.jpg"
+      },
+      "wikidataId": "Q1336983",
+      "wikipediaTitle": "Learjet"
+    },
+    "fcb-sabreliner": {
+      "entryId": "fcb-sabreliner",
+      "firstFlightYear": 1958,
+      "numberBuilt": 212,
+      "photo": {
+        "artist": "PH2 Berry, USN",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/e/e9/CT-39E_Sabreliner_VR-30_in_flight_1980.JPEG/960px-CT-39E_Sabreliner_VR-30_in_flight_1980.JPEG",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:CT-39E_Sabreliner_VR-30_in_flight_1980.JPEG"
+      },
+      "wikidataId": "Q844656",
+      "wikipediaTitle": "North American Sabreliner"
+    },
+    "fcl35": {
+      "entryId": "fcl35",
+      "photo": {
+        "artist": "Arpingstone",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a2/Bombardier.challenger.300.lx-pma.arp.jpg/960px-Bombardier.challenger.300.lx-pma.arp.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Bombardier.challenger.300.lx-pma.arp.jpg"
+      },
+      "wikidataId": "Q891782",
+      "wikipediaTitle": "Bombardier Challenger 300"
+    },
+    "fcl60": {
+      "entryId": "fcl60",
+      "firstFlightYear": 1978,
+      "photo": {
+        "artist": "Ronnie Macdonald from Chelmsford, United Kingdom",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/b5/Canadair_CL500_Challenger_604_%284826809923%29.jpg/960px-Canadair_CL500_Challenger_604_%284826809923%29.jpg",
+        "license": "CC BY 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Canadair_CL500_Challenger_604_(4826809923).jpg"
+      },
+      "wikidataId": "Q699843",
+      "wikipediaTitle": "Bombardier Challenger 600 series"
+    },
+    "fcp-b190": {
+      "entryId": "fcp-b190",
+      "firstFlightYear": 1982,
+      "numberBuilt": 3,
+      "wikidataId": "Q661819",
+      "wikipediaTitle": "Beechcraft 1900"
+    },
+    "fcp-be99": {
+      "entryId": "fcp-be99",
+      "firstFlightYear": 1966,
+      "lengthMeters": 13.58,
+      "numberBuilt": 239,
+      "photo": {
+        "artist": "Candicekerr",
+        "imageURL": "https://upload.wikimedia.org/wikipedia/commons/2/29/Jamaica_Air_Shuttle_In_Flight.jpg",
+        "license": "CC BY 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Jamaica_Air_Shuttle_In_Flight.jpg"
+      },
+      "wikidataId": "Q120323",
+      "wikipediaTitle": "Beechcraft Model 99",
+      "wingspanMeters": 14.0
+    },
+    "fcp-e120": {
+      "entryId": "fcp-e120",
+      "firstFlightYear": 1983,
+      "lengthMeters": 20.0,
+      "numberBuilt": 354,
+      "photo": {
+        "artist": "Alf van Beem",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/d/de/HA-FAN_BASe_-_Budapest_Aircraft_Service_Embraer_EMB-120_Brasilia_takeoff_from_Schiphol_%28AMS_-_EHAM%29%2C_The_Netherlands%2C_17may2014.JPG/960px-HA-FAN_BASe_-_Budapest_Aircraft_Service_Embraer_EMB-120_Brasilia_takeoff_from_Schiphol_%28AMS_-_EHAM%29%2C_The_Netherlands%2C_17may2014.JPG",
+        "license": "CC0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:HA-FAN_BASe_-_Budapest_Aircraft_Service_Embraer_EMB-120_Brasilia_takeoff_from_Schiphol_(AMS_-_EHAM),_The_Netherlands,_17may2014.JPG"
+      },
+      "wikidataId": "Q1163407",
+      "wikipediaTitle": "Embraer EMB 120 Brasilia",
+      "wingspanMeters": 19.78
+    },
+    "fcp-islander": {
+      "entryId": "fcp-islander",
+      "firstFlightYear": 1965,
+      "lengthMeters": 10.86,
+      "numberBuilt": 1280,
+      "wikidataId": "Q921019",
+      "wikipediaTitle": "Britten-Norman BN-2 Islander",
+      "wingspanMeters": 14.94
+    },
+    "fcp-js32": {
+      "entryId": "fcp-js32",
+      "firstFlightYear": 1980,
+      "lengthMeters": 14.39,
+      "numberBuilt": 386,
+      "photo": {
+        "artist": "Anna Zvereva",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/45/Avies%2C_ES-PJD%2C_BAe_Jetstream_31_%2816269083048%29.jpg/960px-Avies%2C_ES-PJD%2C_BAe_Jetstream_31_%2816269083048%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Avies,_ES-PJD,_BAe_Jetstream_31_(16269083048).jpg"
+      },
+      "wikidataId": "Q647915",
+      "wikipediaTitle": "British Aerospace Jetstream",
+      "wingspanMeters": 15.85
+    },
+    "fcp-l410": {
+      "entryId": "fcp-l410",
+      "firstFlightYear": 1969,
+      "lengthMeters": 13.61,
+      "numberBuilt": 1138,
+      "photo": {
+        "artist": "Mottld",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a5/Let_L-410.jpg/960px-Let_L-410.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Let_L-410.jpg"
+      },
+      "wikidataId": "Q157925",
+      "wikipediaTitle": "Let L-410 Turbolet",
+      "wingspanMeters": 17.48
+    },
+    "fcp-metro": {
+      "entryId": "fcp-metro",
+      "firstFlightYear": 1969,
+      "lengthMeters": 18.09,
+      "numberBuilt": 600,
+      "photo": {
+        "artist": "Björn Strey",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/09/D-COLD_%283421921794%29.jpg/960px-D-COLD_%283421921794%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:D-COLD_(3421921794).jpg"
+      },
+      "wikidataId": "Q1393122",
+      "wikipediaTitle": "Fairchild Swearingen Metroliner",
+      "wingspanMeters": 17.37
+    },
+    "fcp-p2012": {
+      "entryId": "fcp-p2012",
+      "firstFlightYear": 2016,
+      "lengthMeters": 11.4,
+      "photo": {
+        "artist": "N717JG",
+        "imageURL": "https://upload.wikimedia.org/wikipedia/commons/3/34/Cape_Air_Tecnam_288.jpg",
+        "license": "CC BY-SA 4.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Cape_Air_Tecnam_288.jpg"
+      },
+      "wikidataId": "Q7692743",
+      "wikipediaTitle": "Tecnam P2012 Traveller",
+      "wingspanMeters": 13.56
+    },
+    "fcp-saab340": {
+      "entryId": "fcp-saab340",
+      "firstFlightYear": 1983,
+      "lengthMeters": 19.73,
+      "numberBuilt": 459,
+      "photo": {
+        "artist": "Paavo Pihelgas",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/d/d7/Estonian_Air_Saab_340A_ES-ASN.jpg/960px-Estonian_Air_Saab_340A_ES-ASN.jpg",
+        "license": "CC BY 2.5",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Estonian_Air_Saab_340A_ES-ASN.jpg"
+      },
+      "wikidataId": "Q277491",
+      "wikipediaTitle": "Saab 340",
+      "wingspanMeters": 21.44
+    },
+    "fcp-twinotter": {
+      "entryId": "fcp-twinotter",
+      "firstFlightYear": 1965,
+      "lengthMeters": 15.77,
+      "numberBuilt": 967,
+      "wikidataId": "Q683041",
+      "wikipediaTitle": "De Havilland Canada DHC-6 Twin Otter",
+      "wingspanMeters": 19.81
+    },
+    "fcrj100": {
+      "entryId": "fcrj100",
+      "photo": {
+        "artist": "ERIC SALARD from PARIS, FRANCE",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/7f/N466SW_LAX_%2830314755488%29.jpg/960px-N466SW_LAX_%2830314755488%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:N466SW_LAX_(30314755488).jpg"
+      },
+      "wikidataId": "Q3000403",
+      "wikipediaTitle": "Bombardier CRJ100/200"
+    },
+    "fcrj1000": {
+      "entryId": "fcrj1000",
+      "photo": {
+        "artist": "Bene Riobó",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/1/12/CRJ-900_Air_Nostrum_EC-JTU_01.jpg/960px-CRJ-900_Air_Nostrum_EC-JTU_01.jpg",
+        "license": "CC BY-SA 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:CRJ-900_Air_Nostrum_EC-JTU_01.jpg"
+      },
+      "wikidataId": "Q962677",
+      "wikipediaTitle": "Bombardier CRJ700 series"
+    },
+    "fcrj200": {
+      "entryId": "fcrj200",
+      "photo": {
+        "artist": "ERIC SALARD from PARIS, FRANCE",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/7f/N466SW_LAX_%2830314755488%29.jpg/960px-N466SW_LAX_%2830314755488%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:N466SW_LAX_(30314755488).jpg"
+      },
+      "wikidataId": "Q3000403",
+      "wikipediaTitle": "Bombardier CRJ100/200"
+    },
+    "fcrj700": {
+      "entryId": "fcrj700",
+      "photo": {
+        "artist": "Bene Riobó",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/1/12/CRJ-900_Air_Nostrum_EC-JTU_01.jpg/960px-CRJ-900_Air_Nostrum_EC-JTU_01.jpg",
+        "license": "CC BY-SA 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:CRJ-900_Air_Nostrum_EC-JTU_01.jpg"
+      },
+      "wikidataId": "Q962677",
+      "wikipediaTitle": "Bombardier CRJ700 series"
+    },
+    "fcrj900": {
+      "entryId": "fcrj900",
+      "photo": {
+        "artist": "Bene Riobó",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/1/12/CRJ-900_Air_Nostrum_EC-JTU_01.jpg/960px-CRJ-900_Air_Nostrum_EC-JTU_01.jpg",
+        "license": "CC BY-SA 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:CRJ-900_Air_Nostrum_EC-JTU_01.jpg"
+      },
+      "wikidataId": "Q962677",
+      "wikipediaTitle": "Bombardier CRJ700 series"
+    },
+    "fd328-jet": {
+      "entryId": "fd328-jet",
+      "firstFlightYear": 1998,
+      "photo": {
+        "artist": "Juergen Lehle",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/69/Tyrolean_Jet_Services_Do-328-300_OE-HTJ.jpg/960px-Tyrolean_Jet_Services_Do-328-300_OE-HTJ.jpg",
+        "license": "CC BY-SA 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Tyrolean_Jet_Services_Do-328-300_OE-HTJ.jpg"
+      },
+      "wikidataId": "Q7451362",
+      "wikipediaTitle": "Fairchild Dornier 328JET"
+    },
+    "fda20": {
+      "entryId": "fda20",
+      "firstFlightYear": 1991,
+      "photo": {
+        "artist": "Projektor",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/43/Flying_Colors_Precision_Flight_Team.jpg/960px-Flying_Colors_Precision_Flight_Team.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Flying_Colors_Precision_Flight_Team.jpg"
+      },
+      "wikidataId": "Q929944",
+      "wikipediaTitle": "Diamond DA20 Katana"
+    },
+    "fda40": {
+      "entryId": "fda40",
+      "firstFlightYear": 1997,
+      "photo": {
+        "artist": "Ahunt at English Wikipedia",
+        "imageURL": "https://upload.wikimedia.org/wikipedia/commons/1/1f/DiamondDA40C-GSPB.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:DiamondDA40C-GSPB.jpg"
+      },
+      "wikidataId": "Q1208678",
+      "wikipediaTitle": "Diamond DA40 Diamond Star"
+    },
+    "fda42": {
+      "entryId": "fda42",
+      "firstFlightYear": 2002,
+      "photo": {
+        "artist": "Ahunt",
+        "imageURL": "https://upload.wikimedia.org/wikipedia/commons/2/2a/DiamondDA-42TwinStarN131TS04.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:DiamondDA-42TwinStarN131TS04.jpg"
+      },
+      "wikidataId": "Q370418",
+      "wikipediaTitle": "Diamond DA42 Twin Star"
+    },
+    "fda62": {
+      "entryId": "fda62",
+      "photo": {
+        "artist": "Anna Zvereva from Tallinn, Estonia",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/6f/Diamond_Sky%2C_ES-KEN%2C_Diamond_DA-62_%2836833726330%29.jpg/960px-Diamond_Sky%2C_ES-KEN%2C_Diamond_DA-62_%2836833726330%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Diamond_Sky,_ES-KEN,_Diamond_DA-62_(36833726330).jpg"
+      },
+      "wikidataId": "Q1208675",
+      "wikipediaTitle": "Diamond DA62"
+    },
+    "fdash8-100": {
+      "entryId": "fdash8-100",
+      "photo": {
+        "artist": "Marvin Mutz",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/8a/D-ABQR_Bombardier_Dash_8-Q400_airberlin_Eurowings_opb_LGW_DUS_2018-07-31_%2833a%29_%2844206314192%29.jpg/960px-D-ABQR_Bombardier_Dash_8-Q400_airberlin_Eurowings_opb_LGW_DUS_2018-07-31_%2833a%29_%2844206314192%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:D-ABQR_Bombardier_Dash_8-Q400_airberlin_Eurowings_opb_LGW_DUS_2018-07-31_(33a)_(44206314192).jpg"
+      },
+      "wikidataId": "Q736765",
+      "wikipediaTitle": "De Havilland Canada Dash 8"
+    },
+    "fdash8-200": {
+      "entryId": "fdash8-200",
+      "photo": {
+        "artist": "Marvin Mutz",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/8a/D-ABQR_Bombardier_Dash_8-Q400_airberlin_Eurowings_opb_LGW_DUS_2018-07-31_%2833a%29_%2844206314192%29.jpg/960px-D-ABQR_Bombardier_Dash_8-Q400_airberlin_Eurowings_opb_LGW_DUS_2018-07-31_%2833a%29_%2844206314192%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:D-ABQR_Bombardier_Dash_8-Q400_airberlin_Eurowings_opb_LGW_DUS_2018-07-31_(33a)_(44206314192).jpg"
+      },
+      "wikidataId": "Q736765",
+      "wikipediaTitle": "De Havilland Canada Dash 8"
+    },
+    "fdash8-300": {
+      "entryId": "fdash8-300",
+      "photo": {
+        "artist": "Marvin Mutz",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/8a/D-ABQR_Bombardier_Dash_8-Q400_airberlin_Eurowings_opb_LGW_DUS_2018-07-31_%2833a%29_%2844206314192%29.jpg/960px-D-ABQR_Bombardier_Dash_8-Q400_airberlin_Eurowings_opb_LGW_DUS_2018-07-31_%2833a%29_%2844206314192%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:D-ABQR_Bombardier_Dash_8-Q400_airberlin_Eurowings_opb_LGW_DUS_2018-07-31_(33a)_(44206314192).jpg"
+      },
+      "wikidataId": "Q736765",
+      "wikipediaTitle": "De Havilland Canada Dash 8"
+    },
+    "fdash8-400": {
+      "entryId": "fdash8-400",
+      "photo": {
+        "artist": "Marvin Mutz",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/8a/D-ABQR_Bombardier_Dash_8-Q400_airberlin_Eurowings_opb_LGW_DUS_2018-07-31_%2833a%29_%2844206314192%29.jpg/960px-D-ABQR_Bombardier_Dash_8-Q400_airberlin_Eurowings_opb_LGW_DUS_2018-07-31_%2833a%29_%2844206314192%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:D-ABQR_Bombardier_Dash_8-Q400_airberlin_Eurowings_opb_LGW_DUS_2018-07-31_(33a)_(44206314192).jpg"
+      },
+      "wikidataId": "Q736765",
+      "wikipediaTitle": "De Havilland Canada Dash 8"
+    },
+    "fdc10": {
+      "entryId": "fdc10",
+      "firstFlightYear": 1970,
+      "lengthMeters": 51.97,
+      "numberBuilt": 446,
+      "photo": {
+        "artist": "Danielkang7744 at English Wikipedia",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/d/d9/Continental_Airlines_DC-10.jpg/960px-Continental_Airlines_DC-10.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Continental_Airlines_DC-10.jpg"
+      },
+      "wikidataId": "Q208075",
+      "wikipediaTitle": "McDonnell Douglas DC-10",
+      "wingspanMeters": 50.4
+    },
+    "fdc9": {
+      "entryId": "fdc9",
+      "firstFlightYear": 1965,
+      "lengthMeters": 31.8,
+      "numberBuilt": 976,
+      "photo": {
+        "artist": "Anthony92931",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/ba/Northwest_N756NW_DC9.JPG/960px-Northwest_N756NW_DC9.JPG",
+        "license": "CC BY-SA 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Northwest_N756NW_DC9.JPG"
+      },
+      "wikidataId": "Q221414",
+      "wikipediaTitle": "McDonnell Douglas DC-9",
+      "wingspanMeters": 27.2
+    },
+    "fe170": {
+      "entryId": "fe170",
+      "photo": {
+        "artist": "Bene Riobó",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/d/d8/EI-RDB_Embraer_175_Alitalia_BCN.jpg/960px-EI-RDB_Embraer_175_Alitalia_BCN.jpg",
+        "license": "CC BY-SA 4.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:EI-RDB_Embraer_175_Alitalia_BCN.jpg"
+      },
+      "wikidataId": "Q3495319",
+      "wikipediaTitle": "Embraer E-Jet family"
+    },
+    "fe175": {
+      "entryId": "fe175",
+      "photo": {
+        "artist": "Bene Riobó",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/d/d8/EI-RDB_Embraer_175_Alitalia_BCN.jpg/960px-EI-RDB_Embraer_175_Alitalia_BCN.jpg",
+        "license": "CC BY-SA 4.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:EI-RDB_Embraer_175_Alitalia_BCN.jpg"
+      },
+      "wikidataId": "Q3495319",
+      "wikipediaTitle": "Embraer E-Jet family"
+    },
+    "fe190": {
+      "entryId": "fe190",
+      "photo": {
+        "artist": "Bene Riobó",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/d/d8/EI-RDB_Embraer_175_Alitalia_BCN.jpg/960px-EI-RDB_Embraer_175_Alitalia_BCN.jpg",
+        "license": "CC BY-SA 4.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:EI-RDB_Embraer_175_Alitalia_BCN.jpg"
+      },
+      "wikidataId": "Q3495319",
+      "wikipediaTitle": "Embraer E-Jet family"
+    },
+    "fe190-e2": {
+      "entryId": "fe190-e2",
+      "photo": {
+        "artist": "Alan Edwards from Chessington, UK",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/4d/PR-ZEY_E190-E2_%28FAB-EGLF%29_%2828498436022%29.jpg/960px-PR-ZEY_E190-E2_%28FAB-EGLF%29_%2828498436022%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:PR-ZEY_E190-E2_(FAB-EGLF)_(28498436022).jpg"
+      },
+      "wikidataId": "Q15266066",
+      "wikipediaTitle": "Embraer E-Jet E2 family"
+    },
+    "fe195": {
+      "entryId": "fe195",
+      "photo": {
+        "artist": "Bene Riobó",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/d/d8/EI-RDB_Embraer_175_Alitalia_BCN.jpg/960px-EI-RDB_Embraer_175_Alitalia_BCN.jpg",
+        "license": "CC BY-SA 4.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:EI-RDB_Embraer_175_Alitalia_BCN.jpg"
+      },
+      "wikidataId": "Q3495319",
+      "wikipediaTitle": "Embraer E-Jet family"
+    },
+    "fe195-e2": {
+      "entryId": "fe195-e2",
+      "photo": {
+        "artist": "Alan Edwards from Chessington, UK",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/4d/PR-ZEY_E190-E2_%28FAB-EGLF%29_%2828498436022%29.jpg/960px-PR-ZEY_E190-E2_%28FAB-EGLF%29_%2828498436022%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:PR-ZEY_E190-E2_(FAB-EGLF)_(28498436022).jpg"
+      },
+      "wikidataId": "Q15266066",
+      "wikipediaTitle": "Embraer E-Jet E2 family"
+    },
+    "fe35l": {
+      "entryId": "fe35l",
+      "firstFlightYear": 2001,
+      "numberBuilt": 283,
+      "photo": {
+        "artist": "Adrian Pingstone (Arpingstone)",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/9/9c/Embraer_legacy_600_g-irsh_arp.jpg/960px-Embraer_legacy_600_g-irsh_arp.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Embraer_legacy_600_g-irsh_arp.jpg"
+      },
+      "wikidataId": "Q1335176",
+      "wikipediaTitle": "Embraer Legacy 600"
+    },
+    "fe50p": {
+      "entryId": "fe50p",
+      "firstFlightYear": 2007,
+      "lengthMeters": 12.8,
+      "numberBuilt": 299,
+      "photo": {
+        "artist": "Greg Goebel",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/9/9d/Embraer_Phenom_100_%28N610AS%29.jpg/960px-Embraer_Phenom_100_%28N610AS%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Embraer_Phenom_100_(N610AS).jpg"
+      },
+      "wikidataId": "Q1049547",
+      "wikipediaTitle": "Embraer Phenom 100",
+      "wingspanMeters": 12.3
+    },
+    "fe550": {
+      "entryId": "fe550",
+      "photo": {
+        "artist": "Matti Blume",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/06/Embraer%2C_EBACE_2019%2C_Le_Grand-Saconnex_%28EB190376%29.jpg/960px-Embraer%2C_EBACE_2019%2C_Le_Grand-Saconnex_%28EB190376%29.jpg",
+        "license": "CC BY-SA 4.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Embraer,_EBACE_2019,_Le_Grand-Saconnex_(EB190376).jpg"
+      },
+      "wikidataId": "Q58487052",
+      "wikipediaTitle": "Embraer Legacy 450/500 and Praetor 500/600"
+    },
+    "fe55p": {
+      "entryId": "fe55p",
+      "firstFlightYear": 2008,
+      "numberBuilt": 834,
+      "wikidataId": "Q952417",
+      "wikipediaTitle": "Embraer Phenom 300"
+    },
+    "ferj135": {
+      "entryId": "ferj135",
+      "photo": {
+        "artist": "Adrian Pingstone",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c8/Flybe_erj145_g-erja_arp.jpg/960px-Flybe_erj145_g-erja_arp.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Flybe_erj145_g-erja_arp.jpg"
+      },
+      "wikidataId": "Q109423211",
+      "wikipediaTitle": "Embraer ERJ family"
+    },
+    "ferj145": {
+      "entryId": "ferj145",
+      "photo": {
+        "artist": "Adrian Pingstone",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c8/Flybe_erj145_g-erja_arp.jpg/960px-Flybe_erj145_g-erja_arp.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Flybe_erj145_g-erja_arp.jpg"
+      },
+      "wikidataId": "Q109423211",
+      "wikipediaTitle": "Embraer ERJ family"
+    },
+    "ff2th": {
+      "entryId": "ff2th",
+      "firstFlightYear": 1993,
+      "photo": {
+        "artist": "Adrian Pingstone",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/b7/Dassault.falcon.2000.vp-bdl.arp.jpg/960px-Dassault.falcon.2000.vp-bdl.arp.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Dassault.falcon.2000.vp-bdl.arp.jpg"
+      },
+      "wikidataId": "Q26790",
+      "wikipediaTitle": "Dassault Falcon 2000"
+    },
+    "ff900": {
+      "entryId": "ff900",
+      "firstFlightYear": 1984,
+      "photo": {
+        "artist": "Adrian Pingstone",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/81/Dassault.falcon900.cs-dfh.arp.jpg/960px-Dassault.falcon900.cs-dfh.arp.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Dassault.falcon900.cs-dfh.arp.jpg"
+      },
+      "wikidataId": "Q1141409",
+      "wikipediaTitle": "Dassault Falcon 900"
+    },
+    "ffa20": {
+      "entryId": "ffa20",
+      "firstFlightYear": 1963,
+      "lengthMeters": 17.15,
+      "numberBuilt": 508,
+      "wikidataId": "Q1474251",
+      "wikipediaTitle": "Dassault Falcon 20",
+      "wingspanMeters": 16.3
+    },
+    "ffa50": {
+      "entryId": "ffa50",
+      "firstFlightYear": 1976,
+      "lengthMeters": 18.5,
+      "numberBuilt": 352,
+      "photo": {
+        "artist": "Markus Eigenheer from Genève",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/8b/N990MM_Dassault_Breguet_Falcon_50_FA50_%2818698869395%29.jpg/960px-N990MM_Dassault_Breguet_Falcon_50_FA50_%2818698869395%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:N990MM_Dassault_Breguet_Falcon_50_FA50_(18698869395).jpg"
+      },
+      "wikidataId": "Q684763",
+      "wikipediaTitle": "Dassault Falcon 50",
+      "wingspanMeters": 18.86
+    },
+    "ffa6x": {
+      "entryId": "ffa6x",
+      "photo": {
+        "artist": "Matti Blume",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/72/Dassault_Falcon_6X_cabin_mock-up_at_EBACE_2019%2C_Le_Grand-Saconnex_%28EB190147%29.jpg/960px-Dassault_Falcon_6X_cabin_mock-up_at_EBACE_2019%2C_Le_Grand-Saconnex_%28EB190147%29.jpg",
+        "license": "CC BY-SA 4.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Dassault_Falcon_6X_cabin_mock-up_at_EBACE_2019,_Le_Grand-Saconnex_(EB190147).jpg"
+      },
+      "wikidataId": "Q50276460",
+      "wikipediaTitle": "Dassault Falcon 6X"
+    },
+    "ffa7x": {
+      "entryId": "ffa7x",
+      "photo": {
+        "artist": "Dmitry A. Mottl",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/64/Dassault_Falcon_7X.jpg/960px-Dassault_Falcon_7X.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Dassault_Falcon_7X.jpg"
+      },
+      "wikidataId": "Q1171993",
+      "wikipediaTitle": "Dassault Falcon 7X"
+    },
+    "ffa8x": {
+      "entryId": "ffa8x",
+      "photo": {
+        "artist": "Dmitry A. Mottl",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/64/Dassault_Falcon_7X.jpg/960px-Dassault_Falcon_7X.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Dassault_Falcon_7X.jpg"
+      },
+      "wikidataId": "Q1171993",
+      "wikipediaTitle": "Dassault Falcon 7X"
+    },
+    "fg-150": {
+      "entryId": "fg-150",
+      "photo": {
+        "artist": "Eddie Maloney from North Las Vegas, USA",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/ff/N916CG_%283996189731%29.jpg/960px-N916CG_%283996189731%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:N916CG_(3996189731).jpg"
+      },
+      "wikidataId": "Q2877369",
+      "wikipediaTitle": "Gulfstream G100"
+    },
+    "fg-280": {
+      "entryId": "fg-280",
+      "firstFlightYear": 2009,
+      "photo": {
+        "artist": "Micha Sender on Jetphotos",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/6d/4X-WBJ_Micha_Sender-1.jpg/960px-4X-WBJ_Micha_Sender-1.jpg",
+        "license": "CC BY-SA 4.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:4X-WBJ_Micha_Sender-1.jpg"
+      },
+      "wikidataId": "Q12059248",
+      "wikipediaTitle": "Gulfstream G280"
+    },
+    "fg-550": {
+      "entryId": "fg-550",
+      "firstFlightYear": 2002,
+      "lengthMeters": 29.39,
+      "numberBuilt": 617,
+      "photo": {
+        "artist": "Wo st 01",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/9/9b/2010-07-21_G550_NetJets_CS-DKE_EDDF_01.jpg/960px-2010-07-21_G550_NetJets_CS-DKE_EDDF_01.jpg",
+        "license": "CC BY-SA 3.0 de",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:2010-07-21_G550_NetJets_CS-DKE_EDDF_01.jpg"
+      },
+      "wikidataId": "Q29367260",
+      "wikipediaTitle": "Gulfstream G550",
+      "wingspanMeters": 28.5
+    },
+    "fg-600": {
+      "entryId": "fg-600",
+      "firstFlightYear": 2016,
+      "photo": {
+        "artist": "MilborneOne",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/d/db/N504GS-Gulfstream7-G500-farnborough2016-A1377.jpg/960px-N504GS-Gulfstream7-G500-farnborough2016-A1377.jpg",
+        "license": "CC BY-SA 4.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:N504GS-Gulfstream7-G500-farnborough2016-A1377.jpg"
+      },
+      "wikidataId": "Q24256468",
+      "wikipediaTitle": "Gulfstream G400/G500/G600"
+    },
+    "fg-650": {
+      "entryId": "fg-650",
+      "photo": {
+        "artist": "Waerfelu",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f8/Outside_G650_N520GA.JPG/960px-Outside_G650_N520GA.JPG",
+        "license": "CC BY 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Outside_G650_N520GA.JPG"
+      },
+      "wikidataId": "Q918427",
+      "wikipediaTitle": "Gulfstream G650/G700/G800"
+    },
+    "fg-700": {
+      "entryId": "fg-700",
+      "photo": {
+        "artist": "Waerfelu",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f8/Outside_G650_N520GA.JPG/960px-Outside_G650_N520GA.JPG",
+        "license": "CC BY 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Outside_G650_N520GA.JPG"
+      },
+      "wikidataId": "Q918427",
+      "wikipediaTitle": "Gulfstream G650/G700/G800"
+    },
+    "fg-astra": {
+      "entryId": "fg-astra",
+      "photo": {
+        "artist": "Eddie Maloney from North Las Vegas, USA",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/ff/N916CG_%283996189731%29.jpg/960px-N916CG_%283996189731%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:N916CG_(3996189731).jpg"
+      },
+      "wikidataId": "Q2877369",
+      "wikipediaTitle": "Gulfstream G100"
+    },
+    "fg-iv": {
+      "entryId": "fg-iv",
+      "firstFlightYear": 1985,
+      "lengthMeters": 26.92,
+      "numberBuilt": 535,
+      "photo": {
+        "artist": "Planephotoman",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/5/59/Gulfstream_G-400.jpg/960px-Gulfstream_G-400.jpg",
+        "license": "CC BY 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Gulfstream_G-400.jpg"
+      },
+      "wikidataId": "Q861792",
+      "wikipediaTitle": "Gulfstream IV",
+      "wingspanMeters": 23.72
+    },
+    "fgl5t": {
+      "entryId": "fgl5t",
+      "photo": {
+        "artist": "Wo st 01",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/cb/2010-07-08_BD700_Tyrolean_OE-IGS_EDDF_03.jpg/960px-2010-07-08_BD700_Tyrolean_OE-IGS_EDDF_03.jpg",
+        "license": "CC BY-SA 3.0 de",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:2010-07-08_BD700_Tyrolean_OE-IGS_EDDF_03.jpg"
+      },
+      "wikidataId": "Q373171",
+      "wikipediaTitle": "Bombardier Global Express"
+    },
+    "fgl7t": {
+      "entryId": "fgl7t",
+      "photo": {
+        "artist": "Matti Blume",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/77/Static_display%2C_EBACE_2018%2C_Le_Grand-Saconnex_%28BL7C0616%29.jpg/960px-Static_display%2C_EBACE_2018%2C_Le_Grand-Saconnex_%28BL7C0616%29.jpg",
+        "license": "CC BY-SA 4.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Static_display,_EBACE_2018,_Le_Grand-Saconnex_(BL7C0616).jpg"
+      },
+      "wikidataId": "Q2009129",
+      "wikipediaTitle": "Bombardier Global 7500"
+    },
+    "fglex": {
+      "entryId": "fglex",
+      "photo": {
+        "artist": "Wo st 01",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/cb/2010-07-08_BD700_Tyrolean_OE-IGS_EDDF_03.jpg/960px-2010-07-08_BD700_Tyrolean_OE-IGS_EDDF_03.jpg",
+        "license": "CC BY-SA 3.0 de",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:2010-07-08_BD700_Tyrolean_OE-IGS_EDDF_03.jpg"
+      },
+      "wikidataId": "Q373171",
+      "wikipediaTitle": "Bombardier Global Express"
+    },
+    "fh-a109": {
+      "entryId": "fh-a109",
+      "firstFlightYear": 1971,
+      "lengthMeters": 13.05,
+      "numberBuilt": 636,
+      "photo": {
+        "artist": "Rob Hodgkins",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/d/da/G-HEMZ_Augusta_109_Cvt_10-05-17_%2835421527336%29.jpg/960px-G-HEMZ_Augusta_109_Cvt_10-05-17_%2835421527336%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:G-HEMZ_Augusta_109_Cvt_10-05-17_(35421527336).jpg"
+      },
+      "wikidataId": "Q398965",
+      "wikipediaTitle": "AgustaWestland AW109"
+    },
+    "fh-a119": {
+      "entryId": "fh-a119",
+      "firstFlightYear": 1995,
+      "lengthMeters": 12.92,
+      "photo": {
+        "artist": "Refueled Dot Net",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/8a/NYPD_helicopter_N319PD.jpg/960px-NYPD_helicopter_N319PD.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:NYPD_helicopter_N319PD.jpg"
+      },
+      "wikidataId": "Q398951",
+      "wikipediaTitle": "AgustaWestland AW119 Koala"
+    },
+    "fh-a169": {
+      "entryId": "fh-a169",
+      "firstFlightYear": 2012,
+      "photo": {
+        "artist": "Adrian",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/bb/Agusta_Westland_AW_169_%28solo%29.jpg/960px-Agusta_Westland_AW_169_%28solo%29.jpg",
+        "license": "CC BY-SA 4.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Agusta_Westland_AW_169_(solo).jpg"
+      },
+      "wikidataId": "Q398904",
+      "wikipediaTitle": "AgustaWestland AW169"
+    },
+    "fh-as355": {
+      "entryId": "fh-as355",
+      "firstFlightYear": 1979,
+      "photo": {
+        "artist": "Laurent ERRERA from L'Union, France",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/7e/A%C3%A9rospatiale_AS-355_F2_Ecureuil_2_H%C3%A9li_B%C3%A9arn_SARL_F-HJLD_-_MSN_5064_%285387445580%29.jpg/960px-A%C3%A9rospatiale_AS-355_F2_Ecureuil_2_H%C3%A9li_B%C3%A9arn_SARL_F-HJLD_-_MSN_5064_%285387445580%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:A%C3%A9rospatiale_AS-355_F2_Ecureuil_2_H%C3%A9li_B%C3%A9arn_SARL_F-HJLD_-_MSN_5064_(5387445580).jpg"
+      },
+      "wikidataId": "Q39699",
+      "wikipediaTitle": "Eurocopter AS355 Écureuil 2"
+    },
+    "fh-aw139": {
+      "entryId": "fh-aw139",
+      "firstFlightYear": 2001,
+      "lengthMeters": 16.65,
+      "numberBuilt": 1000,
+      "photo": {
+        "artist": "Antonio Stellato",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/7b/Italian_Helicopter_HH139%2C_Trident_Juncture_15_%28cropped%29.jpg/960px-Italian_Helicopter_HH139%2C_Trident_Juncture_15_%28cropped%29.jpg",
+        "license": "CC BY 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Italian_Helicopter_HH139,_Trident_Juncture_15_(cropped).jpg"
+      },
+      "wikidataId": "Q398900",
+      "wikipediaTitle": "AgustaWestland AW139"
+    },
+    "fh-b206": {
+      "entryId": "fh-b206",
+      "firstFlightYear": 1962,
+      "lengthMeters": 12.0,
+      "numberBuilt": 7300,
+      "photo": {
+        "artist": "Mfield - Matthew Field, http://www.photography.mattfield.com",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/78/LAPD_Bell_206_Jetranger.jpg/960px-LAPD_Bell_206_Jetranger.jpg",
+        "license": "CC BY 2.5",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:LAPD_Bell_206_Jetranger.jpg"
+      },
+      "wikidataId": "Q660969",
+      "wikipediaTitle": "Bell 206"
+    },
+    "fh-b407": {
+      "entryId": "fh-b407",
+      "firstFlightYear": 1995,
+      "photo": {
+        "artist": "stuart.mike",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/80/Bell_407_-N23986.jpg/960px-Bell_407_-N23986.jpg",
+        "license": "CC BY 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Bell_407_-N23986.jpg"
+      },
+      "wikidataId": "Q815682",
+      "wikipediaTitle": "Bell 407"
+    },
+    "fh-b412": {
+      "entryId": "fh-b412",
+      "firstFlightYear": 1979,
+      "numberBuilt": 869,
+      "photo": {
+        "artist": "Christian Valle",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/e/e2/N301FD.jpg/960px-N301FD.jpg",
+        "license": "CC BY-SA 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:N301FD.jpg"
+      },
+      "wikidataId": "Q815688",
+      "wikipediaTitle": "Bell 412"
+    },
+    "fh-b429": {
+      "entryId": "fh-b429",
+      "firstFlightYear": 2007,
+      "photo": {
+        "artist": "Aleksandr Markin",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/b4/Bell429_RA-01601_%289772552923%29.jpg/960px-Bell429_RA-01601_%289772552923%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Bell429_RA-01601_(9772552923).jpg"
+      },
+      "wikidataId": "Q815686",
+      "wikipediaTitle": "Bell 429 GlobalRanger"
+    },
+    "fh-b505": {
+      "entryId": "fh-b505",
+      "firstFlightYear": 2014,
+      "photo": {
+        "artist": "antoine alacusos",
+        "imageURL": "https://upload.wikimedia.org/wikipedia/commons/9/9b/20180617_Knokke_le_Zoute_Air_Trophy_%28587%29_copie-border_%2828014684427%29_2_%28cropped%29.jpg",
+        "license": "CC BY 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:20180617_Knokke_le_Zoute_Air_Trophy_(587)_copie-border_(28014684427)_2_(cropped).jpg"
+      },
+      "wikidataId": "Q15830622",
+      "wikipediaTitle": "Bell 505 Jet Ranger X"
+    },
+    "fh-exec": {
+      "entryId": "fh-exec",
+      "firstFlightYear": 1994,
+      "photo": {
+        "artist": "User:Ahunt",
+        "imageURL": "https://upload.wikimedia.org/wikipedia/commons/a/ab/RotorwayExec01.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:RotorwayExec01.jpg"
+      },
+      "wikidataId": "Q2168895",
+      "wikipediaTitle": "RotorWay Exec"
+    },
+    "fh-g2ca": {
+      "entryId": "fh-g2ca",
+      "firstFlightYear": 2005,
+      "photo": {
+        "artist": "Mumulafrite",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/2/27/Cabri_G2.JPG/960px-Cabri_G2.JPG",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Cabri_G2.JPG"
+      },
+      "wikidataId": "Q1024963",
+      "wikipediaTitle": "Guimbal Cabri G2"
+    },
+    "fh-gazelle": {
+      "entryId": "fh-gazelle",
+      "firstFlightYear": 1967,
+      "lengthMeters": 11.97,
+      "numberBuilt": 1775,
+      "photo": {
+        "artist": "Eric Gaba (Sting - fr:Sting)",
+        "imageURL": "https://upload.wikimedia.org/wikipedia/commons/2/2c/Gazelle_SA341F2.jpg",
+        "license": "CC BY-SA 2.5",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Gazelle_SA341F2.jpg"
+      },
+      "wikidataId": "Q794595",
+      "wikipediaTitle": "Aérospatiale Gazelle"
+    },
+    "fh-h120": {
+      "entryId": "fh-h120",
+      "firstFlightYear": 1995,
+      "numberBuilt": 700,
+      "photo": {
+        "artist": "Adrian Pingstone",
+        "imageURL": "https://upload.wikimedia.org/wikipedia/commons/b/b7/Eurocopter_Colibri_750pix.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Eurocopter_Colibri_750pix.jpg"
+      },
+      "wikidataId": "Q39665",
+      "wikipediaTitle": "Eurocopter EC120 Colibri"
+    },
+    "fh-h125": {
+      "entryId": "fh-h125",
+      "firstFlightYear": 1974,
+      "numberBuilt": 3028,
+      "photo": {
+        "artist": "Fabien1309",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/7e/Helicopter_rescue_sancy_takeoff.jpg/960px-Helicopter_rescue_sancy_takeoff.jpg",
+        "license": "CC BY-SA 2.0 fr",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Helicopter_rescue_sancy_takeoff.jpg"
+      },
+      "wikidataId": "Q39668",
+      "wikipediaTitle": "Eurocopter AS350 Écureuil"
+    },
+    "fh-h130": {
+      "entryId": "fh-h130",
+      "firstFlightYear": 1999,
+      "photo": {
+        "artist": "Łukasz Golowanow & Maciej Hypś, Konflikty.pl",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/2/2a/Eurocopter_130_SP-MTB_3_%28modified%29.jpg/960px-Eurocopter_130_SP-MTB_3_%28modified%29.jpg",
+        "license": "CC BY-SA 4.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Eurocopter_130_SP-MTB_3_(modified).jpg"
+      },
+      "wikidataId": "Q39882",
+      "wikipediaTitle": "Eurocopter EC130"
+    },
+    "fh-h135": {
+      "entryId": "fh-h135",
+      "firstFlightYear": 1994,
+      "photo": {
+        "artist": "Stahlkocher",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/04/Eurocopter_EC_135_P2.jpg/960px-Eurocopter_EC_135_P2.jpg",
+        "license": "CC BY-SA 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Eurocopter_EC_135_P2.jpg"
+      },
+      "wikidataId": "Q39654",
+      "wikipediaTitle": "Eurocopter EC135"
+    },
+    "fh-h145": {
+      "entryId": "fh-h145",
+      "firstFlightYear": 1999,
+      "photo": {
+        "artist": "Matthias Zepper",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/b5/Zepper-BK_117-C2-%28EC145%29-SchweizerischeRettungsflugwacht.jpg/960px-Zepper-BK_117-C2-%28EC145%29-SchweizerischeRettungsflugwacht.jpg",
+        "license": "CC BY-SA 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Zepper-BK_117-C2-(EC145)-SchweizerischeRettungsflugwacht.jpg"
+      },
+      "wikidataId": "Q39679",
+      "wikipediaTitle": "Eurocopter EC145"
+    },
+    "fh-h160": {
+      "entryId": "fh-h160",
+      "firstFlightYear": 2015,
+      "photo": {
+        "artist": "Berg2",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/7b/Airbus_Helicopters_H160_%28cropped%29.jpg/960px-Airbus_Helicopters_H160_%28cropped%29.jpg",
+        "license": "CC BY-SA 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Airbus_Helicopters_H160_(cropped).jpg"
+      },
+      "wikidataId": "Q19412818",
+      "wikipediaTitle": "Airbus Helicopters H160"
+    },
+    "fh-h500": {
+      "entryId": "fh-h500",
+      "firstFlightYear": 1963,
+      "lengthMeters": 7.01,
+      "photo": {
+        "artist": "Adrian Pingstone (Arpingstone)",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/5/59/Md_helicopters_md-500e_g-sscl_arp.jpg/960px-Md_helicopters_md-500e_g-sscl_arp.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Md_helicopters_md-500e_g-sscl_arp.jpg"
+      },
+      "wikidataId": "Q848899",
+      "wikipediaTitle": "MD Helicopters MD 500"
+    },
+    "fh-r44": {
+      "entryId": "fh-r44",
+      "firstFlightYear": 1990,
+      "lengthMeters": 11.66,
+      "photo": {
+        "artist": "Eirik Haugen, ambulanse-norge",
+        "imageURL": "https://upload.wikimedia.org/wikipedia/commons/8/88/Robinson_r44.jpg",
+        "license": "CC BY 2.5",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Robinson_r44.jpg"
+      },
+      "wikidataId": "Q39675",
+      "wikipediaTitle": "Robinson R44"
+    },
+    "fh-s64": {
+      "entryId": "fh-s64",
+      "firstFlightYear": 1962,
+      "lengthMeters": 21.41,
+      "photo": {
+        "artist": "Regular Daddy",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/65/N179AC-Elvis-739.jpg/960px-N179AC-Elvis-739.jpg",
+        "license": "CC BY-SA 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:N179AC-Elvis-739.jpg"
+      },
+      "wikidataId": "Q1091524",
+      "wikipediaTitle": "Sikorsky S-64 Skycrane"
+    },
+    "fh-s76": {
+      "entryId": "fh-s76",
+      "firstFlightYear": 1977,
+      "lengthMeters": 13.44,
+      "numberBuilt": 537,
+      "photo": {
+        "artist": "MarekW",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/44/HeliJet_S76_landing_at_Vancouver_Harbour.jpg/960px-HeliJet_S76_landing_at_Vancouver_Harbour.jpg",
+        "license": "CC BY-SA 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:HeliJet_S76_landing_at_Vancouver_Harbour.jpg"
+      },
+      "wikidataId": "Q1141716",
+      "wikipediaTitle": "Sikorsky S-76"
+    },
+    "fh-s92": {
+      "entryId": "fh-s92",
+      "firstFlightYear": 1998,
+      "lengthMeters": 17.1,
+      "photo": {
+        "artist": "Ronnie Robertson",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/e/e1/S92_G-IACF_IMG_7005_%28cropped%29.jpg/960px-S92_G-IACF_IMG_7005_%28cropped%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:S92_G-IACF_IMG_7005_(cropped).jpg"
+      },
+      "wikidataId": "Q739040",
+      "wikipediaTitle": "Sikorsky S-92"
+    },
+    "flj-eclipse": {
+      "entryId": "flj-eclipse",
+      "firstFlightYear": 2002,
+      "photo": {
+        "artist": "Alan Radecki Akradecki",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/9/9e/Eclipse-N503EA-060825-23-16.jpg/960px-Eclipse-N503EA-060825-23-16.jpg",
+        "license": "CC BY-SA 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Eclipse-N503EA-060825-23-16.jpg"
+      },
+      "wikidataId": "Q1281954",
+      "wikipediaTitle": "Eclipse 500"
+    },
+    "flj-hondajet": {
+      "entryId": "flj-hondajet",
+      "firstFlightYear": 2003,
+      "lengthMeters": 13.0,
+      "numberBuilt": 125,
+      "wikidataId": "Q1519686",
+      "wikipediaTitle": "Honda HA-420 HondaJet",
+      "wingspanMeters": 12.1
+    },
+    "flj-pc24": {
+      "entryId": "flj-pc24",
+      "photo": {
+        "artist": "Richard Vandervord",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/b8/Pilatus_PC-24_roll-out.jpg/960px-Pilatus_PC-24_roll-out.jpg",
+        "license": "CC BY-SA 4.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Pilatus_PC-24_roll-out.jpg"
+      },
+      "wikidataId": "Q2094874",
+      "wikipediaTitle": "Pilatus PC-24"
+    },
+    "flj-premier": {
+      "entryId": "flj-premier",
+      "firstFlightYear": 1998,
+      "photo": {
+        "artist": "Kiefer. from Frankfurt, Germany",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/bf/Private%2C_Raytheon_390_Premier_I%2C_D-ISAG_%2814338584917%29.jpg/960px-Private%2C_Raytheon_390_Premier_I%2C_D-ISAG_%2814338584917%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Private,_Raytheon_390_Premier_I,_D-ISAG_(14338584917).jpg"
+      },
+      "wikidataId": "Q753672",
+      "wikipediaTitle": "Beechcraft Premier I"
+    },
+    "fm-a400m": {
+      "entryId": "fm-a400m",
+      "firstFlightYear": 2009,
+      "lengthMeters": 45.1,
+      "numberBuilt": 80,
+      "photo": {
+        "artist": "Dval027",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/74/EC-402_-_A400M_-_Airbus_industrie_-_TLS_-_En_finale_sur_32L_-_04550-2.jpg/960px-EC-402_-_A400M_-_Airbus_industrie_-_TLS_-_En_finale_sur_32L_-_04550-2.jpg",
+        "license": "CC BY-SA 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:EC-402_-_A400M_-_Airbus_industrie_-_TLS_-_En_finale_sur_32L_-_04550-2.jpg"
+      },
+      "wikidataId": "Q6496",
+      "wikipediaTitle": "Airbus A400M Atlas",
+      "wingspanMeters": 42.36
+    },
+    "fm-c130": {
+      "entryId": "fm-c130",
+      "firstFlightYear": 1954,
+      "lengthMeters": 29.78,
+      "numberBuilt": 2600,
+      "photo": {
+        "artist": "U.S. Air Force photo by Tech. Sgt. Howard Blair",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/cc/Lockheed_C-130_Hercules.jpg/960px-Lockheed_C-130_Hercules.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Lockheed_C-130_Hercules.jpg"
+      },
+      "wikidataId": "Q182027",
+      "wikipediaTitle": "Lockheed C-130 Hercules",
+      "wingspanMeters": 40.41
+    },
+    "fm-c17": {
+      "entryId": "fm-c17",
+      "firstFlightYear": 1991,
+      "lengthMeters": 53.0,
+      "numberBuilt": 279,
+      "photo": {
+        "artist": "Technical Sergeant James E. Lotz",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/d/d3/C-17_4.jpg/960px-C-17_4.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:C-17_4.jpg"
+      },
+      "wikidataId": "Q211369",
+      "wikipediaTitle": "Boeing C-17 Globemaster III",
+      "wingspanMeters": 52.0
+    },
+    "fm-c27j": {
+      "entryId": "fm-c27j",
+      "firstFlightYear": 1999,
+      "numberBuilt": 117,
+      "photo": {
+        "artist": "Dmitry A. Mottl",
+        "imageURL": "https://upload.wikimedia.org/wikipedia/commons/9/90/Alenia_C27J_Spartan_2_%28cropped%29.jpg",
+        "license": "CC0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Alenia_C27J_Spartan_2_(cropped).jpg"
+      },
+      "wikidataId": "Q1161870",
+      "wikipediaTitle": "Alenia C-27J Spartan"
+    },
+    "fm-c5": {
+      "entryId": "fm-c5",
+      "firstFlightYear": 1968,
+      "lengthMeters": 75.3,
+      "numberBuilt": 131,
+      "photo": {
+        "artist": "U.S. Air Force photo by Tech. Sgt. Charlie Miller",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/e/e6/C5_galaxy.jpg/960px-C5_galaxy.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:C5_galaxy.jpg"
+      },
+      "wikidataId": "Q182012",
+      "wikipediaTitle": "Lockheed C-5 Galaxy",
+      "wingspanMeters": 67.89
+    },
+    "fm-ch47": {
+      "entryId": "fm-ch47",
+      "firstFlightYear": 1961,
+      "lengthMeters": 30.1,
+      "numberBuilt": 1200,
+      "photo": {
+        "artist": "Airwolfhound from Hertfordshire, UK",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a9/CH-47_Chinook_-_RIAT_2015_%2820820630144%29.jpg/960px-CH-47_Chinook_-_RIAT_2015_%2820820630144%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:CH-47_Chinook_-_RIAT_2015_(20820630144).jpg"
+      },
+      "wikidataId": "Q209613",
+      "wikipediaTitle": "Boeing CH-47 Chinook"
+    },
+    "fm-cn235": {
+      "entryId": "fm-cn235",
+      "firstFlightYear": 1983,
+      "lengthMeters": 21.35,
+      "numberBuilt": 286,
+      "photo": {
+        "artist": "Ejército del Aire Ministerio de Defensa España",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/5/55/Ejercicio_Dissimilar_Air_Combat_Training_-_DACT_2017_-_Base_A%C3%A9rea_de_Gando_%2832765123825%29.jpg/960px-Ejercicio_Dissimilar_Air_Combat_Training_-_DACT_2017_-_Base_A%C3%A9rea_de_Gando_%2832765123825%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Ejercicio_Dissimilar_Air_Combat_Training_-_DACT_2017_-_Base_A%C3%A9rea_de_Gando_(32765123825).jpg"
+      },
+      "wikidataId": "Q6498",
+      "wikipediaTitle": "CASA/IPTN CN-235",
+      "wingspanMeters": 25.81
+    },
+    "fm-e6": {
+      "entryId": "fm-e6",
+      "firstFlightYear": 1987,
+      "numberBuilt": 16,
+      "photo": {
+        "artist": "Airwolfhound from Hertfordshire, UK",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/e/e5/E-6B_Mercury_-_RIAT_2018_%2843308247084%29.jpg/960px-E-6B_Mercury_-_RIAT_2018_%2843308247084%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:E-6B_Mercury_-_RIAT_2018_(43308247084).jpg"
+      },
+      "wikidataId": "Q604916",
+      "wikipediaTitle": "Boeing E-6 Mercury"
+    },
+    "fm-f5": {
+      "entryId": "fm-f5",
+      "firstFlightYear": 1959,
+      "lengthMeters": 14.45,
+      "photo": {
+        "artist": "National Museum of USAF",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/85/Northrop_F-5E_%28Tail_No._01557%29_061006-F-1234S-073.jpg/960px-Northrop_F-5E_%28Tail_No._01557%29_061006-F-1234S-073.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Northrop_F-5E_(Tail_No._01557)_061006-F-1234S-073.jpg"
+      },
+      "wikidataId": "Q308940",
+      "wikipediaTitle": "Northrop F-5",
+      "wingspanMeters": 8.13
+    },
+    "fm-hawk": {
+      "entryId": "fm-hawk",
+      "firstFlightYear": 1974,
+      "lengthMeters": 12.43,
+      "numberBuilt": 1000,
+      "photo": {
+        "artist": "Adrian Pingstone (Arpingstone)",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/be/Bae_hawk_t1_xx245_inflight_arp.jpg/960px-Bae_hawk_t1_xx245_inflight_arp.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Bae_hawk_t1_xx245_inflight_arp.jpg"
+      },
+      "wikidataId": "Q687743",
+      "wikipediaTitle": "BAE Systems Hawk",
+      "wingspanMeters": 9.94
+    },
+    "fm-hh65": {
+      "entryId": "fm-hh65",
+      "firstFlightYear": 1980,
+      "lengthMeters": 11.63,
+      "numberBuilt": 102,
+      "photo": {
+        "artist": "Don Ramey Logan",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/7d/USCG_MH-65C_Helicopter_6608_photo_Don_Ramey_Logan.jpg/960px-USCG_MH-65C_Helicopter_6608_photo_Don_Ramey_Logan.jpg",
+        "license": "CC BY-SA 4.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:USCG_MH-65C_Helicopter_6608_photo_Don_Ramey_Logan.jpg"
+      },
+      "wikidataId": "Q972242",
+      "wikipediaTitle": "Eurocopter MH-65 Dolphin"
+    },
+    "fm-hornet": {
+      "entryId": "fm-hornet",
+      "firstFlightYear": 1978,
+      "lengthMeters": 17.1,
+      "numberBuilt": 1480,
+      "photo": {
+        "artist": "DN-SC-04-08946",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/0e/F-18_overflying_water_-_%28USN%2C_USDoD%29.jpg/960px-F-18_overflying_water_-_%28USN%2C_USDoD%29.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:F-18_overflying_water_-_(USN,_USDoD).jpg"
+      },
+      "wikidataId": "Q46397",
+      "wikipediaTitle": "McDonnell Douglas F/A-18 Hornet"
+    },
+    "fm-kc135": {
+      "entryId": "fm-kc135",
+      "firstFlightYear": 1956,
+      "lengthMeters": 41.5,
+      "numberBuilt": 803,
+      "photo": {
+        "artist": "U.S. Air Force photo by Kevin Robertson",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/cf/Usaf.kc135.750pix.jpg/960px-Usaf.kc135.750pix.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Usaf.kc135.750pix.jpg"
+      },
+      "wikidataId": "Q829092",
+      "wikipediaTitle": "Boeing KC-135 Stratotanker",
+      "wingspanMeters": 39.88
+    },
+    "fm-l39": {
+      "entryId": "fm-l39",
+      "firstFlightYear": 1968,
+      "lengthMeters": 12.11,
+      "numberBuilt": 2900,
+      "photo": {
+        "artist": "Md Shaifuzzaman Ayon",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/ad/Aero_L-39_Albatros_Jet_Trainer.jpg/960px-Aero_L-39_Albatros_Jet_Trainer.jpg",
+        "license": "CC BY-SA 4.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Aero_L-39_Albatros_Jet_Trainer.jpg"
+      },
+      "wikidataId": "Q155899",
+      "wikipediaTitle": "Aero L-39 Albatros",
+      "wingspanMeters": 9.11
+    },
+    "fm-p8": {
+      "entryId": "fm-p8",
+      "firstFlightYear": 2009,
+      "lengthMeters": 39.47,
+      "photo": {
+        "artist": "Greg L. Davis",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/e/e4/P-8A_Poseidon_VX-20_Squadron.jpg/960px-P-8A_Poseidon_VX-20_Squadron.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:P-8A_Poseidon_VX-20_Squadron.jpg"
+      },
+      "wikidataId": "Q611401",
+      "wikipediaTitle": "Boeing P-8 Poseidon",
+      "wingspanMeters": 37.64
+    },
+    "fm-pc21": {
+      "entryId": "fm-pc21",
+      "firstFlightYear": 2002,
+      "numberBuilt": 209,
+      "photo": {
+        "artist": "Adrian Pingstone (Arpingstone)",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/63/Pilatus_pc-21_hb-hzc_lands_arp.jpg/960px-Pilatus_pc-21_hb-hzc_lands_arp.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Pilatus_pc-21_hb-hzc_lands_arp.jpg"
+      },
+      "wikidataId": "Q680060",
+      "wikipediaTitle": "Pilatus PC-21"
+    },
+    "fm-pc7": {
+      "entryId": "fm-pc7",
+      "firstFlightYear": 1966,
+      "lengthMeters": 9.78,
+      "numberBuilt": 618,
+      "photo": {
+        "artist": "Yannick Bammert",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/37/Swiss_Air_Force_Pilatus_PC-7_%28cropped%29.jpg/960px-Swiss_Air_Force_Pilatus_PC-7_%28cropped%29.jpg",
+        "license": "CC BY 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Swiss_Air_Force_Pilatus_PC-7_(cropped).jpg"
+      },
+      "wikidataId": "Q688148",
+      "wikipediaTitle": "Pilatus PC-7",
+      "wingspanMeters": 10.4
+    },
+    "fm-t33": {
+      "entryId": "fm-t33",
+      "firstFlightYear": 1948,
+      "numberBuilt": 6557,
+      "photo": {
+        "artist": "Greg Goebel",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f5/Thunderbirds_Lockheed_T-33_Shooting_Star%2C_Chino%2C_California.jpg/960px-Thunderbirds_Lockheed_T-33_Shooting_Star%2C_Chino%2C_California.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Thunderbirds_Lockheed_T-33_Shooting_Star,_Chino,_California.jpg"
+      },
+      "wikidataId": "Q58725",
+      "wikipediaTitle": "Lockheed T-33"
+    },
+    "fm-t38": {
+      "entryId": "fm-t38",
+      "firstFlightYear": 1959,
+      "numberBuilt": 1187,
+      "photo": {
+        "artist": "US Air Force http://www.af.mil/shared/media/photodb/photos/050415-F-0000S-002.jpg",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/1/1b/T-38_%28050415-F-0000S-002%29.jpg/960px-T-38_%28050415-F-0000S-002%29.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:T-38_(050415-F-0000S-002).jpg"
+      },
+      "wikidataId": "Q164523",
+      "wikipediaTitle": "Northrop T-38 Talon"
+    },
+    "fm-texan2": {
+      "entryId": "fm-texan2",
+      "firstFlightYear": 2000,
+      "lengthMeters": 10.16,
+      "photo": {
+        "artist": "U.S. Air Force photo by Master Sgt. David Richards",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/d/d8/T-6A_Texan_II.jpg/960px-T-6A_Texan_II.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:T-6A_Texan_II.jpg"
+      },
+      "wikidataId": "Q814025",
+      "wikipediaTitle": "Beechcraft T-6 Texan II",
+      "wingspanMeters": 10.19
+    },
+    "fm-u2": {
+      "entryId": "fm-u2",
+      "firstFlightYear": 1955,
+      "numberBuilt": 104,
+      "photo": {
+        "artist": "United States Air Force",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/2/23/5th_Reconnaissance_Squadron_-_U-2_Osan.jpg/960px-5th_Reconnaissance_Squadron_-_U-2_Osan.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:5th_Reconnaissance_Squadron_-_U-2_Osan.jpg"
+      },
+      "wikidataId": "Q189064",
+      "wikipediaTitle": "Lockheed U-2"
+    },
+    "fm-uh1": {
+      "entryId": "fm-uh1",
+      "firstFlightYear": 1956,
+      "lengthMeters": 12.77,
+      "numberBuilt": 16000,
+      "photo": {
+        "artist": "Airwolfhound from Hertfordshire, UK",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/e/ee/UH1_Huey_-_Fly_Navy_2017_%28cropped%29.jpg/960px-UH1_Huey_-_Fly_Navy_2017_%28cropped%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:UH1_Huey_-_Fly_Navy_2017_(cropped).jpg"
+      },
+      "wikidataId": "Q154106",
+      "wikipediaTitle": "Bell UH-1 Iroquois"
+    },
+    "fm-uh60": {
+      "entryId": "fm-uh60",
+      "firstFlightYear": 1974,
+      "numberBuilt": 4000,
+      "photo": {
+        "artist": "https://airdefense.bliss.army.mil",
+        "imageURL": "https://upload.wikimedia.org/wikipedia/commons/9/9b/Sikorsky_UH-60A_Black_Hawk_3-view_line_drawing.png",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Sikorsky_UH-60A_Black_Hawk_3-view_line_drawing.png"
+      },
+      "wikidataId": "Q189491",
+      "wikipediaTitle": "Sikorsky UH-60 Black Hawk"
+    },
+    "fmd11": {
+      "entryId": "fmd11",
+      "firstFlightYear": 1990,
+      "lengthMeters": 61.21,
+      "numberBuilt": 200,
+      "photo": {
+        "artist": "Boushh_TFA from Kortenhoef, The Netherlands / Altair78",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/36/KLM_McDonnell_Douglas_MD-11_PH-KCK_Ingrid_Bergman.jpg/960px-KLM_McDonnell_Douglas_MD-11_PH-KCK_Ingrid_Bergman.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:KLM_McDonnell_Douglas_MD-11_PH-KCK_Ingrid_Bergman.jpg"
+      },
+      "wikidataId": "Q62161",
+      "wikipediaTitle": "McDonnell Douglas MD-11",
+      "wingspanMeters": 51.66
+    },
+    "fmd80": {
+      "entryId": "fmd80",
+      "firstFlightYear": 1979,
+      "lengthMeters": 41.3,
+      "numberBuilt": 1191,
+      "photo": {
+        "artist": "Luis Argerich from Buenos Aires, Argentina",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/33/Andes_L%C3%ADneas_A%C3%A9reas_MD-83_%28LV-BTH%29%2C_February_2009.jpg/960px-Andes_L%C3%ADneas_A%C3%A9reas_MD-83_%28LV-BTH%29%2C_February_2009.jpg",
+        "license": "CC BY 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Andes_L%C3%ADneas_A%C3%A9reas_MD-83_(LV-BTH),_February_2009.jpg"
+      },
+      "wikidataId": "Q207400",
+      "wikipediaTitle": "McDonnell Douglas MD-80",
+      "wingspanMeters": 32.85
+    },
+    "fmd90": {
+      "entryId": "fmd90",
+      "firstFlightYear": 1993,
+      "lengthMeters": 45.1,
+      "numberBuilt": 116,
+      "photo": {
+        "artist": "Eddie Maloney from North Las Vegas, USA",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a4/Delta_McDonnell_Douglas_MD-90-30_N908DA_%282933350864%29.jpg/960px-Delta_McDonnell_Douglas_MD-90-30_N908DA_%282933350864%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Delta_McDonnell_Douglas_MD-90-30_N908DA_(2933350864).jpg"
+      },
+      "wikidataId": "Q862615",
+      "wikipediaTitle": "McDonnell Douglas MD-90",
+      "wingspanMeters": 32.8
+    },
+    "fmu2": {
+      "entryId": "fmu2",
+      "firstFlightYear": 1963,
+      "lengthMeters": 12.02,
+      "numberBuilt": 704,
+      "photo": {
+        "artist": "Jozef Tóth",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/09/Mitsubishi_MU-2B-25_%28OK-ATX%29.jpg/960px-Mitsubishi_MU-2B-25_%28OK-ATX%29.jpg",
+        "license": "CC BY-SA 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Mitsubishi_MU-2B-25_(OK-ATX).jpg"
+      },
+      "wikidataId": "Q371359",
+      "wikipediaTitle": "Mitsubishi MU-2",
+      "wingspanMeters": 11.94
+    },
+    "fpa12": {
+      "entryId": "fpa12",
+      "photo": {
+        "artist": "Ahunt",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/73/Piper_PA-12_C-FSCU_01.JPG/960px-Piper_PA-12_C-FSCU_01.JPG",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Piper_PA-12_C-FSCU_01.JPG"
+      },
+      "wikidataId": "Q2096450",
+      "wikipediaTitle": "Piper PA-12 Super Cruiser"
+    },
+    "fpa22": {
+      "entryId": "fpa22",
+      "wikidataId": "Q7197310",
+      "wikipediaTitle": "Piper PA-20 Pacer"
+    },
+    "fpa23": {
+      "entryId": "fpa23",
+      "firstFlightYear": 1952,
+      "lengthMeters": 8.41,
+      "numberBuilt": 6976,
+      "photo": {
+        "artist": "Alan Wilson from Stilton, Peterborough, Cambs, UK",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/e/ee/Piper_PA23-160_Apache_%E2%80%98G-APFV%E2%80%99_%2831103193338%29.jpg/960px-Piper_PA23-160_Apache_%E2%80%98G-APFV%E2%80%99_%2831103193338%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Piper_PA23-160_Apache_%E2%80%98G-APFV%E2%80%99_(31103193338).jpg"
+      },
+      "wikidataId": "Q441585",
+      "wikipediaTitle": "Piper PA-23",
+      "wingspanMeters": 11.33
+    },
+    "fpa24": {
+      "entryId": "fpa24",
+      "numberBuilt": 4857,
+      "photo": {
+        "artist": "Alan Radecki Akradecki",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/9/9b/Pa24-N5760P-071126-01-16.jpg/960px-Pa24-N5760P-071126-01-16.jpg",
+        "license": "CC BY-SA 4.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Pa24-N5760P-071126-01-16.jpg"
+      },
+      "wikidataId": "Q1860367",
+      "wikipediaTitle": "Piper PA-24 Comanche"
+    },
+    "fpa28": {
+      "entryId": "fpa28",
+      "firstFlightYear": 1960,
+      "lengthMeters": 8.23,
+      "numberBuilt": 32778,
+      "photo": {
+        "artist": "Alan Wilson from Stilton, Peterborough, Cambs, UK",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/79/Piper_PA28-181_Archer_II_%E2%80%98G-BXEX%E2%80%99_%2844034123880%29.jpg/960px-Piper_PA28-181_Archer_II_%E2%80%98G-BXEX%E2%80%99_%2844034123880%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Piper_PA28-181_Archer_II_%E2%80%98G-BXEX%E2%80%99_(44034123880).jpg"
+      },
+      "wikidataId": "Q403510",
+      "wikipediaTitle": "Piper PA-28 Cherokee",
+      "wingspanMeters": 10.8
+    },
+    "fpa30": {
+      "entryId": "fpa30",
+      "firstFlightYear": 1962,
+      "lengthMeters": 7.67,
+      "numberBuilt": 2142,
+      "photo": {
+        "artist": "Drgitlow at English Wikipedia",
+        "imageURL": "https://upload.wikimedia.org/wikipedia/commons/d/d2/Piper_PA-30_Twin_Comanche_landing.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Piper_PA-30_Twin_Comanche_landing.jpg"
+      },
+      "wikidataId": "Q1414859",
+      "wikipediaTitle": "Piper PA-30 Twin Comanche",
+      "wingspanMeters": 11.22
+    },
+    "fpa31": {
+      "entryId": "fpa31",
+      "firstFlightYear": 1964,
+      "lengthMeters": 9.94,
+      "numberBuilt": 4,
+      "photo": {
+        "artist": "Anna Zvereva",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/03/Pakker_Avio%2C_ES-EPA%2C_Piper_PA-31-310_Navajo_C_%2816455840372%29.jpg/960px-Pakker_Avio%2C_ES-EPA%2C_Piper_PA-31-310_Navajo_C_%2816455840372%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Pakker_Avio,_ES-EPA,_Piper_PA-31-310_Navajo_C_(16455840372).jpg"
+      },
+      "wikidataId": "Q745036",
+      "wikipediaTitle": "Piper PA-31 Navajo",
+      "wingspanMeters": 12.4
+    },
+    "fpa32": {
+      "entryId": "fpa32",
+      "firstFlightYear": 1963,
+      "numberBuilt": 7842,
+      "photo": {
+        "artist": "",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f2/Piper.pa32.cherokee.six.g-bxwp.arp.jpg/960px-Piper.pa32.cherokee.six.g-bxwp.arp.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Piper.pa32.cherokee.six.g-bxwp.arp.jpg"
+      },
+      "wikidataId": "Q2096452",
+      "wikipediaTitle": "Piper PA-32 Cherokee Six"
+    },
+    "fpa34": {
+      "entryId": "fpa34",
+      "firstFlightYear": 1967,
+      "lengthMeters": 8.73,
+      "numberBuilt": 5037,
+      "photo": {
+        "artist": "",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/7c/Piper.seneca.pa34.g-elis.bristol.arp.jpg/960px-Piper.seneca.pa34.g-elis.bristol.arp.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Piper.seneca.pa34.g-elis.bristol.arp.jpg"
+      },
+      "wikidataId": "Q181818",
+      "wikipediaTitle": "Piper PA-34 Seneca",
+      "wingspanMeters": 11.85
+    },
+    "fpa44": {
+      "entryId": "fpa44",
+      "lengthMeters": 8.41,
+      "photo": {
+        "artist": "KGG1951",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/b4/Piper-pa-44.jpg/960px-Piper-pa-44.jpg",
+        "license": "CC BY-SA 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Piper-pa-44.jpg"
+      },
+      "wikidataId": "Q950548",
+      "wikipediaTitle": "Piper PA-44 Seminole",
+      "wingspanMeters": 11.75
+    },
+    "fpa46": {
+      "entryId": "fpa46",
+      "firstFlightYear": 1979,
+      "wikidataId": "Q1809515",
+      "wikipediaTitle": "Piper PA-46"
+    },
+    "fpa60": {
+      "entryId": "fpa60",
+      "firstFlightYear": 1967,
+      "lengthMeters": 10.61,
+      "photo": {
+        "artist": "",
+        "imageURL": "https://upload.wikimedia.org/wikipedia/commons/c/c8/TedSmith600AerostarC-FEHK.JPG",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:TedSmith600AerostarC-FEHK.JPG"
+      },
+      "wikidataId": "Q175092",
+      "wikipediaTitle": "Piper Aerostar",
+      "wingspanMeters": 11.18
+    },
+    "fpay2": {
+      "entryId": "fpay2",
+      "firstFlightYear": 1969,
+      "lengthMeters": 10.57,
+      "numberBuilt": 823,
+      "photo": {
+        "artist": "Rami Mizrahi on Jetphotos",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/b0/4X-CBL_Rami_Mizrahi.jpg/960px-4X-CBL_Rami_Mizrahi.jpg",
+        "license": "CC BY-SA 4.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:4X-CBL_Rami_Mizrahi.jpg"
+      },
+      "wikidataId": "Q1582144",
+      "wikipediaTitle": "Piper PA-31T Cheyenne",
+      "wingspanMeters": 13.01
+    },
+    "fsc-aa5": {
+      "entryId": "fsc-aa5",
+      "lengthMeters": 6.71,
+      "photo": {
+        "artist": "Arpingstone",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/5/52/Grumman.aa-5.traveller.g-bezf.arp.jpg/960px-Grumman.aa-5.traveller.g-bezf.arp.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Grumman.aa-5.traveller.g-bezf.arp.jpg"
+      },
+      "wikidataId": "Q1455248",
+      "wikipediaTitle": "Grumman American AA-5",
+      "wingspanMeters": 9.6
+    },
+    "fsc-air-beetle": {
+      "entryId": "fsc-air-beetle",
+      "firstFlightYear": 1986,
+      "photo": {
+        "artist": "Ken Hodge from Darwin, Australia",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c8/VH-YLC_Vans_RV6_at_SAAA_Langley_Park_Flyin_October_2011_%286806014742%29.jpg/960px-VH-YLC_Vans_RV6_at_SAAA_Langley_Park_Flyin_October_2011_%286806014742%29.jpg",
+        "license": "CC BY 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:VH-YLC_Vans_RV6_at_SAAA_Langley_Park_Flyin_October_2011_(6806014742).jpg"
+      },
+      "wikidataId": "Q3554378",
+      "wikipediaTitle": "Van's Aircraft RV-6"
+    },
+    "fsc-airvan": {
+      "entryId": "fsc-airvan",
+      "photo": {
+        "artist": "Cory W. Watts from Madison, Wisconsin, United States of America",
+        "imageURL": "https://upload.wikimedia.org/wikipedia/commons/9/92/Gippsland_GA-8_%281911046467%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Gippsland_GA-8_(1911046467).jpg"
+      },
+      "wikidataId": "Q747706",
+      "wikipediaTitle": "GippsAero GA8 Airvan"
+    },
+    "fsc-alarus": {
+      "entryId": "fsc-alarus",
+      "photo": {
+        "artist": "",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/e/e9/AMD_Alarus_side_view.jpg/960px-AMD_Alarus_side_view.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:AMD_Alarus_side_view.jpg"
+      },
+      "wikidataId": "Q3575208",
+      "wikipediaTitle": "AMD Alarus"
+    },
+    "fsc-aquila-a210": {
+      "entryId": "fsc-aquila-a210",
+      "firstFlightYear": 2000,
+      "photo": {
+        "artist": "MAYDAYMAYDAY",
+        "imageURL": "https://upload.wikimedia.org/wikipedia/commons/a/a2/Aquila_en_volm.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Aquila_en_volm.jpg"
+      },
+      "wikidataId": "Q474294",
+      "wikipediaTitle": "Aquila A 210"
+    },
+    "fsc-aurora": {
+      "entryId": "fsc-aurora",
+      "lengthMeters": 6.89,
+      "photo": {
+        "artist": "NickJ 1972",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/ca/Sunward_SA_60L_Aurora_-_Guangdong_Xiangfei_General_Aviation_-_B-12VM.jpg/960px-Sunward_SA_60L_Aurora_-_Guangdong_Xiangfei_General_Aviation_-_B-12VM.jpg",
+        "license": "CC BY-SA 4.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Sunward_SA_60L_Aurora_-_Guangdong_Xiangfei_General_Aviation_-_B-12VM.jpg"
+      },
+      "wikidataId": "Q7641731",
+      "wikipediaTitle": "Sunward SA 60L Aurora",
+      "wingspanMeters": 8.6
+    },
+    "fsc-bristell": {
+      "entryId": "fsc-bristell",
+      "photo": {
+        "artist": "Aleksandr Markin",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/1/1a/Bristell_RA-0146A_%2814078295128%29.jpg/960px-Bristell_RA-0146A_%2814078295128%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Bristell_RA-0146A_(14078295128).jpg"
+      },
+      "wikidataId": "Q4836381",
+      "wikipediaTitle": "BRM Aero Bristell"
+    },
+    "fsc-bushcat": {
+      "entryId": "fsc-bushcat",
+      "photo": {
+        "artist": "FlugKerl2",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/6a/RainbowSkyreach_BushCat.jpg/960px-RainbowSkyreach_BushCat.jpg",
+        "license": "CC BY-SA 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:RainbowSkyreach_BushCat.jpg"
+      },
+      "wikidataId": "Q7284712",
+      "wikipediaTitle": "SkyReach BushCat"
+    },
+    "fsc-c42": {
+      "entryId": "fsc-c42",
+      "firstFlightYear": 1996,
+      "photo": {
+        "artist": "Adrian Pingstone",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/e/ed/Ikarus_c42_g-hbbh_athangar_arp.jpg/960px-Ikarus_c42_g-hbbh_athangar_arp.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Ikarus_c42_g-hbbh_athangar_arp.jpg"
+      },
+      "wikidataId": "Q1559874",
+      "wikipediaTitle": "Ikarus C42"
+    },
+    "fsc-catalina": {
+      "entryId": "fsc-catalina",
+      "photo": {
+        "artist": "Matti Blume",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/4f/Fly_Synthesis_Catalina_at_AERO_Friedrichshafen_2018%2C_Friedrichshafen_%281X7A4291%29.jpg/960px-Fly_Synthesis_Catalina_at_AERO_Friedrichshafen_2018%2C_Friedrichshafen_%281X7A4291%29.jpg",
+        "license": "CC BY-SA 4.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Fly_Synthesis_Catalina_at_AERO_Friedrichshafen_2018,_Friedrichshafen_(1X7A4291).jpg"
+      },
+      "wikidataId": "Q5463208",
+      "wikipediaTitle": "Fly Synthesis Catalina"
+    },
+    "fsc-cavalon": {
+      "entryId": "fsc-cavalon",
+      "photo": {
+        "artist": "Mike Burdett from CROMER, UK",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/85/G-CGYX_%2831016845738%29.jpg/960px-G-CGYX_%2831016845738%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:G-CGYX_(31016845738).jpg"
+      },
+      "wikidataId": "Q474696",
+      "wikipediaTitle": "AutoGyro Cavalon"
+    },
+    "fsc-citabria": {
+      "entryId": "fsc-citabria",
+      "firstFlightYear": 1964,
+      "lengthMeters": 6.91,
+      "photo": {
+        "artist": "Arpingstone",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/8d/Bellanca.citabria.arp.jpg/960px-Bellanca.citabria.arp.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Bellanca.citabria.arp.jpg"
+      },
+      "wikidataId": "Q4033902",
+      "wikipediaTitle": "American Champion Citabria",
+      "wingspanMeters": 10.19
+    },
+    "fsc-commander112": {
+      "entryId": "fsc-commander112",
+      "firstFlightYear": 1970,
+      "lengthMeters": 7.63,
+      "photo": {
+        "artist": "Aleksandr Markin",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/5/51/Commander_112a._N1064J_%285713209127%29.jpg/960px-Commander_112a._N1064J_%285713209127%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Commander_112a._N1064J_(5713209127).jpg"
+      },
+      "wikidataId": "Q7355663",
+      "wikipediaTitle": "Rockwell Commander 112",
+      "wingspanMeters": 10.85
+    },
+    "fsc-cozy": {
+      "entryId": "fsc-cozy",
+      "photo": {
+        "artist": "Arpingstone",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f8/Rutan.cosy.mark3.g-cosi.arp.jpg/960px-Rutan.cosy.mark3.g-cosi.arp.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Rutan.cosy.mark3.g-cosi.arp.jpg"
+      },
+      "wikidataId": "Q5180155",
+      "wikipediaTitle": "Cozy MK IV"
+    },
+    "fsc-dimona": {
+      "entryId": "fsc-dimona",
+      "photo": {
+        "artist": "Alan Wilson from Stilton, Peterborough, Cambs, UK",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/81/Diamond_HK.36TTC_Super_Dimona_%E2%80%98LN-GSD%E2%80%99_%2830126337487%29.jpg/960px-Diamond_HK.36TTC_Super_Dimona_%E2%80%98LN-GSD%E2%80%99_%2830126337487%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Diamond_HK.36TTC_Super_Dimona_%E2%80%98LN-GSD%E2%80%99_(30126337487).jpg"
+      },
+      "wikidataId": "Q1208684",
+      "wikipediaTitle": "Diamond HK36 Super Dimona",
+      "wingspanMeters": 16.0
+    },
+    "fsc-dr400": {
+      "entryId": "fsc-dr400",
+      "firstFlightYear": 1972,
+      "lengthMeters": 6.96,
+      "numberBuilt": 1712,
+      "photo": {
+        "artist": "Alan Wilson from Stilton, Peterborough, Cambs, UK",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/82/Robin_DR400-120_Petit_Prince_%E2%80%98F-GCRS%E2%80%99_%2831915554158%29.jpg/960px-Robin_DR400-120_Petit_Prince_%E2%80%98F-GCRS%E2%80%99_%2831915554158%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Robin_DR400-120_Petit_Prince_%E2%80%98F-GCRS%E2%80%99_(31915554158).jpg"
+      },
+      "wikidataId": "Q1759739",
+      "wikipediaTitle": "Robin DR400",
+      "wingspanMeters": 8.72
+    },
+    "fsc-ercoupe": {
+      "entryId": "fsc-ercoupe",
+      "photo": {
+        "artist": "Ahunt",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/9/93/Erco_F-1_Ercoupe_CF-NLX_02.JPG/960px-Erco_F-1_Ercoupe_CF-NLX_02.JPG",
+        "license": "CC0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Erco_F-1_Ercoupe_CF-NLX_02.JPG"
+      },
+      "wikidataId": "Q2031561",
+      "wikipediaTitle": "ERCO Ercoupe"
+    },
+    "fsc-evolution": {
+      "entryId": "fsc-evolution",
+      "photo": {
+        "artist": "FlugKerl2",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/d/d5/LancairEvolution.jpg/960px-LancairEvolution.jpg",
+        "license": "CC BY-SA 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:LancairEvolution.jpg"
+      },
+      "wikidataId": "Q6482966",
+      "wikipediaTitle": "Lancair Evolution"
+    },
+    "fsc-evolution-piston": {
+      "entryId": "fsc-evolution-piston",
+      "photo": {
+        "artist": "FlugKerl2",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/d/d5/LancairEvolution.jpg/960px-LancairEvolution.jpg",
+        "license": "CC BY-SA 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:LancairEvolution.jpg"
+      },
+      "wikidataId": "Q6482966",
+      "wikipediaTitle": "Lancair Evolution"
+    },
+    "fsc-extra300": {
+      "entryId": "fsc-extra300",
+      "firstFlightYear": 1988,
+      "photo": {
+        "artist": "Tomás Del Coro",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/e/e0/N763DT_Extra_EA-300L.jpg/960px-N763DT_Extra_EA-300L.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:N763DT_Extra_EA-300L.jpg"
+      },
+      "wikidataId": "Q1385143",
+      "wikipediaTitle": "Extra EA-300"
+    },
+    "fsc-extra400": {
+      "entryId": "fsc-extra400",
+      "photo": {
+        "artist": "Stahlkocher",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/bf/Extra_400_D-EXKG_on_runway_vl.jpg/960px-Extra_400_D-EXKG_on_runway_vl.jpg",
+        "license": "CC BY-SA 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Extra_400_D-EXKG_on_runway_vl.jpg"
+      },
+      "wikidataId": "Q1385131",
+      "wikipediaTitle": "Extra EA-400"
+    },
+    "fsc-faeta": {
+      "entryId": "fsc-faeta",
+      "photo": {
+        "artist": "Alan Wilson from Stilton, Peterborough, Cambs, UK",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/4f/ATEC_Faeta_321_%E2%80%98LN-YEV%E2%80%99_%2844406895362%29.jpg/960px-ATEC_Faeta_321_%E2%80%98LN-YEV%E2%80%99_%2844406895362%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:ATEC_Faeta_321_%E2%80%98LN-YEV%E2%80%99_(44406895362).jpg"
+      },
+      "wikidataId": "Q4654643",
+      "wikipediaTitle": "ATEC 321 Faeta"
+    },
+    "fsc-fk9": {
+      "entryId": "fsc-fk9",
+      "firstFlightYear": 1989,
+      "photo": {
+        "artist": "El Grafo",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/61/EDKR_Bergfliegen_2012_1907.jpg/960px-EDKR_Bergfliegen_2012_1907.jpg",
+        "license": "CC BY-SA 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:EDKR_Bergfliegen_2012_1907.jpg"
+      },
+      "wikidataId": "Q794944",
+      "wikipediaTitle": "B&F Fk9"
+    },
+    "fsc-flight-design-ct": {
+      "entryId": "fsc-flight-design-ct",
+      "photo": {
+        "artist": "KGG1951",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/1/10/Flight_design_ct2k.jpg/960px-Flight_design_ct2k.jpg",
+        "license": "CC BY-SA 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Flight_design_ct2k.jpg"
+      },
+      "wikidataId": "Q1428709",
+      "wikipediaTitle": "Flight Design CT"
+    },
+    "fsc-gamebird": {
+      "entryId": "fsc-gamebird",
+      "firstFlightYear": 2015,
+      "photo": {
+        "artist": "Lestocq",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/01/Game_GB-1_GameBird_G-IGBI.jpg/960px-Game_GB-1_GameBird_G-IGBI.jpg",
+        "license": "CC BY-SA 4.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Game_GB-1_GameBird_G-IGBI.jpg"
+      },
+      "wikidataId": "Q30687710",
+      "wikipediaTitle": "Game Composites GB1 GameBird"
+    },
+    "fsc-glastar": {
+      "entryId": "fsc-glastar",
+      "firstFlightYear": 1994,
+      "photo": {
+        "artist": "Arpingstone",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/72/Stoddard-hamilton.glastar.g-gery.arp.jpg/960px-Stoddard-hamilton.glastar.g-gery.arp.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Stoddard-hamilton.glastar.g-gery.arp.jpg"
+      },
+      "wikidataId": "Q5566700",
+      "wikipediaTitle": "Glasair GlaStar"
+    },
+    "fsc-glider": {
+      "entryId": "fsc-glider",
+      "photo": {
+        "artist": "AlfvanBeem",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/e/e1/PH-1274_Rolladen-Schneider_LS-4b.JPG/960px-PH-1274_Rolladen-Schneider_LS-4b.JPG",
+        "license": "CC0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:PH-1274_Rolladen-Schneider_LS-4b.JPG"
+      },
+      "wikidataId": "Q180173",
+      "wikipediaTitle": "Glider (sailplane)"
+    },
+    "fsc-globe-swift": {
+      "entryId": "fsc-globe-swift",
+      "photo": {
+        "artist": "Photo by Eric Gideon (en:User:Ericg)",
+        "imageURL": "https://upload.wikimedia.org/wikipedia/commons/a/ad/Globe_swift.jpg",
+        "license": "CC BY-SA 1.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Globe_swift.jpg"
+      },
+      "wikidataId": "Q5571002",
+      "wikipediaTitle": "Globe GC-1 Swift"
+    },
+    "fsc-harmony": {
+      "entryId": "fsc-harmony",
+      "photo": {
+        "artist": "Tomás Del Coro",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/2/2c/N90MX_Evektor_SportStar.jpg/960px-N90MX_Evektor_SportStar.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:N90MX_Evektor_SportStar.jpg"
+      },
+      "wikidataId": "Q549511",
+      "wikipediaTitle": "Evektor SportStar"
+    },
+    "fsc-husky": {
+      "entryId": "fsc-husky",
+      "firstFlightYear": 1986,
+      "photo": {
+        "artist": "Ahunt at English Wikipedia",
+        "imageURL": "https://upload.wikimedia.org/wikipedia/commons/e/ed/AviatA-1BHuskyC-GTHY01.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:AviatA-1BHuskyC-GTHY01.jpg"
+      },
+      "wikidataId": "Q790806",
+      "wikipediaTitle": "Aviat Husky"
+    },
+    "fsc-icon": {
+      "entryId": "fsc-icon",
+      "firstFlightYear": 2008,
+      "lengthMeters": 7.01,
+      "numberBuilt": 198,
+      "photo": {
+        "artist": "H. Michael Miley",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/5/58/Icon_A5_in_the_water.jpg/960px-Icon_A5_in_the_water.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Icon_A5_in_the_water.jpg"
+      },
+      "wikidataId": "Q1060705",
+      "wikipediaTitle": "Icon A5",
+      "wingspanMeters": 10.61
+    },
+    "fsc-lake-la4": {
+      "entryId": "fsc-lake-la4",
+      "lengthMeters": 7.6,
+      "photo": {
+        "artist": "Ahunt at English Wikipedia",
+        "imageURL": "https://upload.wikimedia.org/wikipedia/commons/1/14/LakeLA-4-200BucaneerC-FZZN01.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:LakeLA-4-200BucaneerC-FZZN01.jpg"
+      },
+      "wikidataId": "Q542768",
+      "wikipediaTitle": "Lake Buccaneer",
+      "wingspanMeters": 11.58
+    },
+    "fsc-lancair-legacy": {
+      "entryId": "fsc-lancair-legacy",
+      "photo": {
+        "artist": "FlugKerl2",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/ad/Lancair_Legacy_N550AW_landing.jpg/960px-Lancair_Legacy_N550AW_landing.jpg",
+        "license": "CC BY-SA 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Lancair_Legacy_N550AW_landing.jpg"
+      },
+      "wikidataId": "Q6482967",
+      "wikipediaTitle": "Lancair Legacy"
+    },
+    "fsc-longez": {
+      "entryId": "fsc-longez",
+      "firstFlightYear": 1979,
+      "lengthMeters": 5.12,
+      "numberBuilt": 700,
+      "photo": {
+        "artist": "NOAA",
+        "imageURL": "https://upload.wikimedia.org/wikipedia/commons/4/4f/NOAA-Long-EZ.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:NOAA-Long-EZ.jpg"
+      },
+      "wikidataId": "Q1338262",
+      "wikipediaTitle": "Rutan Long-EZ",
+      "wingspanMeters": 7.96
+    },
+    "fsc-maule-m7": {
+      "entryId": "fsc-maule-m7",
+      "firstFlightYear": 1984,
+      "photo": {
+        "artist": "Arpingstone",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/2/2b/Maule.m7-235b.arp.jpg/960px-Maule.m7-235b.arp.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Maule.m7-235b.arp.jpg"
+      },
+      "wikidataId": "Q3852393",
+      "wikipediaTitle": "Maule M-7"
+    },
+    "fsc-minicab": {
+      "entryId": "fsc-minicab",
+      "photo": {
+        "artist": "RuthAS",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/66/Gardan_GY-201_Minicab_G-BGMR_Wroughton_04.07.93_edited-2.jpg/960px-Gardan_GY-201_Minicab_G-BGMR_Wroughton_04.07.93_edited-2.jpg",
+        "license": "CC BY 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Gardan_GY-201_Minicab_G-BGMR_Wroughton_04.07.93_edited-2.jpg"
+      },
+      "wikidataId": "Q3095363",
+      "wikipediaTitle": "CAB Minicab"
+    },
+    "fsc-mooney": {
+      "entryId": "fsc-mooney",
+      "firstFlightYear": 1953,
+      "photo": {
+        "artist": "Arpingstone",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/bf/Mooney.m20j.g-muni.arp.jpg/960px-Mooney.m20j.g-muni.arp.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Mooney.m20j.g-muni.arp.jpg"
+      },
+      "wikidataId": "Q920799",
+      "wikipediaTitle": "Mooney M20"
+    },
+    "fsc-mt03": {
+      "entryId": "fsc-mt03",
+      "photo": {
+        "artist": "Huhu Uet",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/cd/Autogyro_MT-03_%28D-MTBI%29_06.jpg/960px-Autogyro_MT-03_%28D-MTBI%29_06.jpg",
+        "license": "CC BY 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Autogyro_MT-03_(D-MTBI)_06.jpg"
+      },
+      "wikidataId": "Q1566033",
+      "wikipediaTitle": "AutoGyro MT-03"
+    },
+    "fsc-mx2": {
+      "entryId": "fsc-mx2",
+      "firstFlightYear": 2002,
+      "photo": {
+        "artist": "Amr4121",
+        "imageURL": "https://upload.wikimedia.org/wikipedia/commons/4/4a/Rob_holland_mx2.jpg",
+        "license": "CC BY-SA 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Rob_holland_mx2.jpg"
+      },
+      "wikidataId": "Q6720301",
+      "wikipediaTitle": "MX Aircraft MX2"
+    },
+    "fsc-p68": {
+      "entryId": "fsc-p68",
+      "firstFlightYear": 1970,
+      "lengthMeters": 9.35,
+      "numberBuilt": 430,
+      "photo": {
+        "artist": "wiltshirespotter",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/cd/D-GFPG_%2817004135598%29.jpg/960px-D-GFPG_%2817004135598%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:D-GFPG_(17004135598).jpg"
+      },
+      "wikidataId": "Q2598865",
+      "wikipediaTitle": "Partenavia P.68",
+      "wingspanMeters": 12.0
+    },
+    "fsc-pioneer300": {
+      "entryId": "fsc-pioneer300",
+      "photo": {
+        "artist": "User:MatthiasKabel",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/61/Pioneer300_Pioneer_Team_at_ILA_2010_06.jpg/960px-Pioneer300_Pioneer_Team_at_ILA_2010_06.jpg",
+        "license": "CC BY-SA 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Pioneer300_Pioneer_Team_at_ILA_2010_06.jpg"
+      },
+      "wikidataId": "Q4735435",
+      "wikipediaTitle": "Alpi Pioneer 300"
+    },
+    "fsc-pitts-s2": {
+      "entryId": "fsc-pitts-s2",
+      "lengthMeters": 4.71,
+      "photo": {
+        "artist": "Alan Wilson from Peterborough, Cambs, UK",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/9/97/Pitts_Specials_%E2%80%98G-SWON%E2%80%99_%26_%E2%80%98G-STUI%E2%80%99_%2851547688785%29.jpg/960px-Pitts_Specials_%E2%80%98G-SWON%E2%80%99_%26_%E2%80%98G-STUI%E2%80%99_%2851547688785%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Pitts_Specials_%E2%80%98G-SWON%E2%80%99_%26_%E2%80%98G-STUI%E2%80%99_(51547688785).jpg"
+      },
+      "wikidataId": "Q1262007",
+      "wikipediaTitle": "Pitts Special",
+      "wingspanMeters": 5.28
+    },
+    "fsc-remos-g3": {
+      "entryId": "fsc-remos-g3",
+      "photo": {
+        "artist": "Ahunt",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/e/e8/REMOS_G-3_Mirage.jpg/960px-REMOS_G-3_Mirage.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:REMOS_G-3_Mirage.jpg"
+      },
+      "wikidataId": "Q2143100",
+      "wikipediaTitle": "Remos GX"
+    },
+    "fsc-risen": {
+      "entryId": "fsc-risen",
+      "photo": {
+        "artist": "Charlotte1103",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/6e/Swiss_Excellence_Risen.jpg/960px-Swiss_Excellence_Risen.jpg",
+        "license": "CC BY-SA 4.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Swiss_Excellence_Risen.jpg"
+      },
+      "wikidataId": "Q27825357",
+      "wikipediaTitle": "Swiss Excellence Risen"
+    },
+    "fsc-rv": {
+      "entryId": "fsc-rv",
+      "firstFlightYear": 1995,
+      "photo": {
+        "artist": "Ahunt at English Wikipedia",
+        "imageURL": "https://upload.wikimedia.org/wikipedia/commons/6/6a/VansRV-8C-GERV02.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:VansRV-8C-GERV02.jpg"
+      },
+      "wikidataId": "Q3554382",
+      "wikipediaTitle": "Van's Aircraft RV-8"
+    },
+    "fsc-s18": {
+      "entryId": "fsc-s18",
+      "firstFlightYear": 1963,
+      "photo": {
+        "artist": "FlugKerl2",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/cc/T18_in_flight.jpg/960px-T18_in_flight.jpg",
+        "license": "CC BY-SA 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:T18_in_flight.jpg"
+      },
+      "wikidataId": "Q3525859",
+      "wikipediaTitle": "Thorp T-18"
+    },
+    "fsc-scout": {
+      "entryId": "fsc-scout",
+      "photo": {
+        "artist": "User Ericg on en.wikipedia",
+        "imageURL": "https://upload.wikimedia.org/wikipedia/commons/c/cb/Bush_plane.jpg",
+        "license": "CC BY-SA 1.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Bush_plane.jpg"
+      },
+      "wikidataId": "Q4743344",
+      "wikipediaTitle": "American Champion Scout"
+    },
+    "fsc-searey": {
+      "entryId": "fsc-searey",
+      "photo": {
+        "artist": "Ahunt",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a2/Progressive_Aerodyne_SeaRey_C-GJIB.jpg/960px-Progressive_Aerodyne_SeaRey_C-GJIB.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Progressive_Aerodyne_SeaRey_C-GJIB.jpg"
+      },
+      "wikidataId": "Q7248618",
+      "wikipediaTitle": "Progressive Aerodyne SeaRey"
+    },
+    "fsc-sf25": {
+      "entryId": "fsc-sf25",
+      "photo": {
+        "artist": "El Grafo",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/e/e5/Scheibe_SF_25_B_D-KAGR_03.jpg/960px-Scheibe_SF_25_B_D-KAGR_03.jpg",
+        "license": "CC BY-SA 4.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Scheibe_SF_25_B_D-KAGR_03.jpg"
+      },
+      "wikidataId": "Q372295",
+      "wikipediaTitle": "Scheibe Falke"
+    },
+    "fsc-sierra": {
+      "entryId": "fsc-sierra",
+      "firstFlightYear": 1963,
+      "numberBuilt": 4366,
+      "photo": {
+        "artist": "Alan Wilson",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/5/57/Beech_A23-24_Musketeer_EI-BFF_%286935542098%29.jpg/960px-Beech_A23-24_Musketeer_EI-BFF_%286935542098%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Beech_A23-24_Musketeer_EI-BFF_(6935542098).jpg"
+      },
+      "wikidataId": "Q814007",
+      "wikipediaTitle": "Beechcraft Musketeer"
+    },
+    "fsc-sirius": {
+      "entryId": "fsc-sirius",
+      "firstFlightYear": 2008,
+      "photo": {
+        "artist": "FlugKerl2",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/6f/TLUltralightTL-3000_Sirius.jpg/960px-TLUltralightTL-3000_Sirius.jpg",
+        "license": "CC BY-SA 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:TLUltralightTL-3000_Sirius.jpg"
+      },
+      "wikidataId": "Q7670623",
+      "wikipediaTitle": "TL Ultralight TL-3000 Sirius"
+    },
+    "fsc-skyfox": {
+      "entryId": "fsc-skyfox",
+      "firstFlightYear": 1989,
+      "wikidataId": "Q7537718",
+      "wikipediaTitle": "Skyfox Aviation Skyfox"
+    },
+    "fsc-skyleader600": {
+      "entryId": "fsc-skyleader600",
+      "photo": {
+        "artist": "Fgarganese",
+        "imageURL": "https://upload.wikimedia.org/wikipedia/commons/8/81/Skyleader200_brasov.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Skyleader200_brasov.jpg"
+      },
+      "wikidataId": "Q6366988",
+      "wikipediaTitle": "Kappa 77 KP 2U-SOVA"
+    },
+    "fsc-sling-high-wing": {
+      "entryId": "fsc-sling-high-wing",
+      "photo": {
+        "artist": "ZLEA",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/3f/Sling_HW_%28N669JP%2C_cn_005K%29_%287-29-2023%29.jpg/960px-Sling_HW_%28N669JP%2C_cn_005K%29_%287-29-2023%29.jpg",
+        "license": "CC BY-SA 4.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Sling_HW_(N669JP,_cn_005K)_(7-29-2023).jpg"
+      },
+      "wikidataId": "Q105063540",
+      "wikipediaTitle": "Sling Aircraft Sling HW"
+    },
+    "fsc-sling4": {
+      "entryId": "fsc-sling4",
+      "photo": {
+        "artist": "Lestocq",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/bc/Airplane_Factory_Sling_4_N981RW.jpg/960px-Airplane_Factory_Sling_4_N981RW.jpg",
+        "license": "CC BY-SA 4.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Airplane_Factory_Sling_4_N981RW.jpg"
+      },
+      "wikidataId": "Q25041287",
+      "wikipediaTitle": "Sling Aircraft Sling 4"
+    },
+    "fsc-sonaca200": {
+      "entryId": "fsc-sonaca200",
+      "photo": {
+        "artist": "Sonaca aircraft",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/e/eb/Sonaca_200%E2%80%99s_initial_prototype_assembled_by_The_Airplane_Factory_in_2015.jpg/960px-Sonaca_200%E2%80%99s_initial_prototype_assembled_by_The_Airplane_Factory_in_2015.jpg",
+        "license": "CC BY-SA 4.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Sonaca_200%E2%80%99s_initial_prototype_assembled_by_The_Airplane_Factory_in_2015.jpg"
+      },
+      "wikidataId": "Q30593107",
+      "wikipediaTitle": "Sonaca 200"
+    },
+    "fsc-sonex": {
+      "entryId": "fsc-sonex",
+      "wikidataId": "Q3490333",
+      "wikipediaTitle": "Sonex Aircraft"
+    },
+    "fsc-sport-cub": {
+      "entryId": "fsc-sport-cub",
+      "photo": {
+        "artist": "Clemens Vasters from Viersen, Germany",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/8f/Cub_Crafters_CC-11_at_the_Imperial_War_Museum_Duxford_%282%29.jpg/960px-Cub_Crafters_CC-11_at_the_Imperial_War_Museum_Duxford_%282%29.jpg",
+        "license": "CC BY 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Cub_Crafters_CC-11_at_the_Imperial_War_Museum_Duxford_(2).jpg"
+      },
+      "wikidataId": "Q5191903",
+      "wikipediaTitle": "CubCrafters CC11-100 Sport Cub S2"
+    },
+    "fsc-tampico": {
+      "entryId": "fsc-tampico",
+      "firstFlightYear": 1980,
+      "lengthMeters": 7.75,
+      "photo": {
+        "artist": "Pedro Aragão",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/81/Socata_TB-20_Trinidad_GT%2C_Academia_Aeronautica_de_Evora_%28AAE%29_JP6989836.jpg/960px-Socata_TB-20_Trinidad_GT%2C_Academia_Aeronautica_de_Evora_%28AAE%29_JP6989836.jpg",
+        "license": "CC BY-SA 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Socata_TB-20_Trinidad_GT,_Academia_Aeronautica_de_Evora_(AAE)_JP6989836.jpg"
+      },
+      "wikidataId": "Q1313156",
+      "wikipediaTitle": "SOCATA TB family",
+      "wingspanMeters": 9.85
+    },
+    "fsc-tecnam": {
+      "entryId": "fsc-tecnam",
+      "photo": {
+        "artist": "Adrian Pingstone",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f5/Tecnam_Sierra_P2002_%28G-CWFS%29_at_Cotswold_Airport_England_18Jun2016_arp.jpg/960px-Tecnam_Sierra_P2002_%28G-CWFS%29_at_Cotswold_Airport_England_18Jun2016_arp.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Tecnam_Sierra_P2002_(G-CWFS)_at_Cotswold_Airport_England_18Jun2016_arp.jpg"
+      },
+      "wikidataId": "Q4050786",
+      "wikipediaTitle": "Tecnam P2002 Sierra"
+    },
+    "fsc-ultralight": {
+      "entryId": "fsc-ultralight",
+      "photo": {
+        "artist": "Arpingstone",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/4d/Huntair.pathfinder.arp.jpg/960px-Huntair.pathfinder.arp.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Huntair.pathfinder.arp.jpg"
+      },
+      "wikidataId": "Q678305",
+      "wikipediaTitle": "Ultralight aviation"
+    },
+    "fsc-velocity": {
+      "entryId": "fsc-velocity",
+      "photo": {
+        "artist": "Alan Radecki Akradecki",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/e/e6/Velocity-N6971T-071008-04-16.jpg/960px-Velocity-N6971T-071008-04-16.jpg",
+        "license": "CC BY-SA 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Velocity-N6971T-071008-04-16.jpg"
+      },
+      "wikidataId": "Q7919292",
+      "wikipediaTitle": "Velocity Velocity"
+    },
+    "fsc-viking": {
+      "entryId": "fsc-viking",
+      "lengthMeters": 8.02,
+      "photo": {
+        "artist": "Craig Kinzer",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c5/Viking_30456.jpg/960px-Viking_30456.jpg",
+        "license": "CC BY-SA 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Viking_30456.jpg"
+      },
+      "wikidataId": "Q4883482",
+      "wikipediaTitle": "Bellanca Viking",
+      "wingspanMeters": 10.41
+    },
+    "fsc-wt9": {
+      "entryId": "fsc-wt9",
+      "firstFlightYear": 2001,
+      "photo": {
+        "artist": "Clément Gruin",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/2/25/AirExpo_2016_-_Dynamic_WT9_%281%29.jpg/960px-AirExpo_2016_-_Dynamic_WT9_%281%29.jpg",
+        "license": "CC BY-SA 4.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:AirExpo_2016_-_Dynamic_WT9_(1).jpg"
+      },
+      "wikidataId": "Q24284",
+      "wikipediaTitle": "Aerospool WT9 Dynamic"
+    },
+    "fsc-zodiac": {
+      "entryId": "fsc-zodiac",
+      "firstFlightYear": 1984,
+      "photo": {
+        "artist": "Ahunt at English Wikipedia",
+        "imageURL": "https://upload.wikimedia.org/wikipedia/commons/8/86/ZenairCH_601XLN601XC.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:ZenairCH_601XLN601XC.jpg"
+      },
+      "wikidataId": "Q4053600",
+      "wikipediaTitle": "AMD Zodiac"
+    },
+    "fsf50": {
+      "entryId": "fsf50",
+      "photo": {
+        "artist": "Markus Eigenheer from Genève, Schweiz",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/2/2b/Cirrus_Vision_SF50_N124MW_cn_0009_%2828664083278%29.jpg/960px-Cirrus_Vision_SF50_N124MW_cn_0009_%2828664083278%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Cirrus_Vision_SF50_N124MW_cn_0009_(28664083278).jpg"
+      },
+      "wikidataId": "Q1093133",
+      "wikipediaTitle": "Cirrus Vision SF50"
+    },
+    "fsr20": {
+      "entryId": "fsr20",
+      "firstFlightYear": 1995,
+      "photo": {
+        "artist": "Tomás Del Coro from Las Vegas, Nevada, USA",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/be/CIRRUS_DESIGN_CORP_SR20_N345BS_%282059%29_%285056614400%29.jpg/960px-CIRRUS_DESIGN_CORP_SR20_N345BS_%282059%29_%285056614400%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:CIRRUS_DESIGN_CORP_SR20_N345BS_(2059)_(5056614400).jpg"
+      },
+      "wikidataId": "Q1093144",
+      "wikipediaTitle": "Cirrus SR20"
+    },
+    "fsr22": {
+      "entryId": "fsr22",
+      "firstFlightYear": 2000,
+      "wikidataId": "Q867617",
+      "wikipediaTitle": "Cirrus SR22"
+    },
+    "ftc-690": {
+      "entryId": "ftc-690",
+      "firstFlightYear": 1948,
+      "lengthMeters": 13.1,
+      "photo": {
+        "artist": "NOAA/NOHRSC",
+        "imageURL": "https://upload.wikimedia.org/wikipedia/commons/b/bd/Aero_Commander.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Aero_Commander.jpg"
+      },
+      "wikidataId": "Q381283",
+      "wikipediaTitle": "Aero Commander 500 family",
+      "wingspanMeters": 14.2
+    },
+    "ftp-beaver": {
+      "entryId": "ftp-beaver",
+      "firstFlightYear": 1947,
+      "lengthMeters": 9.24,
+      "numberBuilt": 1657,
+      "photo": {
+        "artist": "Raimond Spekking",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c3/De_Havilland_Canada_DHC-2_Beaver_%28N130WA%29.jpg/960px-De_Havilland_Canada_DHC-2_Beaver_%28N130WA%29.jpg",
+        "license": "CC BY-SA 4.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:De_Havilland_Canada_DHC-2_Beaver_(N130WA).jpg"
+      },
+      "wikidataId": "Q291804",
+      "wikipediaTitle": "De Havilland Canada DHC-2 Beaver",
+      "wingspanMeters": 14.64
+    },
+    "ftp-epic": {
+      "entryId": "ftp-epic",
+      "firstFlightYear": 2004,
+      "photo": {
+        "artist": "Ahunt",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/5/58/Epic_Aircraft_LT_N370JP.JPG/960px-Epic_Aircraft_LT_N370JP.JPG",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Epic_Aircraft_LT_N370JP.JPG"
+      },
+      "wikidataId": "Q266095",
+      "wikipediaTitle": "Epic LT"
+    },
+    "ftp-kodiak": {
+      "entryId": "ftp-kodiak",
+      "firstFlightYear": 2004,
+      "photo": {
+        "artist": "Mark Wagner",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c6/Quest_Kodiak_100_front_right_20130608.jpg/960px-Quest_Kodiak_100_front_right_20130608.jpg",
+        "license": "CC BY 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Quest_Kodiak_100_front_right_20130608.jpg"
+      },
+      "wikidataId": "Q2122974",
+      "wikipediaTitle": "Daher Kodiak"
+    },
+    "ftp-pc12": {
+      "entryId": "ftp-pc12",
+      "firstFlightYear": 1991,
+      "wikidataId": "Q685211",
+      "wikipediaTitle": "Pilatus PC-12"
+    },
+    "ftp-tbm": {
+      "entryId": "ftp-tbm",
+      "photo": {
+        "artist": "Michael Mainiero",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/0f/Daher-Socata_TBM_900_Air_to_Air.jpg/960px-Daher-Socata_TBM_900_Air_to_Air.jpg",
+        "license": "CC BY-SA 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Daher-Socata_TBM_900_Air_to_Air.jpg"
+      },
+      "wikidataId": "Q1779127",
+      "wikipediaTitle": "SOCATA TBM"
+    },
+    "fv-cj6": {
+      "entryId": "fv-cj6",
+      "photo": {
+        "artist": "N509FZ",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/06/CJ-6_Sky_Wing_02_at_CCAS2023_%2820230724131218%29.jpg/960px-CJ-6_Sky_Wing_02_at_CCAS2023_%2820230724131218%29.jpg",
+        "license": "CC BY-SA 4.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:CJ-6_Sky_Wing_02_at_CCAS2023_(20230724131218).jpg"
+      },
+      "wikidataId": "Q653603",
+      "wikipediaTitle": "Nanchang CJ-6"
+    },
+    "fv-cub": {
+      "entryId": "fv-cub",
+      "firstFlightYear": 1938,
+      "photo": {
+        "artist": "Alan Wilson",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/48/Piper_L-4J_Cub_%27480173_-_57-H%27_%28G-RRSR%29_%2814126025704%29.jpg/960px-Piper_L-4J_Cub_%27480173_-_57-H%27_%28G-RRSR%29_%2814126025704%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Piper_L-4J_Cub_%27480173_-_57-H%27_(G-RRSR)_(14126025704).jpg"
+      },
+      "wikidataId": "Q1162019",
+      "wikipediaTitle": "Piper J-3 Cub"
+    },
+    "fv-dc3": {
+      "entryId": "fv-dc3",
+      "firstFlightYear": 1935,
+      "lengthMeters": 19.63,
+      "numberBuilt": 607,
+      "photo": {
+        "artist": "Towpilot",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/d/df/Douglas_DC-3%2C_SE-CFP.jpg/960px-Douglas_DC-3%2C_SE-CFP.jpg",
+        "license": "CC BY-SA 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Douglas_DC-3,_SE-CFP.jpg"
+      },
+      "wikidataId": "Q190211",
+      "wikipediaTitle": "Douglas DC-3",
+      "wingspanMeters": 28.96
+    },
+    "fv-dh82": {
+      "entryId": "fv-dh82",
+      "firstFlightYear": 1931,
+      "lengthMeters": 7.29,
+      "numberBuilt": 8280,
+      "photo": {
+        "artist": "Towpilot",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/35/DH_82A_Tiger_Moth_-_N81DH.jpg/960px-DH_82A_Tiger_Moth_-_N81DH.jpg",
+        "license": "CC BY-SA 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:DH_82A_Tiger_Moth_-_N81DH.jpg"
+      },
+      "wikidataId": "Q654062",
+      "wikipediaTitle": "De Havilland Tiger Moth",
+      "wingspanMeters": 8.94
+    },
+    "fv-great-lakes": {
+      "entryId": "fv-great-lakes",
+      "lengthMeters": 6.2,
+      "photo": {
+        "artist": "Grimmi",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/9/93/Great_lakes.jpg/960px-Great_lakes.jpg",
+        "license": "CC BY-SA 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Great_lakes.jpg"
+      },
+      "wikidataId": "Q1544302",
+      "wikipediaTitle": "Great Lakes Sport Trainer",
+      "wingspanMeters": 8.13
+    },
+    "fv-luscombe8": {
+      "entryId": "fv-luscombe8",
+      "firstFlightYear": 1937,
+      "photo": {
+        "artist": "MilborneOne",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a3/Luscombe8E%2C_G-BSHH.jpg/960px-Luscombe8E%2C_G-BSHH.jpg",
+        "license": "CC BY-SA 4.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Luscombe8E,_G-BSHH.jpg"
+      },
+      "wikidataId": "Q3267782",
+      "wikipediaTitle": "Luscombe 8"
+    },
+    "fv-p149": {
+      "entryId": "fv-p149",
+      "firstFlightYear": 1953,
+      "lengthMeters": 8.8,
+      "numberBuilt": 272,
+      "photo": {
+        "artist": "Foto: Joe Rimensberger",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/33/Piaggio-P.149D-Rimensberger.JPG/960px-Piaggio-P.149D-Rimensberger.JPG",
+        "license": "CC BY-SA 3.0 de",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Piaggio-P.149D-Rimensberger.JPG"
+      },
+      "wikidataId": "Q689357",
+      "wikipediaTitle": "Piaggio P.149",
+      "wingspanMeters": 11.12
+    },
+    "fv-p51": {
+      "entryId": "fv-p51",
+      "firstFlightYear": 1940,
+      "numberBuilt": 16974,
+      "photo": {
+        "artist": "Airwolfhound from Hertfordshire, UK",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/e/e3/P51_Mustang_-_CHino_Airshow_2014_%2814349568311%29.jpg/960px-P51_Mustang_-_CHino_Airshow_2014_%2814349568311%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:P51_Mustang_-_CHino_Airshow_2014_(14349568311).jpg"
+      },
+      "wikidataId": "Q192075",
+      "wikipediaTitle": "North American P-51 Mustang",
+      "wingspanMeters": 11.28
+    },
+    "fv-safir": {
+      "entryId": "fv-safir",
+      "firstFlightYear": 1945,
+      "lengthMeters": 8.08,
+      "numberBuilt": 323,
+      "photo": {
+        "artist": "Towpilot",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/08/Saab_91C_01.jpg/960px-Saab_91C_01.jpg",
+        "license": "CC BY-SA 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Saab_91C_01.jpg"
+      },
+      "wikidataId": "Q696722",
+      "wikipediaTitle": "Saab 91 Safir",
+      "wingspanMeters": 10.6
+    },
+    "fv-stearman": {
+      "entryId": "fv-stearman",
+      "firstFlightYear": 1934,
+      "lengthMeters": 7.56,
+      "numberBuilt": 9783,
+      "photo": {
+        "artist": "Juergen Lehle",
+        "imageURL": "https://upload.wikimedia.org/wikipedia/commons/8/85/Boeing_Stearman_N67193.jpg",
+        "license": "CC BY-SA 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Boeing_Stearman_N67193.jpg"
+      },
+      "wikidataId": "Q660944",
+      "wikipediaTitle": "Boeing-Stearman Model 75",
+      "wingspanMeters": 9.8
+    },
+    "fv-t6": {
+      "entryId": "fv-t6",
+      "firstFlightYear": 1935,
+      "lengthMeters": 8.85,
+      "numberBuilt": 15495,
+      "photo": {
+        "artist": "http://www.ascho.wpafb.af.mil/REMARKABLE/PG-162.HTM",
+        "imageURL": "https://upload.wikimedia.org/wikipedia/commons/c/c5/T-6_Texan.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:T-6_Texan.jpg"
+      },
+      "wikidataId": "Q40021",
+      "wikipediaTitle": "North American T-6 Texan",
+      "wingspanMeters": 12.8
+    },
+    "fv-tbm": {
+      "entryId": "fv-tbm",
+      "firstFlightYear": 1941,
+      "numberBuilt": 9839,
+      "photo": {
+        "artist": "Greg Goebel",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/fb/Grumman_TBM_Avenger%2C_Chino%2C_California.jpg/960px-Grumman_TBM_Avenger%2C_Chino%2C_California.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Grumman_TBM_Avenger,_Chino,_California.jpg"
+      },
+      "wikidataId": "Q734103",
+      "wikipediaTitle": "Grumman TBF Avenger"
+    }
+  },
+  "generated": "2026-10-25",
+  "version": 1
+}

@@ -34,6 +34,7 @@
 import SwiftUI
 import UIKit
 import Accessibility  // AttributedString's announcement-priority attribute
+import SwiftData      // the card back's one-off Hangar fetch on turn-over
 
 // MARK: - Reveal animation math (verbatim from the RevealV3 prototype)
 
@@ -150,7 +151,49 @@ nonisolated enum RevealCardTaps {
         chipsShown || (settled && hasZoomablePhoto) || shareAvailable
     }
 
-    static func bodyTapDismisses(chipsShown: Bool) -> Bool { !chipsShown }
+    /// `flipped`: once the card is turned over (or turning), a body tap
+    /// never continues. The back is for reading, and a stray tap there
+    /// must not throw the user out of the reveal.
+    static func bodyTapDismisses(chipsShown: Bool, flipped: Bool = false) -> Bool {
+        !chipsShown && !flipped
+    }
+
+    /// When the card can be turned over (the card back, 2026-10-25): the
+    /// same moment Share goes live — settled, pipeline done, catch saved,
+    /// bonus chips gone — so nothing about the back competes with the
+    /// catch ceremony.
+    static func turnOverAvailable(shareAvailable: Bool) -> Bool { shareAvailable }
+}
+
+/// What the reveal's card back looks up, decided purely so tests can pin
+/// Noah's rule: NOTHING is fetched before the first turn-over (don't delay
+/// the catch moment), and it's looked up once.
+nonisolated struct CardBackLoadPlan: Equatable, Sendable {
+    /// Where the catch row for the back's type facts comes from.
+    enum RowSource: Equatable, Sendable {
+        /// The loader's own row (the single-catch path).
+        case loader
+        /// The newest saved catch of this airframe (duplicates, multi-catch).
+        case newestByIcao(String)
+        /// No row (the ✦ Catch simulator): the back shows less.
+        case none
+    }
+    let row: RowSource
+    /// The icao24 to ask Planespotters about; nil = no lookup (the closeup
+    /// resolves straight to its fallback).
+    let planespottersIcao: String?
+
+    /// nil = fetch nothing: the card hasn't been turned over yet, or the
+    /// back has already been loaded.
+    static func make(turnedOver: Bool, alreadyLoaded: Bool, loaderHasRow: Bool,
+                     liveIcao: String?, loaderIcao: String?) -> CardBackLoadPlan? {
+        guard turnedOver, !alreadyLoaded else { return nil }
+        let icao = [liveIcao, loaderIcao]
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+            .first { !$0.isEmpty }
+        let row: RowSource = loaderHasRow ? .loader : icao.map { .newestByIcao($0) } ?? .none
+        return CardBackLoadPlan(row: row, planespottersIcao: icao)
+    }
 }
 
 /// Split-flap character pool (no vowel-ambiguous I/O, plus digits + dash).
@@ -751,6 +794,24 @@ struct CatchRevealView: View {
     @State private var successBeat = 0
     @State private var missBeat = 0
 
+    // MARK: Card back (2026-10-25)
+
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.openURL) private var openURL
+    /// Which face of the card is up. FlipCard toggles it on a swipe too, so
+    /// side effects hang off `onChange(of: cardFlipped)`.
+    @State private var cardFlipped = false
+    /// Latches on the first turn-over: NOTHING on the back is looked up or
+    /// fetched before then (Noah: don't delay the catch moment).
+    @State private var didLoadBack = false
+    @State private var backTypeInfo: TypeInfo?
+    @State private var backHistory: TypeHistory?
+    @State private var backRegistration: String?
+    @State private var backPlanespotters: PlanePhoto?
+    @State private var backPlanespottersResolved = false
+    @State private var backSummary: WikipediaSummary?
+    @State private var backSummaryLoading = false
+
     enum ChipsPhase { case hidden, shown, collapsed }
 
     /// A resolved bonus-round outcome. `answeredValue == nil` ⇒ SKIP / dismiss.
@@ -890,6 +951,13 @@ struct CatchRevealView: View {
                 if hasGuess, settled { popBonusRoundIfEligible() }
             }
             .onDisappear { settleTask?.cancel() }
+            .onChange(of: cardFlipped) { _, flipped in
+                if flipped { loadBackIfNeeded() }
+                CardTurnAnalytics.capture(source: .reveal, flipped: flipped,
+                                          closeup: backModel.closeup,
+                                          hasTypeInfo: backTypeInfo != nil,
+                                          muted: isSimulated)
+            }
             .sensoryFeedback(.success, trigger: settled)
             .onAppear {
                 heroZoom.onCommit = { method in
@@ -950,6 +1018,87 @@ struct CatchRevealView: View {
         showShareSheet = true
     }
 
+    // MARK: - Card back
+
+    /// What the back renders, from the @State the first turn-over fills.
+    private var backModel: CardBackModel {
+        CardBackModel(
+            modelName: livePlane.model ?? "Unknown aircraft",
+            registration: backRegistration,
+            rarity: livePlane.rarity,
+            closeup: .resolve(planespotters: backPlanespotters,
+                              lookupDone: backPlanespottersResolved,
+                              typePhoto: backTypeInfo?.photo),
+            typeInfo: backTypeInfo,
+            history: backHistory,
+            summary: backSummary,
+            summaryLoading: backSummaryLoading
+        )
+    }
+
+    /// Everything the back needs, looked up once on the FIRST turn-over and
+    /// never before (the reveal has no Hangar query of its own, and nothing
+    /// may slow the catch moment). The catch row comes from the loader, else
+    /// the newest saved catch of this airframe (duplicates, the multi path);
+    /// the ✦ Catch simulator usually has neither and shows less.
+    private func loadBackIfNeeded() {
+        guard let plan = CardBackLoadPlan.make(
+            turnedOver: cardFlipped, alreadyLoaded: didLoadBack,
+            loaderHasRow: loader?.row != nil,
+            liveIcao: livePlane.icao24, loaderIcao: loader?.row?.icao24
+        ) else { return }
+        didLoadBack = true
+        let row: Catch?
+        switch plan.row {
+        case .loader: row = loader?.row
+        case .newestByIcao(let icao): row = newestCatch(icao24: icao)
+        case .none: row = nil
+        }
+        if let row {
+            backRegistration = row.registration
+            backTypeInfo = TypeInfoStore.info(for: row)
+            // The whole-Hangar fetch + TypeHistory pass is the expensive part
+            // (thousands of rows for a power user). It runs on the main
+            // actor, so it waits until the ~0.55 s flip has finished instead
+            // of hitching its first frames; YOU AND THIS TYPE appears when
+            // it's ready, like the Wikipedia summary does.
+            Task {
+                try? await Task.sleep(for: .milliseconds(650))
+                let all = (try? modelContext.fetch(FetchDescriptor<Catch>())) ?? [row]
+                let history = TypeHistory.compute(for: row, in: all)
+                withAnimation(.easeInOut(duration: 0.25)) { backHistory = history }
+            }
+        }
+        if let icao = plan.planespottersIcao {
+            Task {
+                let photo = await PlanespottersClient.shared.photo(for: icao)
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    backPlanespotters = photo
+                    backPlanespottersResolved = true
+                }
+            }
+        } else {
+            backPlanespottersResolved = true
+        }
+        if let title = backTypeInfo?.wikipediaTitle {
+            backSummaryLoading = true
+            Task {
+                let fetched = await WikipediaSummaryClient.shared.summary(forTitle: title)
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    backSummary = fetched
+                    backSummaryLoading = false
+                }
+            }
+        }
+    }
+
+    private func newestCatch(icao24: String) -> Catch? {
+        var d = FetchDescriptor<Catch>(predicate: #Predicate { $0.icao24 == icao24 },
+                                       sortBy: [SortDescriptor(\.caughtAt, order: .reverse)])
+        d.fetchLimit = 1
+        return (try? modelContext.fetch(d))?.first
+    }
+
     /// Card stacked ABOVE the CTA so the "tap to continue / View in Hangar"
     /// row is always a reserved strip below the card — never overlapped by a
     /// tall (wrapped-name) card, which is what happened when the card was
@@ -984,42 +1133,64 @@ struct CatchRevealView: View {
             // branch here would give the two states different structural
             // identities and SwiftUI would rebuild the card subtree when the
             // chips pop, resetting the ledger count-up mid-ceremony.
-            card(t: t, bt: bt, width: width, render: render, shareVisible: shareAvailable)
-                // Once the card takes hits (below), a tap on its body that no
-                // control claims (Share, photo zoom, chips) would otherwise
-                // be swallowed, so it does what the catcher behind would:
-                // continue. Child controls win over this parent gesture.
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    if RevealCardTaps.bodyTapDismisses(chipsShown: chipsPhase == .shown) {
-                        advanceOrDismiss()
+            //
+            // The card turns over (2026-10-25): FlipCard is ALWAYS here, with
+            // swipe-to-flip gated by `enabled` rather than an if/else, for the
+            // same structural-identity reason. Everything below this comment
+            // down to `back:` is the FRONT, exactly as before.
+            FlipCard(isFlipped: $cardFlipped,
+                     enabled: RevealCardTaps.turnOverAvailable(shareAvailable: shareAvailable)) {
+                card(t: t, bt: bt, width: width, render: render, shareVisible: shareAvailable,
+                     turnOverVisible: RevealCardTaps.turnOverAvailable(shareAvailable: shareAvailable))
+                    // Once the card takes hits (below), a tap on its body that no
+                    // control claims (Share, photo zoom, chips) would otherwise
+                    // be swallowed, so it does what the catcher behind would:
+                    // continue. Child controls win over this parent gesture.
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        if RevealCardTaps.bodyTapDismisses(chipsShown: chipsPhase == .shown,
+                                                           flipped: cardFlipped) {
+                            advanceOrDismiss()
+                        }
                     }
-                }
-                .accessibilityElement(children: render?.chipsInLayout == true
-                                                ? .contain : .ignore)
-                .accessibilityLabel(render?.chipsInLayout == true
-                                    ? Text("Catch result")
-                                    : Text(cardAccessibilityLabel))
-                // The card is normally tap-through (taps fall to the dismiss
-                // catcher behind). While the chips are up it must capture taps
-                // so the chips + SKIP are interactive; and once the reveal has
-                // settled with a composed photo, the hero's tap-to-zoom gesture
-                // needs hits too. Either way only ATTACHED gestures capture —
-                // margin/chrome taps still fall through to the catcher and
-                // dismiss (or skip-then-dismiss).
-                // The callsign-line Share button needs hits once it's live too;
-                // the body-tap gesture above keeps tap-to-continue working.
-                .allowsHitTesting(RevealCardTaps.cardTakesHits(
-                    chipsShown: chipsPhase == .shown, settled: settled,
-                    hasZoomablePhoto: zoomablePhotoURL != nil, shareAvailable: shareAvailable))
-                // At rest the card is ONE VoiceOver element (`.ignore` above),
-                // which hides the Share button inside it, so Share is offered
-                // as a named action on that element while it's live.
-                .accessibilityActions {
-                    if shareAvailable {
-                        Button("Share this catch", action: openShare)
+                    .accessibilityElement(children: render?.chipsInLayout == true
+                                                    ? .contain : .ignore)
+                    .accessibilityLabel(render?.chipsInLayout == true
+                                        ? Text("Catch result")
+                                        : Text(cardAccessibilityLabel))
+                    // The card is normally tap-through (taps fall to the dismiss
+                    // catcher behind). While the chips are up it must capture taps
+                    // so the chips + SKIP are interactive; and once the reveal has
+                    // settled with a composed photo, the hero's tap-to-zoom gesture
+                    // needs hits too. Either way only ATTACHED gestures capture —
+                    // margin/chrome taps still fall through to the catcher and
+                    // dismiss (or skip-then-dismiss).
+                    // The callsign-line Share button needs hits once it's live too;
+                    // the body-tap gesture above keeps tap-to-continue working.
+                    .allowsHitTesting(RevealCardTaps.cardTakesHits(
+                        chipsShown: chipsPhase == .shown, settled: settled,
+                        hasZoomablePhoto: zoomablePhotoURL != nil, shareAvailable: shareAvailable))
+                    // At rest the card is ONE VoiceOver element (`.ignore` above),
+                    // which hides the Share button inside it, so Share is offered
+                    // as a named action on that element while it's live.
+                    .accessibilityActions {
+                        if shareAvailable {
+                            Button("Share this catch", action: openShare)
+                        }
+                        if RevealCardTaps.turnOverAvailable(shareAvailable: shareAvailable) {
+                            Button("About this plane") { cardFlipped = true }
+                        }
                     }
-                }
+            } back: {
+                CatchCardBack(model: backModel, width: width,
+                              onOpenURL: { openURL($0) },
+                              onTurnBack: { cardFlipped = false })
+                    // Swallow body taps: without this a tap on the back's
+                    // empty space would fall through to the dismiss catcher
+                    // behind and end the reveal. Its buttons still win.
+                    .contentShape(Rectangle())
+                    .onTapGesture {}
+            }
         }, cta: {
             // The streak lives INSIDE the card (the entry-stamp row) since
             // 2026-08-26 — as a free line here it crowded the card's outline
@@ -1334,7 +1505,8 @@ struct CatchRevealView: View {
     ) -> some View {
         revealColumn(height: size.height, scrolls: false, card: {
             card(t: 1.0, bt: guessState?.bt ?? 0, width: width, render: guessState?.render,
-                 shareVisible: guessState?.render.chipsInLayout != true)
+                 shareVisible: guessState?.render.chipsInLayout != true,
+                 turnOverVisible: guessState?.render.chipsInLayout != true)
         }, cta: {
             // Settled-state chrome, mirrored from `layout` (which gates it
             // on the live `settled` flag this static render never flips).
@@ -1359,7 +1531,7 @@ struct CatchRevealView: View {
     // count-up clock `bt`, and the immutable bonus-round `render` (nil = plain
     // reveal). Keeping it pure of `@State` lets any beat render as a static frame.
     private func card(t: Double, bt: Double, width: CGFloat, render: GuessRender?,
-                      shareVisible: Bool) -> some View {
+                      shareVisible: Bool, turnOverVisible: Bool = false) -> some View {
         let accent = livePlane.rarity.tint
         // The prototype's absolute sizes were tuned for a 300pt-wide card.
         // Scale every metric off the real card width so it reads full-size
@@ -1523,6 +1695,19 @@ struct CatchRevealView: View {
                         }
                         .opacity(ss(0.9, 1.0, t))
                         .padding(.top, 2 * scale)
+                    }
+
+                    // Turn the card over (2026-10-25). Joins the card only
+                    // once Share is live — inside the VStack like the chips,
+                    // so the card's own modifier chain never branches. At rest
+                    // the card is one VoiceOver element, so the same action is
+                    // also offered via `accessibilityActions` in `layout`.
+                    if turnOverVisible {
+                        CardTurnOverButton(title: "ABOUT THIS PLANE", scale: scale) {
+                            cardFlipped = true
+                        }
+                        .padding(.bottom, -14 * scale)
+                        .transition(.opacity)
                     }
                 }
                 .padding(.horizontal, hPad)

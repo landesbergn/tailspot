@@ -45,6 +45,10 @@ struct SettledCatchCard: View {
     /// hosts the matching HeroZoomOverlay). nil (share renders, screens
     /// without the overlay) keeps the hero a plain framed photo.
     var heroZoom: HeroZoomModel? = nil
+    /// Turn the card over (CatchDetailView's FlipCard, 2026-10-25). Non-nil
+    /// renders the "ABOUT THIS PLANE" control at the foot of the card; nil
+    /// (share renders and every other caller) leaves the card unchanged.
+    var onTurnOver: (() -> Void)? = nil
 
     private var base: Int { plane.rarity.basePoints }
     private var bonus: Int { isFirstOfType ? Int((Double(base) * 0.5).rounded()) : 0 }
@@ -127,11 +131,18 @@ struct SettledCatchCard: View {
                 }
             }
             .padding(.horizontal, hPad)
-            .padding(.bottom, 22 * scale)
+            .padding(.bottom, onTurnOver == nil ? 22 * scale : 6 * scale)
             // Everything below the hero reads as one card (name, tier,
             // stats, route, ledger). The hero stays OUTSIDE the combine so
             // its Planespotters link remains an actionable element.
             .accessibilityElement(children: .combine)
+
+            // Outside the combine too: a real Button VoiceOver can reach.
+            if let onTurnOver {
+                CardTurnOverButton(title: "ABOUT THIS PLANE", scale: scale, action: onTurnOver)
+                    .padding(.horizontal, hPad)
+                    .padding(.bottom, 8 * scale)
+            }
         }
         .frame(width: width)
         .modifier(CatchRarityFrame(rarity: plane.rarity, scale: scale))

@@ -25,10 +25,12 @@
   <div class="meta">
     <p><strong>Operator:</strong> Noah Landesberg (sole developer)</p>
     <p><strong>Contact:</strong> <a href="mailto:privacy@tailspot.app">privacy@tailspot.app</a></p>
-    <p><strong>Effective date:</strong> July 11, 2026</p>
+    <p><strong>Effective date:</strong> October 25, 2026</p>
   </div>
 
   <p>Tailspot is a free plane-spotting game. This policy explains what information the app collects, why, and what happens to it. It is written to be read, not lawyered around.</p>
+
+  <p><strong>What changed on October 25, 2026</strong>: catch cards can now be turned over to show more about the aircraft type. Doing so fetches a short summary from Wikipedia, and the back of the card may load a photo of the type from Wikimedia Commons. Wikimedia is a new third party the app talks to (see §4).</p>
 
   <p><strong>What changed on July 11, 2026</strong> (from the June 11, 2026 policy): (1) the app now embeds the PostHog analytics SDK, including session replay — recordings of the app's screens; your catch photos and the live camera view are masked out of those recordings (see §3); (2) we now describe location use accurately: the app uses your location continuously while it is open, to fetch nearby aircraft — not only at the moment of a catch; (3) catch records are now stored on our server and can be restored after a reinstall (photos cannot — see §5); (4) two minor processors added: Apple (turning catch coordinates into a place name) and Planespotters.net (loading stock aircraft photos).</p>
 
@@ -154,7 +156,8 @@
     <li><strong>Fly.io</strong> — backend hosting (US).</li>
     <li><strong>PostHog</strong> — analytics and session replay (see §3).</li>
     <li><strong>Apple</strong> — (a) opt-in crash reporting; (b) when you catch a plane, the catch coordinates are sent to Apple's geocoding service to turn them into a place name ("Oakland, US") for your collection card.</li>
-    <li><strong>Planespotters.net</strong> — when your collection shows a stock photo of an aircraft, the image loads directly from Planespotters' servers, which necessarily see your IP address (like any image on any website). The request identifies the aircraft, not you.</li>
+    <li><strong>Planespotters.net</strong> — when your collection shows a stock photo of an aircraft, the image loads directly from Planespotters' servers, which necessarily see your IP address (like any image on any website). The request identifies the aircraft, not you. The back of a catch card also loads the photo of that exact aircraft from Planespotters when one exists.</li>
+    <li><strong>Wikipedia and Wikimedia Commons</strong> (Wikimedia Foundation) — when you turn a catch card over, the app fetches a short summary of the aircraft type from Wikipedia. The back of the card may also load a photo of the type from Wikimedia Commons; on a catch's detail screen in your collection that photo can load when the screen opens, before the card is turned. These requests go directly from your phone to Wikimedia's servers, which see your IP address. They name the aircraft type (e.g. "Boeing 737"), not you, and carry no account or device identifier. The facts shown under SPECS ship inside the app (from Wikidata) and need no request.</li>
   </ul>
 
   <hr class="rule">

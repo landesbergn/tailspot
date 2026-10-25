@@ -5,6 +5,14 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-10-25 — Catch card backs (branch `claude/plane-catch-details-314049`)
+
+- Every catch card turns over (3D flip, button or swipe) to a back with the
+  Planespotters photo of the airframe (else a Commons type photo), "you and
+  this type" from the Hangar, bundled Wikidata specs, and a live Wikipedia
+  summary. Hangar detail and the reveal (reveal fetches nothing until the
+  first turn-over). New `catch_card_turned` event. Detail in PLAN §9.
+
 ## 2026-10-24 — Security audit (branch `worktree-security-audit-2026-10`)
 
 - Four parallel reviews (backend auth, backend catches/challenges, web + CI,
