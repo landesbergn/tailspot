@@ -9,7 +9,7 @@
 //     tabs, reset countdowns, and previous-period champion banners on the week
 //     and month tabs. Shows rank/handle/points/catches, highlights "me" row (works
 //     in the list). The fixed header carries one centred sentence for the
-//     selected tab under the switcher: "You're 18th this week" over
+//     selected tab under the switcher: "You're 18th with 1,240 pts" over
 //     "10 points behind @x · resets in 2d 9h" — see StandingLine in
 //     LeaderboardWindows.swift. A handle-less device gets the
 //     "claim a handle" hint instead of a goal.
@@ -609,13 +609,14 @@ struct LeaderboardScreen: View {
     }
 
     /// The standing line in the fixed header (Noah's option "D · One
-    /// sentence", 2026-10-23), centred under the switcher:
+    /// sentence", 2026-10-23; points added 2026-10-26), centred under the
+    /// switcher:
     ///
-    ///         You're 18th this week
+    ///       You're 18th with 1,240 pts
     ///   10 points behind @randy98 · resets in 2d 9h
     ///
     /// The heading is the app's one prose head (`.brandDisplayFont()`) with
-    /// the ordinal in cyan; the subtitle is body text. Both wrap rather than
+    /// the ordinal and the points in cyan; the subtitle is body text. Both wrap rather than
     /// truncate at large type (`fixedSize(vertical:)` lets the header grow).
     /// With no standing (unregistered) only the reset shows; with neither,
     /// nothing does.
@@ -644,7 +645,8 @@ struct LeaderboardScreen: View {
             .frame(maxWidth: .infinity)
             .padding(.top, 4)
             .padding(.bottom, 8)
-            // One element, read as sentences ("You're 18th this week. 10
+            // One element, read as sentences ("You're 18th this week with
+            // 1,240 points. 10
             // points behind randy98. Resets in 2 days, 9 hours.").
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(StandingLine.spoken(line, spokenReset: reset?.spoken))
@@ -659,10 +661,13 @@ struct LeaderboardScreen: View {
         }
     }
 
-    /// "You're **18th** this week" with the ordinal in Brand cyan.
+    /// "You're **18th** with **1,240** pts" with the ordinal and the
+    /// number in Brand cyan.
     private func standingHeading(_ line: StandingLine) -> Text {
         guard let ordinal = line.ordinal else { return Text(line.heading) }
-        return Text("You're \(Text(ordinal).foregroundStyle(Brand.Color.cyan))\(line.headingSuffix)")
+        let number = line.points.formatted(.number)
+        let unit = line.points == 1 ? "pt" : "pts"
+        return Text("You're \(Text(ordinal).foregroundStyle(Brand.Color.cyan)) with \(Text(number).foregroundStyle(Brand.Color.cyan)) \(unit)")
     }
 }
 
