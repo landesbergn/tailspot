@@ -199,10 +199,12 @@ nonisolated struct RaceGap: Equatable, Sendable {
             // either — see `LeaderboardEntry.myIndex`.)
             guard handleConfirmed else { return nil }
             // Handled but not a row on the board. With room left, any
-            // point earns a row; a full board means beating the last row.
+            // catch earns a row (every catch scores > 0, and the server
+            // lists any handled device with points in the window); a full
+            // board means beating the last row.
             // "Full" trusts the server's `totalCatchers` (qualifying
             // spotters before the row limit) as well as the row count, so
-            // a short response can't promise "1 PT" when the real board is
+            // a short response can't promise "1 catch" when the real board is
             // full. An older server without the count falls back to rows.
             //
             // Belt and braces for a strand the marker missed: a device

@@ -511,7 +511,7 @@ struct RaceGapTests {
     }
 
     /// No handle, nothing caught: hidden. The backend lists only handled
-    /// devices, so "1 PT TO MAKE THE BOARD" would be a false promise — one
+    /// devices, so "1 catch to get on the board" would be a false promise — one
     /// catch later the line would vanish and still no row would appear.
     /// The "claim a handle" hint is the only call to action.
     @Test func noHandle_zeroPoints_hidden() {
@@ -605,7 +605,7 @@ struct RaceGapTests {
 
     /// The server says more spotters qualify than the 50-row limit, even
     /// though this response is short: the board is full, so a 0-pt spotter
-    /// must beat the last row, not "1 PT TO MAKE THE BOARD".
+    /// must beat the last row, not "1 catch to get on the board".
     @Test func shortResponse_serverCountSaysFull_noOnePointPromise() {
         let response = LeaderboardResponse(
             entries: board(), me: MyStanding(rank: 0, points: 0), window: "week",
@@ -630,14 +630,16 @@ struct RaceGapTests {
         #expect(gap.points == 111)
     }
 
-    /// Room on the board per the server count: one point earns a row.
-    @Test func serverCountSaysRoom_onePoint() throws {
+    /// Room on the board per the server count: one catch earns a row.
+    @Test func serverCountSaysRoom_oneCatch() throws {
         let response = LeaderboardResponse(
             entries: board(), me: MyStanding(rank: 0, points: 0), window: "week",
             resetsAt: "2026-10-26T00:00:00.000Z", champions: nil, totalCatchers: 12)
         let gap = try #require(RaceGap.compute(
             response: response, window: .week, myHandle: "notlisted", handleConfirmed: true))
+        #expect(gap.target == .makeBoard(full: false))
         #expect(gap.points == 1)
+        #expect(gap.prose == "1 catch to get on the board")
     }
 
     /// Stranded handle (local handle the server never confirmed — the
@@ -863,7 +865,7 @@ struct StandingLineTests {
     }
 
     /// Nothing caught this week, room on the board.
-    @Test func offBoard_roomLeft_onePoint() throws {
+    @Test func offBoard_roomLeft_oneCatch() throws {
         let l = try line(board(), me: MyStanding(rank: 0, points: 0), handle: "notlisted")
         #expect(l.heading == "You're not on the board yet")
         #expect(l.detail == "1 catch to get on the board")
