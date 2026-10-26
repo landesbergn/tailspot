@@ -276,17 +276,26 @@ nonisolated struct RaceGap: Equatable, Sendable {
 // MARK: - Standing line
 
 /// The standing line under the WEEK / MONTH / ALL TIME switcher (Noah's
-/// option "D · One sentence", 2026-10-23), centred:
+/// option "D · One sentence", 2026-10-23; the score joined the heading in
+/// option "A · Points in the heading", 2026-10-26), centred:
 ///
-///         You're 18th this week
+///       You're 18th with 1,240 pts
 ///   10 points behind @randy98 · resets in 2d 9h
 ///
 /// It replaced the YOUR STANDING card (rank, handle, points, YOU pill and a
-/// goal line), which read as busy. The ordinal is the only number in the
-/// heading; the subtitle holds the gap and, on week and month, the reset.
+/// goal line), which read as busy. The heading holds my rank and points;
+/// the subtitle holds the gap and, on week and month, the reset.
 ///
-/// RANK CONSISTENCY: the ordinal is MY ROW's printed rank, so it always
-/// matches the list. `me.rank` (which also counts hidden handle-less and
+/// The score sits in the heading because my own row is usually below the
+/// fold (the champion banner and podium fill the top of the board), so
+/// without it the screen never said how many points I have. The switcher
+/// already names the window, so the visible heading drops "this week";
+/// VoiceOver keeps it. On the pre-windows backend the points are left out
+/// ("You're 11th"): its board is all-time even under the WEEK tab, and
+/// all-time points there would read as this week's.
+///
+/// RANK CONSISTENCY: the ordinal and the points are MY ROW's printed rank
+/// and points, so they always match the list. `me.rank` (which also counts hidden handle-less and
 /// disabled devices; see `RaceGap`) is never printed: when I'm not a row
 /// the heading says "You're not on the board yet".
 nonisolated struct StandingLine: Equatable, Sendable {
@@ -301,6 +310,10 @@ nonisolated struct StandingLine: Equatable, Sendable {
 
     /// My row's printed rank; 0 when I'm not a row on the board.
     let rank: Int
+    /// My row's printed points; 0 when I'm not a row on the board. Never
+    /// `me.points`, which can run out of step with the rows (see
+    /// `RaceGap.compute`).
+    let points: Int
     /// My handle, nil for a handle-less device (claim-a-handle hint, no
     /// goal).
     let handle: String?
@@ -327,7 +340,7 @@ nonisolated struct StandingLine: Equatable, Sendable {
             // one way onto the board, so it still shows. Unregistered with
             // a handle → nil (the view shows the reset alone).
             guard myHandle == nil else { return nil }
-            return StandingLine(rank: 0, handle: nil, goal: nil,
+            return StandingLine(rank: 0, points: 0, handle: nil, goal: nil,
                                 windowPhrase: windowMatches ? window.standingPhrase : nil)
         }
         let entries = response.displayedEntries
@@ -350,6 +363,7 @@ nonisolated struct StandingLine: Equatable, Sendable {
                 .map(GoalLine.gap)
         }
         return StandingLine(rank: myIndex.map { entries[$0].rank } ?? 0,
+                            points: myIndex.map { entries[$0].points } ?? 0,
                             handle: myHandle,
                             goal: goal,
                             windowPhrase: windowMatches ? window.standingPhrase : nil)
@@ -366,12 +380,31 @@ nonisolated struct StandingLine: Equatable, Sendable {
     /// "18th", drawn in Brand cyan inside the heading; nil off the board.
     var ordinal: String? { isOnBoard ? Ordinal.english(rank) : nil }
 
-    /// What follows the ordinal: " this week", or "" on the old backend.
-    var headingSuffix: String { windowPhrase.map { " \($0)" } ?? "" }
+    /// Whether the heading carries my points: only when the board is this
+    /// window's (not the pre-windows backend's all-time board).
+    var showsPoints: Bool { isOnBoard && windowPhrase != nil }
 
-    /// "You're 18th this week" / "You're not on the board yet".
+    /// "1,240", drawn in Brand cyan inside the heading.
+    var pointsNumber: String { points.formatted(.number) }
+
+    /// "pts" / "pt", after the number.
+    var pointsUnit: String { points == 1 ? "pt" : "pts" }
+
+    /// "You're 18th with 1,240 pts" / "You're 11th" (pre-windows backend)
+    /// / "You're not on the board yet". The view styles the same pieces.
     var heading: String {
-        ordinal.map { "You're \($0)\(headingSuffix)" } ?? "You're not on the board yet"
+        guard let ordinal else { return "You're not on the board yet" }
+        return showsPoints
+            ? "You're \(ordinal) with \(pointsNumber) \(pointsUnit)"
+            : "You're \(ordinal)"
+    }
+
+    /// The heading as VoiceOver reads it: the window back in, and "points"
+    /// in full ("You're 18th this week with 1,240 points").
+    var spokenHeading: String {
+        guard let ordinal else { return heading }
+        guard let windowPhrase, showsPoints else { return heading }
+        return "You're \(ordinal) \(windowPhrase) with \(RaceGap.pointsText(points))"
     }
 
     /// The goal (or the claim-a-handle hint), without the reset.
@@ -407,13 +440,14 @@ nonisolated struct StandingLine: Equatable, Sendable {
         return joined.prefix(1).uppercased() + joined.dropFirst()
     }
 
-    /// VoiceOver for the whole line: "You're 18th this week. 10 points
+    /// VoiceOver for the whole line: "You're 18th this week with 1,240
+    /// points. 10 points
     /// behind randy98. Resets in 2 days, 9 hours." `spokenReset` is the
     /// countdown's spoken form ("resets in 2 days, 9 hours").
     static func spoken(_ line: StandingLine?, spokenReset: String?) -> String {
         var sentences: [String] = []
         if let line {
-            sentences.append(line.heading)
+            sentences.append(line.spokenHeading)
             if let detail = line.detail {
                 sentences.append(detail
                     .replacingOccurrences(of: "@", with: "")
