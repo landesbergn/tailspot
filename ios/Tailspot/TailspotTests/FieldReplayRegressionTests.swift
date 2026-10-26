@@ -135,4 +135,45 @@ struct FieldReplayRegressionTests {
         #expect(lastTick.visibleCount < lastTick.aircraft.count / 2,
                 "visibility must still exclude the majority of a 77-plane bbox")
     }
+
+    /// Field miss (2026-09-05, Berkeley): WGN211 — `RDCT037` after redaction
+    /// — a Western Global 747-400 freighter at cruise (10.7 km altitude,
+    /// 33 km slant, 18.7° elevation, contrail-visible in a clear morning
+    /// sky), 4 km past `revealReachMeters`. Every recorded empty tap landed
+    /// within 1° of its projection and the recording's own diagnosis was
+    /// `filtered-far`: no label, no reveal, no toast. The precision-tap rule
+    /// (`precisionTapRevealMaxOffsetDeg`) turns each of those taps into a
+    /// reveal while the ambient band keeps hiding the plane — pinned here
+    /// through the same candidate pipeline the live tap handler runs.
+    @Test func wgn211DeadOnTapsRevealThroughPrecisionRule() throws {
+        let events = try loadReplay("replay-2026-09-05T154638Z")
+        let ordered = events.sorted { $0.timestamp < $1.timestamp }
+        let ticks = ordered.compactMap { if case .tick(let t) = $0 { t } else { nil } }
+        let taps = ordered.compactMap { if case .emptyTap(let t) = $0 { t } else { nil } }
+        try #require(!ticks.isEmpty)
+        #expect(taps.count == 3, "fixture should hold the three recorded taps")
+
+        for tap in taps {
+            // The bug stays reproducible: the app said filtered-far at the time.
+            #expect(tap.reason == "filtered-far")
+            #expect(tap.nearestIcao24 == "RDCT037")
+
+            let tick = ticks.last(where: { $0.timestamp <= tap.timestamp }) ?? ticks[0]
+            let (cands, observed) = try emptySkyTapCandidates(tap: tap, tick: tick)
+            let choice = try #require(chooseEmptySkyTapSubject(cands))
+            let subject = observed[choice.candidate.index]
+
+            #expect(subject.aircraft.icao24 == "RDCT037")
+            #expect(choice.candidate.offsetDeg <= precisionTapRevealMaxOffsetDeg,
+                    "tap should reconstruct dead-on (got \(choice.candidate.offsetDeg)°)")
+            #expect(choice.reason == "filtered-precise")
+            #expect(choice.rescued == false)
+            #expect(shouldTapReveal(reason: choice.reason))
+
+            // The ambient contract is untouched: without the tap the plane
+            // is still hidden and still past plain reveal reach.
+            #expect(subject.visibilityTier == .hidden)
+            #expect(!subject.isPlausiblyRevealable)
+        }
+    }
 }
