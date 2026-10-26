@@ -19,7 +19,7 @@ import UIKit
 
 // MARK: - Fixed example data
 
-nonisolated private enum BackFixtures {
+nonisolated enum BackFixtures {
     static let firstCaught = Date(timeIntervalSince1970: 1_772_625_600) // 2026-03-04 12:00 UTC
 
     static let b738Info = TypeInfo(
