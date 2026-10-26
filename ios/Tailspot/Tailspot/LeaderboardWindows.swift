@@ -126,7 +126,7 @@ nonisolated struct RaceGap: Equatable, Sendable {
         ///
         /// `full`: the board already has its 50 rows, so the goal is
         /// beating the last one ("31 points to make the top 50"); with
-        /// room left, any point earns a row ("1 point to get on the
+        /// room left, any catch earns a row ("1 catch to get on the
         /// board").
         case makeBoard(full: Bool)
     }
@@ -232,7 +232,9 @@ nonisolated struct RaceGap: Equatable, Sendable {
     ///   (ties break by registration time). Level on points reads "1 point
     ///   to pass @randy98", because "0 points behind" would be no goal.
     /// - make the board: "31 points to make the top 50" on a full board,
-    ///   "1 point to get on the board" with room left.
+    ///   "1 catch to get on the board" with room left — any catch earns a
+    ///   row there, and a catch is the action the player takes (Noah,
+    ///   2026-10-26).
     var prose: String {
         switch target {
         case .pass(let handle, _):
@@ -243,7 +245,7 @@ nonisolated struct RaceGap: Equatable, Sendable {
         case .makeBoard(let full):
             return full
                 ? "\(Self.pointsText(points)) to make the top \(LeaderboardResponse.displayLimit)"
-                : "\(Self.pointsText(points)) to get on the board"
+                : "1 catch to get on the board"
         }
     }
 
