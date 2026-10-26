@@ -24,6 +24,10 @@ What it does
    "X.jpg: A derivative work: B", "Original uploader was X at en.wikipedia");
    a CC BY/BY-SA photo with no real author falls back to the uploader, else
    is dropped. A public-domain photo with no author stores artist "".
+   When the P18 image is missing or fails that check, the article's lead
+   image is tried, then the other photos in the article (`article_photos`:
+   file names that mention the type, never cockpits, logos or diagrams),
+   all through the same licence check.
 6. Writes TypeInfo.json (sorted, pretty-printed) and prints a report.
 
 Missing facts are omitted, never guessed: a field Wikidata lacks is simply
@@ -214,7 +218,9 @@ OVERRIDES = {
     "flj-eclipse": "Eclipse 500",
     "flj-premier": "Beechcraft Premier I",
     # GA.
-    "fc152": "Cessna 150",
+    # The card and its representative typecode are the 152, which has its
+    # own article (and a freely licensed photo; the 150's has neither).
+    "fc152": "Cessna 152",
     "fc185": "Cessna 185 Skywagon",
     "fc206": "Cessna 206",
     "fc400": "Cessna 400",
@@ -570,6 +576,56 @@ def lead_images(titles):
     return out
 
 
+# Words in a file name that mean it is not a photo of the whole aircraft.
+NOT_THE_AIRCRAFT = re.compile(
+    r"cockpit|panel|interior|cabin|engine|logo|flag|map|diagram|drawing|"
+    r"3view|3-view|schematic|seat|wreck|crash|accident|propeller|wheel|mockup|mock-up",
+    re.IGNORECASE)
+
+
+def _squash(text):
+    return re.sub(r"[^a-z0-9]", "", text.lower())
+
+
+def article_photos(titles):
+    """article title -> candidate photo file names, best first.
+
+    Third source, for articles where neither P18 nor the lead image is a
+    freely licensed photo. Only files whose name mentions the type (a word of
+    the title after the maker, e.g. "SR22", "PC-12", "King Air") count, so a
+    stray photo of some other aircraft in the article is never picked. Every
+    candidate still goes through the Commons licence check.
+    """
+    out = {}
+    for title in sorted(set(titles)):
+        data = get_json(WIKI_API, {
+            "action": "query",
+            "titles": title,
+            "prop": "images",
+            "imlimit": "max",
+        })
+        names = []
+        for page in data.get("query", {}).get("pages", []):
+            for im in page.get("images", []):
+                n = im.get("title", "")
+                n = n.split(":", 1)[1] if ":" in n else n
+                if RASTER.search(n) and not NOT_THE_AIRCRAFT.search(n):
+                    names.append(n.replace("_", " "))
+        words = [_squash(w) for w in title.split()[1:]]
+        words = [w for w in words if len(w) >= 2]
+        joined = _squash("".join(title.split()[1:]))
+
+        def score(name):
+            sq = _squash(name)
+            return (joined in sq) * 10 + sum(w in sq for w in words)
+
+        ranked = sorted((n for n in names if score(n) > 0),
+                        key=lambda n: (-score(n), n))
+        if ranked:
+            out[title] = ranked[:8]
+    return out
+
+
 # MARK: - Commons
 
 def strip_html(text):
@@ -749,9 +805,21 @@ def main():
         if hit:
             article_users[hit[0]] = article_users.get(hit[0], 0) + 1
 
+    # Third source: other photos in the article, for articles still without
+    # a usable P18 or lead image.
+    def lead_ok(title):
+        return bool(photos.get(leads.get(title, ""), (None,))[0])
+    needs_any = sorted({r[0] for r in resolved.values()
+                        if r and not has_photo(r[1]) and not lead_ok(r[0])})
+    extras = article_photos(needs_any) if needs_any else {}
+    extra_files = [f for fs in extras.values() for f in fs if f not in photos]
+    if extra_files:
+        photos.update(fetch_photos(extra_files))
+
     out = {}
     no_article, suspicious, dropped = [], [], []
     from_lead = 0
+    from_article = 0
     shared_article = 0
     implausible = []
     for fam_id, fam_title, entry_id, canonical, _tc in entries:
@@ -797,6 +865,13 @@ def main():
                 from_lead += 1
             else:
                 dropped.append((entry_id, leads[final] + " (lead image)", lic))
+        if "photo" not in info:
+            for name in extras.get(final, []):
+                photo, _lic = photos.get(name, (None, "missing"))
+                if photo:
+                    info["photo"] = photo
+                    from_article += 1
+                    break
         out[entry_id] = info
 
     doc = {
@@ -810,8 +885,12 @@ def main():
     print(f"entries: {len(entries)}  resolved: {len(out)}  "
           f"no article: {len(no_article)}  looks wrong: {len(suspicious)}")
     with_photo = sum(1 for v in out.values() if "photo" in v)
-    print(f"with photo: {with_photo} ({from_lead} from article lead images)  "
+    print(f"with photo: {with_photo} ({from_lead} from article lead images, "
+          f"{from_article} from other article photos)  "
           f"photo candidates dropped for licence: {len(dropped)}")
+    for eid, v in sorted(out.items()):
+        if "photo" not in v:
+            print(f"  no photo: {eid} ({v['wikipediaTitle']})")
     print(f"entries on a shared family article (Wikidata specs omitted): {shared_article}")
     for key in ("firstFlightYear", "numberBuilt", "wingspanMeters", "lengthMeters"):
         print(f"  {key}: {sum(1 for v in out.values() if key in v)}")

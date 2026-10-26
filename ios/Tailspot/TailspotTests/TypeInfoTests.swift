@@ -100,7 +100,18 @@ struct TypeInfoTests {
             }
             #expect(!p.artist.contains("<"), "\(key): HTML left in artist")
         }
-        #expect(photos > 200)
+        #expect(photos > 295)
+    }
+
+    /// Common catches that once fell back to the plain sky (2026-10-25: the
+    /// Cessna 152's only Wikidata photo is GFDL-only and it was mapped to the
+    /// 150's article). The generator now also tries the article's photos.
+    @Test func commonGATypesHaveATypePhoto() {
+        let c152 = TypeInfoStore.info(forEntryId: "fc152")
+        #expect(c152?.wikipediaTitle == "Cessna 152")
+        for id in ["fc152", "fsr22", "ftp-pc12", "fb350", "fcp-twinotter", "fe55p", "flj-hondajet"] {
+            #expect(TypeInfoStore.info(forEntryId: id)?.photo != nil, "\(id) has no photo")
+        }
     }
 
     @Test func specsArePlausibleWhenPresent() throws {

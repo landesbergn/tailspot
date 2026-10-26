@@ -205,10 +205,10 @@
     "f777-200": {
       "entryId": "f777-200",
       "photo": {
-        "artist": "Aero Icarus from Zürich, Switzerland",
-        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/3c/Cathay_Pacific_Boeing_777-200%3B_B-HNL%40HKG.jpg/960px-Cathay_Pacific_Boeing_777-200%3B_B-HNL%40HKG.jpg",
+        "artist": "Altair78",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/07/United_Airlines_777_N797UA_LAX.jpg/960px-United_Airlines_777_N797UA_LAX.jpg",
         "license": "CC BY-SA 2.0",
-        "pageURL": "https://commons.wikimedia.org/wiki/File:Cathay_Pacific_Boeing_777-200;_B-HNL@HKG.jpg"
+        "pageURL": "https://commons.wikimedia.org/wiki/File:United_Airlines_777_N797UA_LAX.jpg"
       },
       "wikidataId": "Q6425",
       "wikipediaTitle": "Boeing 777"
@@ -216,10 +216,10 @@
     "f777-200lr": {
       "entryId": "f777-200lr",
       "photo": {
-        "artist": "Aero Icarus from Zürich, Switzerland",
-        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/3c/Cathay_Pacific_Boeing_777-200%3B_B-HNL%40HKG.jpg/960px-Cathay_Pacific_Boeing_777-200%3B_B-HNL%40HKG.jpg",
+        "artist": "Altair78",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/07/United_Airlines_777_N797UA_LAX.jpg/960px-United_Airlines_777_N797UA_LAX.jpg",
         "license": "CC BY-SA 2.0",
-        "pageURL": "https://commons.wikimedia.org/wiki/File:Cathay_Pacific_Boeing_777-200;_B-HNL@HKG.jpg"
+        "pageURL": "https://commons.wikimedia.org/wiki/File:United_Airlines_777_N797UA_LAX.jpg"
       },
       "wikidataId": "Q6425",
       "wikipediaTitle": "Boeing 777"
@@ -227,10 +227,10 @@
     "f777-300": {
       "entryId": "f777-300",
       "photo": {
-        "artist": "Aero Icarus from Zürich, Switzerland",
-        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/3c/Cathay_Pacific_Boeing_777-200%3B_B-HNL%40HKG.jpg/960px-Cathay_Pacific_Boeing_777-200%3B_B-HNL%40HKG.jpg",
+        "artist": "Altair78",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/07/United_Airlines_777_N797UA_LAX.jpg/960px-United_Airlines_777_N797UA_LAX.jpg",
         "license": "CC BY-SA 2.0",
-        "pageURL": "https://commons.wikimedia.org/wiki/File:Cathay_Pacific_Boeing_777-200;_B-HNL@HKG.jpg"
+        "pageURL": "https://commons.wikimedia.org/wiki/File:United_Airlines_777_N797UA_LAX.jpg"
       },
       "wikidataId": "Q6425",
       "wikipediaTitle": "Boeing 777"
@@ -238,10 +238,10 @@
     "f777-300er": {
       "entryId": "f777-300er",
       "photo": {
-        "artist": "Aero Icarus from Zürich, Switzerland",
-        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/3c/Cathay_Pacific_Boeing_777-200%3B_B-HNL%40HKG.jpg/960px-Cathay_Pacific_Boeing_777-200%3B_B-HNL%40HKG.jpg",
+        "artist": "Altair78",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/07/United_Airlines_777_N797UA_LAX.jpg/960px-United_Airlines_777_N797UA_LAX.jpg",
         "license": "CC BY-SA 2.0",
-        "pageURL": "https://commons.wikimedia.org/wiki/File:Cathay_Pacific_Boeing_777-200;_B-HNL@HKG.jpg"
+        "pageURL": "https://commons.wikimedia.org/wiki/File:United_Airlines_777_N797UA_LAX.jpg"
       },
       "wikidataId": "Q6425",
       "wikipediaTitle": "Boeing 777"
@@ -606,6 +606,12 @@
     },
     "fb350": {
       "entryId": "fb350",
+      "photo": {
+        "artist": "MF Kamaruddin",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/49/Angled_shot_of_Malaysia_Air_Force%27s_Beechcraft_Super_King_Air_MPA.jpg/960px-Angled_shot_of_Malaysia_Air_Force%27s_Beechcraft_Super_King_Air_MPA.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Angled_shot_of_Malaysia_Air_Force%27s_Beechcraft_Super_King_Air_MPA.jpg"
+      },
       "wikidataId": "Q1094597",
       "wikipediaTitle": "Beechcraft Super King Air"
     },
@@ -625,6 +631,12 @@
     },
     "fbe20": {
       "entryId": "fbe20",
+      "photo": {
+        "artist": "MF Kamaruddin",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/49/Angled_shot_of_Malaysia_Air_Force%27s_Beechcraft_Super_King_Air_MPA.jpg/960px-Angled_shot_of_Malaysia_Air_Force%27s_Beechcraft_Super_King_Air_MPA.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Angled_shot_of_Malaysia_Air_Force%27s_Beechcraft_Super_King_Air_MPA.jpg"
+      },
       "wikidataId": "Q1094597",
       "wikipediaTitle": "Beechcraft Super King Air"
     },
@@ -790,12 +802,15 @@
     },
     "fc152": {
       "entryId": "fc152",
-      "firstFlightYear": 1957,
-      "lengthMeters": 7.34,
-      "numberBuilt": 23949,
-      "wikidataId": "Q1057117",
-      "wikipediaTitle": "Cessna 150",
-      "wingspanMeters": 9.97
+      "numberBuilt": 7584,
+      "photo": {
+        "artist": "Alf van Beem",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/9/98/Ph-cbf_cessna_f152.jpg/960px-Ph-cbf_cessna_f152.jpg",
+        "license": "CC0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Ph-cbf_cessna_f152.jpg"
+      },
+      "wikidataId": "Q2348731",
+      "wikipediaTitle": "Cessna 152"
     },
     "fc162": {
       "entryId": "fc162",
@@ -1032,6 +1047,12 @@
       "firstFlightYear": 1978,
       "lengthMeters": 10.9,
       "numberBuilt": 236,
+      "photo": {
+        "artist": "Cory W. Watts from Madison, Wisconsin, United States of America",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/bd/The_Cessna_425_Corsair_%28544365691%29.jpg/960px-The_Cessna_425_Corsair_%28544365691%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:The_Cessna_425_Corsair_(544365691).jpg"
+      },
       "wikidataId": "Q1057259",
       "wikipediaTitle": "Cessna 425",
       "wingspanMeters": 13.45
@@ -1144,6 +1165,12 @@
       "entryId": "fcp-b190",
       "firstFlightYear": 1982,
       "numberBuilt": 3,
+      "photo": {
+        "artist": "Adrian Pingstone",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/9/98/Beechcraft_1900D_%28code_T-729%29_of_the_Swiss_Air_Force_arrives_Fairford_7Jul2016_arp.jpg/960px-Beechcraft_1900D_%28code_T-729%29_of_the_Swiss_Air_Force_arrives_Fairford_7Jul2016_arp.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Beechcraft_1900D_(code_T-729)_of_the_Swiss_Air_Force_arrives_Fairford_7Jul2016_arp.jpg"
+      },
       "wikidataId": "Q661819",
       "wikipediaTitle": "Beechcraft 1900"
     },
@@ -1182,6 +1209,12 @@
       "firstFlightYear": 1965,
       "lengthMeters": 10.86,
       "numberBuilt": 1280,
+      "photo": {
+        "artist": "twiga_swala",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/e/e5/Vieques_Air_Link_Britten-Norman_BN-2_Islander_at_Benjam%C3%ADn_Rivera_Noriega_Airport.jpg/960px-Vieques_Air_Link_Britten-Norman_BN-2_Islander_at_Benjam%C3%ADn_Rivera_Noriega_Airport.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Vieques_Air_Link_Britten-Norman_BN-2_Islander_at_Benjam%C3%ADn_Rivera_Noriega_Airport.jpg"
+      },
       "wikidataId": "Q921019",
       "wikipediaTitle": "Britten-Norman BN-2 Islander",
       "wingspanMeters": 14.94
@@ -1265,6 +1298,12 @@
       "firstFlightYear": 1965,
       "lengthMeters": 15.77,
       "numberBuilt": 967,
+      "photo": {
+        "artist": "ZLEA",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f1/De_Havilland_Canada_DHC-6-100_Twin_Otter_%28N24HV%2C_cn_109%29_%282-3-2024%29.jpg/960px-De_Havilland_Canada_DHC-6-100_Twin_Otter_%28N24HV%2C_cn_109%29_%282-3-2024%29.jpg",
+        "license": "CC BY-SA 4.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:De_Havilland_Canada_DHC-6-100_Twin_Otter_(N24HV,_cn_109)_(2-3-2024).jpg"
+      },
       "wikidataId": "Q683041",
       "wikipediaTitle": "De Havilland Canada DHC-6 Twin Otter",
       "wingspanMeters": 19.81
@@ -1566,6 +1605,12 @@
       "entryId": "fe55p",
       "firstFlightYear": 2008,
       "numberBuilt": 834,
+      "photo": {
+        "artist": "Piemags Aviation",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/5/55/Embraer_Phenom_300_N310GV_taxiing_at_Scottsdale_Airport%2C_October_2023.jpg/960px-Embraer_Phenom_300_N310GV_taxiing_at_Scottsdale_Airport%2C_October_2023.jpg",
+        "license": "CC BY-SA 4.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Embraer_Phenom_300_N310GV_taxiing_at_Scottsdale_Airport,_October_2023.jpg"
+      },
       "wikidataId": "Q952417",
       "wikipediaTitle": "Embraer Phenom 300"
     },
@@ -1620,6 +1665,12 @@
       "firstFlightYear": 1963,
       "lengthMeters": 17.15,
       "numberBuilt": 508,
+      "photo": {
+        "artist": "Shahram Sharifi",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/31/A_IRIAF_Dassault_Falcon_20_lands_at_Mehrabad_Airport.jpg/960px-A_IRIAF_Dassault_Falcon_20_lands_at_Mehrabad_Airport.jpg",
+        "license": "CC BY-SA 4.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:A_IRIAF_Dassault_Falcon_20_lands_at_Mehrabad_Airport.jpg"
+      },
       "wikidataId": "Q1474251",
       "wikipediaTitle": "Dassault Falcon 20",
       "wingspanMeters": 16.3
@@ -2126,6 +2177,12 @@
       "firstFlightYear": 2003,
       "lengthMeters": 13.0,
       "numberBuilt": 125,
+      "photo": {
+        "artist": "ZLEA",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/2/28/Honda_HA-420_HondaJet_Elite_II_%28N420LR%2C_cn_42000240%29_%287-28-2023%29.jpg/960px-Honda_HA-420_HondaJet_Elite_II_%28N420LR%2C_cn_42000240%29_%287-28-2023%29.jpg",
+        "license": "CC BY-SA 4.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Honda_HA-420_HondaJet_Elite_II_(N420LR,_cn_42000240)_(7-28-2023).jpg"
+      },
       "wikidataId": "Q1519686",
       "wikipediaTitle": "Honda HA-420 HondaJet",
       "wingspanMeters": 12.1
@@ -2550,6 +2607,12 @@
     },
     "fpa22": {
       "entryId": "fpa22",
+      "photo": {
+        "artist": "RuthAS",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/87/Piper_PA-20_Pacer_Skis_Bromma_03.68.jpg/960px-Piper_PA-20_Pacer_Skis_Bromma_03.68.jpg",
+        "license": "CC BY 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Piper_PA-20_Pacer_Skis_Bromma_03.68.jpg"
+      },
       "wikidataId": "Q7197310",
       "wikipediaTitle": "Piper PA-20 Pacer"
     },
@@ -2669,6 +2732,12 @@
     "fpa46": {
       "entryId": "fpa46",
       "firstFlightYear": 1979,
+      "photo": {
+        "artist": "Tomás Del Coro from Las Vegas, Nevada, USA",
+        "imageURL": "https://upload.wikimedia.org/wikipedia/commons/2/27/N5EQ_4636051-1996_Piper_Malibu_Meridian_PA_46-350P_%284440180942%29.jpg",
+        "license": "CC BY-SA 2.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:N5EQ_4636051-1996_Piper_Malibu_Meridian_PA_46-350P_(4440180942).jpg"
+      },
       "wikidataId": "Q1809515",
       "wikipediaTitle": "Piper PA-46"
     },
@@ -2677,7 +2746,7 @@
       "firstFlightYear": 1967,
       "lengthMeters": 10.61,
       "photo": {
-        "artist": "",
+        "artist": "No machine-readable source provided. Own work assumed (based on copyright claims)",
         "imageURL": "https://upload.wikimedia.org/wikipedia/commons/c/c8/TedSmith600AerostarC-FEHK.JPG",
         "license": "Public domain",
         "pageURL": "https://commons.wikimedia.org/wiki/File:TedSmith600AerostarC-FEHK.JPG"
@@ -3361,6 +3430,12 @@
     },
     "fsc-sonex": {
       "entryId": "fsc-sonex",
+      "photo": {
+        "artist": "Adrian Pingstone",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/9/98/Sonex_Aircraft_Sonex_%28G-CIDX%29_at_Cotswold_Airport_England_18Jun2016_arp.jpg/960px-Sonex_Aircraft_Sonex_%28G-CIDX%29_at_Cotswold_Airport_England_18Jun2016_arp.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Sonex_Aircraft_Sonex_(G-CIDX)_at_Cotswold_Airport_England_18Jun2016_arp.jpg"
+      },
       "wikidataId": "Q3490333",
       "wikipediaTitle": "Sonex Aircraft"
     },
@@ -3380,10 +3455,10 @@
       "firstFlightYear": 1980,
       "lengthMeters": 7.75,
       "photo": {
-        "artist": "Pedro Aragão",
-        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/81/Socata_TB-20_Trinidad_GT%2C_Academia_Aeronautica_de_Evora_%28AAE%29_JP6989836.jpg/960px-Socata_TB-20_Trinidad_GT%2C_Academia_Aeronautica_de_Evora_%28AAE%29_JP6989836.jpg",
+        "artist": "Stahlkocher",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/7a/Socata_TB-200_Tobago_XL.jpg/960px-Socata_TB-200_Tobago_XL.jpg",
         "license": "CC BY-SA 3.0",
-        "pageURL": "https://commons.wikimedia.org/wiki/File:Socata_TB-20_Trinidad_GT,_Academia_Aeronautica_de_Evora_(AAE)_JP6989836.jpg"
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Socata_TB-200_Tobago_XL.jpg"
       },
       "wikidataId": "Q1313156",
       "wikipediaTitle": "SOCATA TB family",
@@ -3485,6 +3560,12 @@
     "fsr22": {
       "entryId": "fsr22",
       "firstFlightYear": 2000,
+      "photo": {
+        "artist": "Bidgee",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/8a/Cirrus_Design_Corp_%28N20GH%29_Cirrus_SR22T_G7_GTS_taxiing_at_Wagga_Wagga_Airport.jpg/960px-Cirrus_Design_Corp_%28N20GH%29_Cirrus_SR22T_G7_GTS_taxiing_at_Wagga_Wagga_Airport.jpg",
+        "license": "CC BY-SA 3.0 au",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Cirrus_Design_Corp_(N20GH)_Cirrus_SR22T_G7_GTS_taxiing_at_Wagga_Wagga_Airport.jpg"
+      },
       "wikidataId": "Q867617",
       "wikipediaTitle": "Cirrus SR22"
     },
@@ -3544,6 +3625,12 @@
     "ftp-pc12": {
       "entryId": "ftp-pc12",
       "firstFlightYear": 1991,
+      "photo": {
+        "artist": "Air Force Special Operations Command",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/74/PC-12_take_off.jpg/960px-PC-12_take_off.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:PC-12_take_off.jpg"
+      },
       "wikidataId": "Q685211",
       "wikipediaTitle": "Pilatus PC-12"
     },
