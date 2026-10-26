@@ -788,6 +788,7 @@ struct StandingLineTests {
         #expect(month.heading == "You're 11th with 95 pts")
         #expect(month.spokenHeading == "You're 11th this month with 95 points")
         let all = try line(board(), me: MyStanding(rank: 11, points: 95), handle: "s11", window: .all)
+        #expect(all.heading == "You're 11th with 95 pts")
         #expect(all.spokenHeading == "You're 11th all time with 95 points")
         // All time has no reset: the subtitle is just the gap.
         #expect(sub(all.detail, reset: nil) == "50 points behind @s10")
@@ -933,13 +934,17 @@ struct StandingLineTests {
     }
 
     /// Old backend (no `window` key): the rank shows from the row with no
-    /// window phrase (its board isn't any one window's) and no goal.
+    /// window phrase (its board isn't any one window's), no points, and no
+    /// goal.
     @Test func oldBackend_noWindowPhraseNoGoal() throws {
         let old = LeaderboardResponse(entries: board(), me: MyStanding(rank: 14, points: 95))
         let l = try #require(StandingLine.compute(response: old, window: .week,
                                                   myHandle: "s11", handleConfirmed: true))
-        #expect(l.heading == "You're 11th with 95 pts")
-        #expect(l.spokenHeading == "You're 11th with 95 points")
+        // No points either: the all-time board sits under the WEEK tab,
+        // so its points would read as this week's.
+        #expect(!l.showsPoints)
+        #expect(l.heading == "You're 11th")
+        #expect(l.spokenHeading == "You're 11th")
         #expect(l.goal == nil)
     }
 

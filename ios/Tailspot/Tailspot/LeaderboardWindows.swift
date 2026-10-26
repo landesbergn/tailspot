@@ -283,14 +283,16 @@ nonisolated struct RaceGap: Equatable, Sendable {
 ///   10 points behind @randy98 · resets in 2d 9h
 ///
 /// It replaced the YOUR STANDING card (rank, handle, points, YOU pill and a
-/// goal line), which read as busy. The ordinal is the only number in the
-/// heading; the subtitle holds the gap and, on week and month, the reset.
+/// goal line), which read as busy. The heading holds my rank and points;
+/// the subtitle holds the gap and, on week and month, the reset.
 ///
 /// The score sits in the heading because my own row is usually below the
 /// fold (the champion banner and podium fill the top of the board), so
 /// without it the screen never said how many points I have. The switcher
 /// already names the window, so the visible heading drops "this week";
-/// VoiceOver keeps it.
+/// VoiceOver keeps it. On the pre-windows backend the points are left out
+/// ("You're 11th"): its board is all-time even under the WEEK tab, and
+/// all-time points there would read as this week's.
 ///
 /// RANK CONSISTENCY: the ordinal and the points are MY ROW's printed rank
 /// and points, so they always match the list. `me.rank` (which also counts hidden handle-less and
@@ -378,22 +380,31 @@ nonisolated struct StandingLine: Equatable, Sendable {
     /// "18th", drawn in Brand cyan inside the heading; nil off the board.
     var ordinal: String? { isOnBoard ? Ordinal.english(rank) : nil }
 
-    /// "1,240 pts" / "1 pt", drawn in Brand cyan inside the heading.
-    var pointsLabel: String {
-        "\(points.formatted(.number)) \(points == 1 ? "pt" : "pts")"
-    }
+    /// Whether the heading carries my points: only when the board is this
+    /// window's (not the pre-windows backend's all-time board).
+    var showsPoints: Bool { isOnBoard && windowPhrase != nil }
 
-    /// "You're 18th with 1,240 pts" / "You're not on the board yet".
+    /// "1,240", drawn in Brand cyan inside the heading.
+    var pointsNumber: String { points.formatted(.number) }
+
+    /// "pts" / "pt", after the number.
+    var pointsUnit: String { points == 1 ? "pt" : "pts" }
+
+    /// "You're 18th with 1,240 pts" / "You're 11th" (pre-windows backend)
+    /// / "You're not on the board yet". The view styles the same pieces.
     var heading: String {
-        ordinal.map { "You're \($0) with \(pointsLabel)" } ?? "You're not on the board yet"
+        guard let ordinal else { return "You're not on the board yet" }
+        return showsPoints
+            ? "You're \(ordinal) with \(pointsNumber) \(pointsUnit)"
+            : "You're \(ordinal)"
     }
 
     /// The heading as VoiceOver reads it: the window back in, and "points"
     /// in full ("You're 18th this week with 1,240 points").
     var spokenHeading: String {
         guard let ordinal else { return heading }
-        let window = windowPhrase.map { " \($0)" } ?? ""
-        return "You're \(ordinal)\(window) with \(RaceGap.pointsText(points))"
+        guard let windowPhrase, showsPoints else { return heading }
+        return "You're \(ordinal) \(windowPhrase) with \(RaceGap.pointsText(points))"
     }
 
     /// The goal (or the claim-a-handle hint), without the reset.

@@ -665,9 +665,10 @@ struct LeaderboardScreen: View {
     /// number in Brand cyan.
     private func standingHeading(_ line: StandingLine) -> Text {
         guard let ordinal = line.ordinal else { return Text(line.heading) }
-        let number = line.points.formatted(.number)
-        let unit = line.points == 1 ? "pt" : "pts"
-        return Text("You're \(Text(ordinal).foregroundStyle(Brand.Color.cyan)) with \(Text(number).foregroundStyle(Brand.Color.cyan)) \(unit)")
+        let rank = Text(ordinal).foregroundStyle(Brand.Color.cyan)
+        guard line.showsPoints else { return Text("You're \(rank)") }
+        let number = Text(line.pointsNumber).foregroundStyle(Brand.Color.cyan)
+        return Text("You're \(rank) with \(number) \(line.pointsUnit)")
     }
 }
 
