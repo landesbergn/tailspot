@@ -42,8 +42,10 @@ final class VisualConfirmationPipeline: ObservableObject {
     /// Kill switch. Ships ON by default (2026-06-26 go-live — previously
     /// Release-OFF pending a formal field gate; enabled to learn from real
     /// users instead, since worst case it no-ops to the geometric prediction).
-    /// The debug overlay can still toggle it off on a dev build; production
-    /// has no user-facing toggle by design.
+    /// It gates the live pre-press tracking (legacy catch mode) and the
+    /// `visual_confirm_enabled` telemetry property — the catch-time snap runs
+    /// regardless. Wrench row: "Live plane tracking" (removed 2026-09-05,
+    /// back 2026-10-25 when the flag made legacy the default again).
     var enabled: Bool {
         get { UserDefaults.standard.object(forKey: Self.enabledKey) as? Bool ?? Self.defaultEnabled }
         set {

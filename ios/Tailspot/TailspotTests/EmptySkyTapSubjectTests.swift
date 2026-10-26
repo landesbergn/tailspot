@@ -38,12 +38,14 @@ struct EmptySkyTapSubjectTests {
         onScreen: Bool = false, grounded: Bool = false,
         slantMeters: Double = 5_000,
         tier: ObservedAircraft.VisibilityTier = .hidden,
-        revealable: Bool = false
+        revealable: Bool = false,
+        aboveHorizon: Bool = false
     ) -> EmptySkyTapCandidate {
         EmptySkyTapCandidate(
             index: index, offsetDeg: offsetDeg, onScreen: onScreen,
             grounded: grounded, slantMeters: slantMeters,
-            tier: tier, plausiblyRevealable: revealable
+            tier: tier, plausiblyRevealable: revealable,
+            aboveHorizon: aboveHorizon
         )
     }
 
@@ -186,6 +188,42 @@ struct EmptySkyTapSubjectTests {
             cand(index: 0, offsetDeg: 55, revealable: true)
         ])
         #expect(choice?.reason == "nothing-nearby")
+        #expect(choice?.rescued == false)
+    }
+
+    // MARK: - Precision tap (2026-09-05, WGN211)
+
+    @Test func deadOnTapOnFarHiddenPlaneIsPreciseNotFar() {
+        // The WGN211 shape: hidden, past reveal reach, above the horizon,
+        // tap 1° off. It is the subject, it reveals, nothing is rescued.
+        let choice = chooseEmptySkyTapSubject([
+            cand(index: 0, offsetDeg: 1.0, slantMeters: 33_100, aboveHorizon: true),
+            cand(index: 1, offsetDeg: 30, revealable: true),
+        ])
+        #expect(choice?.candidate.index == 0)
+        #expect(choice?.reason == "filtered-precise")
+        #expect(choice?.rescued == false)
+        #expect(shouldTapReveal(reason: choice?.reason ?? ""))
+    }
+
+    @Test func belowHorizonPrimaryYieldsToDeadOnPlaneAboveHorizon() {
+        // A sub-horizon stranger angularly nearer than the above-horizon
+        // plane under the tap: the rescue hands the tap to the latter and
+        // it classifies precise.
+        let choice = chooseEmptySkyTapSubject([
+            cand(index: 0, offsetDeg: 1.0, slantMeters: 20_000),
+            cand(index: 1, offsetDeg: 2.0, slantMeters: 33_100, aboveHorizon: true),
+        ])
+        #expect(choice?.candidate.index == 1)
+        #expect(choice?.reason == "filtered-precise")
+        #expect(choice?.rescued == true)
+    }
+
+    @Test func looseTapOnFarPlaneStaysFilteredFarEvenAboveHorizon() {
+        let choice = chooseEmptySkyTapSubject([
+            cand(index: 0, offsetDeg: 4.0, slantMeters: 33_100, aboveHorizon: true),
+        ])
+        #expect(choice?.reason == "filtered-far")
         #expect(choice?.rescued == false)
     }
 }

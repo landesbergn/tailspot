@@ -5,13 +5,27 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
-## 2026-10-25 — Catch card backs (branch `claude/plane-catch-details-314049`)
+## 2026-10-25 — Frame-is-the-catch behind a PostHog flag (branch `feat/frame-catch-flag`, PR #229)
+
+- The new catch rule now ships dark. PostHog boolean flag
+  `frame-is-the-catch` turns it on per person or cohort; off, unloaded or
+  keyless means the shipped rule, so App Store behaviour is unchanged.
+  The value changes only at cold launch or foreground, never mid-aim.
+- Debug builds: the wrench "New catch rule" switch overrides the flag on
+  this phone, with "Follow PostHog" to drop the override; NEW CATCH RULE
+  badge under the zoom pill while the new rule is live.
+- Merged 56 main commits. Streak debug tooling kept from main; first-label
+  tap telemetry wired into both modes' tap paths.
+
+## 2026-10-25 — Catch card backs (PR #388)
 
 - Every catch card turns over (3D flip, button or swipe) to a back with the
   Planespotters photo of the airframe (else a Commons type photo), "you and
   this type" from the Hangar, bundled Wikidata specs, and a live Wikipedia
   summary. Hangar detail and the reveal (reveal fetches nothing until the
   first turn-over). New `catch_card_turned` event. Detail in PLAN §9.
+- Type photos 286 → 301 of 302: the generator also tries an article's other
+  photos (Cessna 152 now uses its own article, photo and specs).
 
 ## 2026-10-24 — Security audit (branch `worktree-security-audit-2026-10`)
 
@@ -901,6 +915,29 @@ ties the whole-frame result to the exact catch. A private PostHog review queue
 can use that catch-spine event to flag repeated strong indoor signals across
 multiple days. That queue is intentionally a human-review lead, never an
 automatic cheating verdict.
+
+## 2026-09-05 — Precision-tap reveal — PR #248
+
+Field miss, Berkeley 08:46 PDT: Noah tapped six times on a plane he could
+plainly see — WGN211, a Western Global 747-400 freighter at 35,000 ft, 33 km
+out over the coast — and got the NO AIRCRAFT HERE ripple every time. The
+replay + PostHog showed the app knew exactly which plane it was (each tap
+0.5–3.5° from its projection, compass fine, position fresh) and hid it on
+purpose: the 18.7° elevation put the visibility cap at ≈ 9.7 km and tap-reveal
+reach at ≈ 29 km, 4 km short; the contrail allowance only starts at 30°. The
+beyond-eyeshot toast was suppressed too, because a 16 km plane 55° off-aim
+counted as revealable.
+
+Decision: keep default visibility as is, but a targeted tap must reveal and
+make the plane catchable. New classifier reason `filtered-precise` — a hidden,
+airborne, above-horizon plane within `precisionTapRevealMaxOffsetDeg` (2.5°) of
+the tap reveals + force-locks like `filtered`. Sized on recorded offsets:
+Dumbarton ≥ 9.6° (untouched), NYC couch 11/12 ≥ 5.3° with one 1.8° admission
+(accepted trade, pinned by `couchTapsStayRefusedExceptTheOneDeadOn`). Today's
+recording is redacted and committed as a permanent `FieldReplays` regression,
+run through a new shared `emptySkyTapCandidates` test harness. Diagnosis
+lesson: HogQL datetime literals are project-local time, not UTC — a UTC window
+returned zero rows and briefly looked like a missing session.
 
 ## 2026-09-01 — v1.1.1 train opened — branch `chore/open-1.1.1-train`
 

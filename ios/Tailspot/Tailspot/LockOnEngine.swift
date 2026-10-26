@@ -2,13 +2,20 @@
 //  LockOnEngine.swift
 //  Tailspot
 //
+//  THE LEGACY CATCH MODE (`CatchMode.legacy`). This is the shipped
+//  (v1.1.x App Store) catch interaction, deleted outright by PR #229
+//  (frame-is-the-catch, 2026-08-28) and restored on 2026-09-02 so the two
+//  models can be A/B'd on one build from the wrench panel. Nothing here
+//  runs while `CatchMode.frame` is live; the frame mode's rules are in
+//  `CatchMembership.swift`. Delete this file (and its tests) again once
+//  the comparison is decided — see `CatchMode.swift`.
+//
 //  State machine for the AR pin interaction. Per the Task 4 redesign,
-//  labels for visible planes are now ambient — every visible plane
-//  carries its own per-plane label, rendered by the AR overlay
-//  independently of this engine. The "lock" concept only applies to
-//  an explicit pin: the user taps a plane (or empty sky) to drive
-//  state through here. There is no auto-acquire: `update()` never
-//  drives idle → locked on its own.
+//  labels for visible planes are ambient — every visible plane carries
+//  its own per-plane label, rendered by the AR overlay independently of
+//  this engine. The "lock" concept only applies to an explicit pin: the
+//  user taps a plane (or empty sky) to drive state through here. There
+//  is no auto-acquire: `update()` never drives idle → locked on its own.
 //
 //  The engine is intentionally a pure state machine — it doesn't know
 //  about SwiftUI or screen geometry. ContentView calls forceLock() on
@@ -30,6 +37,11 @@
 //  Sticky hold gives the user time to read the label after panning
 //  off (compass jitter alone can move the projected position out of
 //  the lock zone for a moment).
+//
+//  The zone helpers below (`icaosInZone`, `catchCandidates`, the
+//  dominance / aim-confidence scoring) are the legacy selection layer;
+//  `closestTargetIcao24` and the shared `CatchCandidate` carrier live in
+//  `CatchMembership.swift` because the frame mode uses them too.
 //
 
 import Foundation
@@ -123,70 +135,7 @@ final class LockOnEngine: ObservableObject {
     }
 }
 
-// MARK: - Lock-zone helper
-
-/// Returns the icao24 of the visible aircraft whose projected screen
-/// position is closest to a reference point — by default the screen
-/// center — provided it falls within `lockZoneRadius` of that point.
-/// Nil otherwise.
-///
-/// Used in two modes by ContentView:
-///   - center-driven (default): `at` is nil; the lock follows whatever
-///     plane the user is aiming at.
-///   - tap-driven: `at` is the tap location; the lock pins to whatever
-///     plane the user explicitly pointed at.
-///
-/// `hfovDeg` / `vfovDeg` should reflect the camera's *effective* FOV —
-/// i.e., base FOV / current zoom factor — so the projection math
-/// matches what's on screen. `lockZoneRadius` stays in pixels (it's
-/// a UI affordance, not an angular tolerance): at high zoom the same
-/// 80 px covers a tighter angular wedge, which is exactly right for
-/// disambiguating planes that have spread apart on screen.
-///
-/// Pure function; sits next to the engine because they're co-used.
-/// Doesn't know about SwiftUI — takes the inputs the engine needs
-/// to call its update().
-@MainActor
-func closestTargetIcao24(
-    in observed: [ObservedAircraft],
-    at point: CGPoint? = nil,
-    phoneHeadingDeg: Double,
-    cameraElevationDeg: Double,
-    rollDeg: Double = 0,
-    screenSize: CGSize,
-    hfovDeg: Double = 56,
-    vfovDeg: Double = 72,
-    lockZoneRadius: CGFloat = 80
-) -> String? {
-    let anchor = point ?? CGPoint(x: screenSize.width / 2, y: screenSize.height / 2)
-    // Build the camera basis once and reuse — keeps lock-zone geometry
-    // identical to the label projection (same pose, same basis).
-    let basis = Geo.cameraBasis(
-        headingDeg: phoneHeadingDeg, cameraElevationDeg: cameraElevationDeg, rollDeg: rollDeg
-    )
-
-    var bestIcao: String? = nil
-    var bestDist: CGFloat = .infinity
-
-    for obs in observed where obs.isLikelyVisibleToObserver {
-        guard let pos = obs.screenPosition(
-            basis: basis,
-            in: screenSize,
-            hfovDeg: hfovDeg,
-            vfovDeg: vfovDeg
-        ) else { continue }
-
-        let dx = pos.x - anchor.x
-        let dy = pos.y - anchor.y
-        let dist = (dx*dx + dy*dy).squareRoot()
-        if dist <= lockZoneRadius && dist < bestDist {
-            bestDist = dist
-            bestIcao = obs.aircraft.icao24
-        }
-    }
-
-    return bestIcao
-}
+// MARK: - Legacy zone helpers
 
 /// Returns icao24s sorted by distance-to-anchor (ascending) for every
 /// visible aircraft whose screen projection lands inside a circular
@@ -249,17 +198,6 @@ func icaosInZone(
 //   2. aimConfidence — a silent shadow flag for a center catch
 //      that is off-crosshair AND small AND made under a poor compass: the
 //      hallmark of "wrong plane," recorded for calibration.
-
-/// One in-zone catch candidate with the geometry the plausibility layer needs
-/// — a superset of `icaosInZone` membership carrying the fields selection and
-/// the aim-confidence flag consume.
-nonisolated struct CatchCandidate: Equatable, Sendable {
-    let icao24: String
-    let offsetDeg: Double        // angular separation from the crosshair (bore-sight)
-    let offsetPx: CGFloat        // screen-pixel separation (what zone membership uses)
-    let arcmin: Double           // apparent angular size
-    let slantMeters: Double
-}
 
 /// In-zone visible planes with full geometry, sorted by pixel offset — the
 /// same membership as `icaosInZone`, carrying the angular offset + apparent
