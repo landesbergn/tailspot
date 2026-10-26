@@ -26,6 +26,10 @@ Git history + PLAN.md §9 remain the authoritative record.
   first turn-over). New `catch_card_turned` event. Detail in PLAN §9.
 - Type photos 286 → 301 of 302: the generator also tries an article's other
   photos (Cessna 152 now uses its own article, photo and specs).
+- Device-pass changes: "NO PHOTO AVAILABLE" panel instead of the sky
+  placeholder; YOU AND THIS TYPE is first caught plus a catch log by operator
+  (catch count and family progress dropped); the Wikipedia teaser opens a
+  sheet with the whole intro paragraph.
 
 ## 2026-10-24 — Security audit (branch `worktree-security-audit-2026-10`)
 

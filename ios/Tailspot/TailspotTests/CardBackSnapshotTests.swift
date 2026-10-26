@@ -28,17 +28,17 @@ nonisolated private enum BackFixtures {
         photo: nil)
 
     static let b738History = TypeHistory(
-        timesCaught: 6, firstCaughtAt: firstCaught,
+        firstCaughtAt: firstCaught,
         airlines: [
             .init(name: "United", count: 3), .init(name: "Southwest", count: 2),
             .init(name: "Alaska", count: 1), .init(name: "American", count: 1),
             .init(name: "Delta", count: 1),
-        ],
-        familyTitle: "Boeing 737", variantsCaught: 4, variantsTotal: 11)
+        ])
 
     // Test copy written for the fixture (not real Wikipedia text).
     static let b738Summary = WikipediaSummary(
         extract: "The Boeing 737-800 is a stretched member of the 737 Next Generation family of narrow-body airliners. It entered service in 1998 and became the most widely flown variant of the family.",
+        intro: "The Boeing 737-800 is a stretched member of the 737 Next Generation family of narrow-body airliners. It entered service in 1998 and became the most widely flown variant of the family. A third sentence only the sheet shows.",
         pageURL: URL(string: "https://en.m.wikipedia.org/wiki/Boeing_737_Next_Generation")!)
 
     static let planespotters = PlanePhoto(
@@ -63,16 +63,14 @@ nonisolated private enum BackFixtures {
         typeInfo: TypeInfo(entryId: "c172", wikipediaTitle: nil, wikidataId: nil,
                            firstFlightYear: 1955, numberBuilt: nil,
                            wingspanMeters: 11.0, lengthMeters: 8.28, photo: c172Photo),
-        history: TypeHistory(timesCaught: 1, firstCaughtAt: firstCaught,
-                             airlines: [], familyTitle: nil, variantsCaught: 0, variantsTotal: 0),
+        history: TypeHistory(firstCaughtAt: firstCaught, airlines: []),
         summary: nil, summaryLoading: false)
 
     static let minimal = CardBackModel(
         modelName: "Unknown aircraft", registration: nil, rarity: .common,
         closeup: .none, typeInfo: nil,
-        history: TypeHistory(timesCaught: 2, firstCaughtAt: firstCaught,
-                             airlines: [.init(name: "Southwest", count: 2)],
-                             familyTitle: nil, variantsCaught: 0, variantsTotal: 0),
+        history: TypeHistory(firstCaughtAt: firstCaught,
+                             airlines: [.init(name: "Southwest", count: 2)]),
         summary: nil, summaryLoading: false)
 }
 
@@ -128,22 +126,19 @@ struct CardBackFormatTests {
         #expect(CardBackFormat.specCells(empty, unit: .feet, locale: us).isEmpty)
     }
 
-    @Test func airlinesShowTopThreePlusMore() {
-        #expect(CardBackFormat.airlines(BackFixtures.b738History.airlines)
-                == "United · Southwest · Alaska +2 more")
-        #expect(CardBackFormat.airlines([.init(name: "Southwest", count: 2)]) == "Southwest")
-        #expect(CardBackFormat.airlines([]) == nil)
+    @Test func catchLogShowsTopThreeThenHowManyMore() {
+        let log = CardBackFormat.catchLog(BackFixtures.b738History.airlines)
+        #expect(log.rows == [.init(name: "United", count: "3×"),
+                             .init(name: "Southwest", count: "2×"),
+                             .init(name: "Alaska", count: "1×")])
+        #expect(log.more == 2)
+        let one = CardBackFormat.catchLog([.init(name: "Southwest", count: 2)])
+        #expect(one.rows == [.init(name: "Southwest", count: "2×")] && one.more == 0)
+        let empty = CardBackFormat.catchLog([])
+        #expect(empty.rows.isEmpty && empty.more == 0)
     }
 
-    @Test func historyCopy() {
-        let h = BackFixtures.b738History
-        #expect(CardBackFormat.caughtCell(h) == CardBackCell(label: "CAUGHT", value: "6", unit: "airframes"))
-        #expect(CardBackFormat.caughtCell(BackFixtures.c172.history!)?.unit == "airframe")
-        #expect(CardBackFormat.familyProgress(h) == "4 of 11 Boeing 737 variants")
-        #expect(CardBackFormat.familyProgress(BackFixtures.c172.history!) == nil)
-        let none = TypeHistory(timesCaught: 0, firstCaughtAt: nil, airlines: [],
-                               familyTitle: nil, variantsCaught: 0, variantsTotal: 0)
-        #expect(CardBackFormat.caughtCell(none) == nil)
+    @Test func firstCaughtIsAShortDate() {
         #expect(CardBackFormat.firstCaught(BackFixtures.firstCaught, locale: us,
                                            timeZone: TimeZone(identifier: "UTC")!) == "Mar 4, 2026")
     }

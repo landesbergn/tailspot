@@ -36,8 +36,12 @@ private nonisolated let wikipediaLog = Logger(
 
 /// The first couple of sentences of a Wikipedia article + where to read more.
 nonisolated struct WikipediaSummary: Equatable, Sendable {
-    /// First 2 sentences of the REST extract, unedited text.
+    /// First 2 sentences of the REST extract, unedited text — the card's
+    /// teaser.
     let extract: String
+    /// The whole REST extract (the article's intro paragraph), unedited —
+    /// shown in the sheet the teaser opens.
+    var intro: String = ""
     /// The article page (`content_urls.mobile.page`, https). Opened from the
     /// "Read more on Wikipedia" link.
     let pageURL: URL
@@ -144,7 +148,8 @@ nonisolated extension WikipediaSummaryClient {
             .compactMap({ $0.flatMap(URL.init(string:)) })
             .first(where: { $0.scheme?.lowercased() == "https" && $0.host != nil })
         else { return nil }
-        return WikipediaSummary(extract: extract, pageURL: pageURL)
+        let intro = (wire.extract ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return WikipediaSummary(extract: extract, intro: intro, pageURL: pageURL)
     }
 
     /// Lowercased abbreviations whose trailing period never ends a sentence.

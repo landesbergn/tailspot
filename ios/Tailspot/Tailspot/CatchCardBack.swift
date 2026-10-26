@@ -138,13 +138,6 @@ nonisolated enum CardBackFormat {
         return false
     }
 
-    /// "1 airframe" / "3 airframes" — split so the count renders big.
-    static func caughtCell(_ history: TypeHistory) -> CardBackCell? {
-        guard history.timesCaught > 0 else { return nil }
-        return CardBackCell(label: "CAUGHT", value: "\(history.timesCaught)",
-                            unit: history.timesCaught == 1 ? "airframe" : "airframes")
-    }
-
     /// "Mar 4, 2026" in the user's locale.
     static func firstCaught(_ date: Date, locale: Locale = .current,
                             timeZone: TimeZone = .current) -> String {
@@ -154,21 +147,19 @@ nonisolated enum CardBackFormat {
         return date.formatted(style)
     }
 
-    /// Top `top` operators by count ("United · Southwest · Alaska"), plus
-    /// "+N more" when there are others. nil when the list is empty.
-    static func airlines(_ list: [TypeHistory.AirlineCount], top: Int = 3) -> String? {
-        let names = list.map(\.name).filter { !$0.isEmpty }
-        guard !names.isEmpty else { return nil }
-        let shown = names.prefix(top).joined(separator: " · ")
-        let rest = names.count - min(top, names.count)
-        return rest > 0 ? "\(shown) +\(rest) more" : shown
+    /// One row of the catch log: "SOUTHWEST" … "2×".
+    struct LogRow: Equatable, Sendable {
+        let name: String
+        let count: String
     }
 
-    /// "4 of 11 Boeing 737 variants". nil without a family or variants.
-    static func familyProgress(_ history: TypeHistory) -> String? {
-        guard let title = history.familyTitle?.trimmingCharacters(in: .whitespaces),
-              !title.isEmpty, history.variantsTotal > 0 else { return nil }
-        return "\(history.variantsCaught) of \(history.variantsTotal) \(title) variants"
+    /// The catch log: the top `top` operators as rows, then how many more
+    /// operators there are (shown as "+N more"). Empty rows when the list is.
+    static func catchLog(_ list: [TypeHistory.AirlineCount],
+                         top: Int = 3) -> (rows: [LogRow], more: Int) {
+        let named = list.filter { !$0.name.isEmpty && $0.count > 0 }
+        let rows = named.prefix(top).map { LogRow(name: $0.name, count: "\($0.count)×") }
+        return (rows, named.count - rows.count)
     }
 
     /// The exact number, grouped for the locale ("5,215") — never rounded
@@ -298,6 +289,7 @@ struct CatchCardBack: View {
     /// DEBUG/test hook: shown in place of the remote closeup so hosted
     /// snapshots (which can't wait on AsyncImage) still show a photo.
     let snapshotImage: UIImage?
+    @State private var showingSummary = false
 
     init(model: CardBackModel, width: CGFloat,
          onOpenURL: @escaping (URL) -> Void, onTurnBack: @escaping () -> Void,
@@ -313,11 +305,9 @@ struct CatchCardBack: View {
         let scale = width / 300
         let hPad = 22 * scale
         let history = model.history
-        let caught = history.flatMap(CardBackFormat.caughtCell)
         let first = history?.firstCaughtAt.map { CardBackFormat.firstCaught($0) }
-        let airlines = history.flatMap { CardBackFormat.airlines($0.airlines) }
-        let family = history.flatMap(CardBackFormat.familyProgress)
-        let hasHistory = caught != nil || first != nil || airlines != nil || family != nil
+        let log = CardBackFormat.catchLog(history?.airlines ?? [])
+        let hasHistory = first != nil || !log.rows.isEmpty
         let specs = CardBackFormat.specCells(model.typeInfo, unit: UnitPreferences.shared.altitude)
 
         return VStack(alignment: .leading, spacing: 0) {
@@ -338,14 +328,15 @@ struct CatchCardBack: View {
                     Rectangle().fill(RP.rule).frame(height: 1)
                     sectionLabel("YOU AND THIS TYPE", scale: scale)
                     VStack(spacing: 6 * scale) {
-                        if let caught {
-                            ledgerLine(caught.label,
-                                       caught.unit.map { "\(caught.value) \($0)" } ?? caught.value,
-                                       scale: scale)
-                        }
                         if let first { ledgerLine("FIRST CAUGHT", first, scale: scale) }
-                        if let airlines { ledgerLine("AIRLINES", airlines, scale: scale, lines: 2) }
-                        if let family { ledgerLine("FAMILY", family, scale: scale) }
+                        // The catch log: who was flying the ones you caught.
+                        ForEach(log.rows, id: \.name) { row in
+                            logLine(row.name.uppercased(), row.count, scale: scale)
+                                .accessibilityLabel("\(row.name), \(row.count.dropLast()) caught")
+                        }
+                        if log.more > 0 {
+                            logLine("+\(log.more) MORE", "", scale: scale)
+                        }
                     }
                 }
 
@@ -402,7 +393,7 @@ struct CatchCardBack: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel(CardBackFormat.photoAccessibilityLabel(for: model.closeup) ?? "View photo")
             } else {
-                photo.accessibilityHidden(true)
+                photo
             }
 
             if let credit = CardBackFormat.creditParts(for: model.closeup), let link {
@@ -438,15 +429,36 @@ struct CatchCardBack: View {
     private func closeupImage(scale: CGFloat) -> some View {
         switch model.closeup {
         case .loading:
-            RevealPhoto(url: nil, loading: true)
+            photoPlaceholder(loading: true, scale: scale)
         case .none:
-            // The front's sky placeholder — no text, no claim.
-            RevealPhoto(url: nil)
+            photoPlaceholder(loading: false, scale: scale)
         case .planespotters(let p):
             remoteImage(p.thumbnailLargeURL)
         case .commons(let t):
             remoteImage(t.imageURL)
         }
+    }
+
+    /// No photo (yet): a plain dark panel that says so, not the front's
+    /// illustrated sky, which read as a broken image on the back.
+    private func photoPlaceholder(loading: Bool, scale: CGFloat) -> some View {
+        ZStack {
+            Brand.Color.bgElevated
+            if loading {
+                ProgressView().tint(RP.muted)
+            } else {
+                VStack(spacing: 8 * scale) {
+                    Image(systemName: "photo")
+                        .font(.system(size: 20 * scale, weight: .regular))
+                    Text("NO PHOTO AVAILABLE")
+                        .font(.system(size: 10 * scale, weight: .semibold, design: .monospaced))
+                        .tracking(1.5)
+                }
+                .foregroundStyle(RP.faint)
+            }
+        }
+        .accessibilityElement()
+        .accessibilityLabel(loading ? "Loading photo" : "No photo available")
     }
 
     /// Remote photo, loaded from its source URL every time (Planespotters
@@ -465,9 +477,9 @@ struct CatchCardBack: View {
                         .overlay(image.resizable().aspectRatio(contentMode: .fill))
                         .clipped()
                 case .failure:
-                    RevealPhoto(url: nil)
+                    photoPlaceholder(loading: false, scale: 1)
                 default:
-                    RevealPhoto(url: nil, loading: true)
+                    photoPlaceholder(loading: true, scale: 1)
                 }
             }
         }
@@ -519,6 +531,23 @@ struct CatchCardBack: View {
         .accessibilityElement(children: .combine)
     }
 
+    /// A catch-log row: operator left (truncates if it must), count right.
+    private func logLine(_ name: String, _ count: String, scale: CGFloat) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10 * scale) {
+            Text(name)
+                .font(.system(size: 10 * scale, weight: .regular, design: .monospaced))
+                .foregroundStyle(RP.muted)
+                .lineLimit(1)
+                .truncationMode(.tail)
+            Spacer(minLength: 0)
+            Text(count)
+                .font(.system(size: 11.5 * scale, weight: .semibold, design: .monospaced))
+                .foregroundStyle(RP.ink)
+                .fixedSize()
+        }
+        .accessibilityElement(children: .combine)
+    }
+
     /// Two-column grid of the known specs, in the front's statCell style.
     private func specGrid(_ cells: [CardBackCell], scale: CGFloat) -> some View {
         let rows = stride(from: 0, to: cells.count, by: 2).map { Array(cells[$0..<min($0 + 2, cells.count)]) }
@@ -560,33 +589,47 @@ struct CatchCardBack: View {
     @ViewBuilder
     private func wikipediaBlock(scale: CGFloat) -> some View {
         if let summary = model.summary {
-            VStack(alignment: .leading, spacing: 6 * scale) {
-                // Unedited Wikipedia text. Lowest layout priority: when the
-                // back is shorter than its content (it's sized to the
-                // front), this is what truncates first.
-                Text(summary.extract)
-                    .font(.system(size: 12.5 * scale))
-                    .foregroundStyle(RP.ink.opacity(0.88))
-                    .lineSpacing(1.5 * scale)
-                    .lineLimit(4)
-                    .truncationMode(.tail)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .layoutPriority(-1)
-                Text("From Wikipedia · CC BY-SA 4.0")
-                    .font(.system(size: 9.5 * scale, weight: .regular, design: .monospaced))
-                    .foregroundStyle(RP.faint)
-                    .lineLimit(1)
-                Button { onOpenURL(summary.pageURL) } label: {
-                    Text("Read more on Wikipedia ›")
-                        .font(.system(size: 11.5 * scale, weight: .semibold))
-                        .foregroundStyle(RP.muted)
-                        .lineLimit(1)
-                        .contentShape(Rectangle().inset(by: -12))
+            // The card only has room for a teaser (the back is sized to the
+            // front), so the whole block opens a sheet with the article's
+            // full intro paragraph.
+            Button { showingSummary = true } label: {
+                VStack(alignment: .leading, spacing: 6 * scale) {
+                    // Unedited Wikipedia text. Lowest layout priority: when
+                    // the back is shorter than its content, this is what
+                    // truncates first.
+                    Text(summary.extract)
+                        .font(.system(size: 12.5 * scale))
+                        .foregroundStyle(RP.ink.opacity(0.88))
+                        .lineSpacing(1.5 * scale)
+                        .lineLimit(5)
+                        .truncationMode(.tail)
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .layoutPriority(-1)
+                    HStack(spacing: 6 * scale) {
+                        // The licence credit never truncates.
+                        Text("From Wikipedia · CC BY-SA 4.0")
+                            .font(.system(size: 9.5 * scale, weight: .regular, design: .monospaced))
+                            .foregroundStyle(RP.faint)
+                            .fixedSize()
+                        Spacer(minLength: 0)
+                        Text("MORE ›")
+                            .font(.system(size: 9.5 * scale, weight: .semibold, design: .monospaced))
+                            .tracking(1)
+                            .foregroundStyle(RP.muted)
+                            .fixedSize()
+                    }
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Read more on Wikipedia")
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
             .layoutPriority(-1)
+            .accessibilityLabel(summary.extract)
+            .accessibilityHint("Opens the Wikipedia summary")
+            .sheet(isPresented: $showingSummary) {
+                WikipediaSummarySheet(title: model.modelName, summary: summary,
+                                      onOpenURL: onOpenURL)
+            }
         } else {
             // Loading: a quiet placeholder line, nothing that reads as text.
             VStack(alignment: .leading, spacing: 6 * scale) {
@@ -599,5 +642,50 @@ struct CatchCardBack: View {
             .accessibilityElement()
             .accessibilityLabel("Loading Wikipedia summary")
         }
+    }
+}
+
+/// The Wikipedia intro for this type, opened from the card back's teaser:
+/// the article's whole lead paragraph, unedited, with its credit and a link
+/// to the full article.
+struct WikipediaSummarySheet: View {
+    let title: String
+    let summary: WikipediaSummary
+    let onOpenURL: (URL) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    Text(summary.intro.isEmpty ? summary.extract : summary.intro)
+                        .font(.body)
+                        .foregroundStyle(Brand.Color.textPrimary)
+                        .lineSpacing(3)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .textSelection(.enabled)
+                    Text("From Wikipedia · CC BY-SA 4.0")
+                        .font(Brand.Font.mono(size: 11, relativeTo: .caption))
+                        .foregroundStyle(Brand.Color.textSecondary)
+                    Button {
+                        onOpenURL(summary.pageURL)
+                    } label: {
+                        Label("Read the full article on Wikipedia", systemImage: "arrow.up.right")
+                            .font(.body.weight(.semibold))
+                    }
+                    .padding(.top, 4)
+                }
+                .padding(20)
+            }
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .preferredColorScheme(.dark)
     }
 }

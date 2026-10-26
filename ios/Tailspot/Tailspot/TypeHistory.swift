@@ -3,16 +3,14 @@
 //  Tailspot
 //
 //  "You and this type" — the Hangar-derived block on the back of the catch
-//  card: how many airframes of this type you've caught, when you first did,
-//  which airlines you've seen flying it, and how far through its family set
-//  you are ("4 of 9 variants").
+//  card: when you first caught this type, and a log of who was flying the
+//  ones you've caught ("Southwest 2×, Delta 1×").
 //
 //  Pure and computed on read from the catch list — nothing new is stored on
 //  `Catch`. No new matching rules either: "same type" means "resolves to the
 //  same CardSetEntry" via `TypeInfoStore.entry(for:)` (the existing
-//  `CardSets.matches(key:entry:)`, exact typecode first), the family
-//  progress is the Sets tab's own `CardSets.progress(of:againstKeys:)`, and
-//  the airline label is `Airlines.operatorLabel` — the same one the catch
+//  `CardSets.matches(key:entry:)`, exact typecode first), and the airline
+//  label is `Airlines.operatorLabel` — the same one the catch
 //  detail card shows. So this block can never disagree with the Hangar.
 //
 
@@ -24,23 +22,15 @@ nonisolated struct TypeHistory: Equatable, Sendable {
         let count: Int
     }
 
-    /// Distinct airframes (icao24s) of this type the user has caught — the
-    /// same entry when one matches, otherwise the same typecode. Includes the
+    /// Earliest `caughtAt` among the user's catches of this type — the same
+    /// entry when one matches, otherwise the same typecode. Includes the
     /// catch being shown.
-    let timesCaught: Int
-    /// Earliest `caughtAt` among those catches.
     let firstCaughtAt: Date?
-    /// Operator labels across those airframes, sorted by count desc, then
-    /// name. Each airframe counts once per label. "Operator unknown" (an
+    /// The catch log: operator label → how many of those catches it flew,
+    /// sorted by count desc, then name. Counts catches, not airframes (the
+    /// same Southwest jet caught twice is "Southwest 2×"). "Operator unknown" (an
     /// airline callsign we can't name) is left out — it isn't an airline seen.
     let airlines: [AirlineCount]
-    /// `CardSet.title` of the family, e.g. "Boeing 737". nil when no entry
-    /// matches.
-    let familyTitle: String?
-    /// Entries of that family the user has filled (Sets-tab logic).
-    let variantsCaught: Int
-    /// Entries in that family; 0 when no family.
-    let variantsTotal: Int
 
     /// Builds the history for `c` against the whole Hangar `all`. `c` is
     /// counted even if `all` doesn't contain it (the reveal may pass a list
@@ -68,10 +58,9 @@ nonisolated struct TypeHistory: Equatable, Sendable {
             sameType = hangar.filter { airframeKey($0) == airframeKey(c) }
         }
 
-        let airframes = Set(sameType.map(airframeKey))
         let firstCaughtAt = sameType.map(\.caughtAt).min()
 
-        var airframesByLabel: [String: Set<String>] = [:]
+        var catchesByLabel: [String: Int] = [:]
         for row in sameType {
             // A row with neither an operator nor a callsign says nothing
             // about who flies it; operatorLabel would call it "Private",
@@ -81,28 +70,13 @@ nonisolated struct TypeHistory: Equatable, Sendable {
             guard hasOperator || hasCallsign else { continue }
             let label = Airlines.operatorLabel(operatorName: row.operatorName, callsign: row.callsign)
             guard label != "Operator unknown" else { continue }
-            airframesByLabel[label, default: []].insert(airframeKey(row))
+            catchesByLabel[label, default: 0] += 1
         }
-        let airlines = airframesByLabel
-            .map { AirlineCount(name: $0.key, count: $0.value.count) }
+        let airlines = catchesByLabel
+            .map { AirlineCount(name: $0.key, count: $0.value) }
             .sorted { $0.count != $1.count ? $0.count > $1.count : $0.name < $1.name }
 
-        var variantsCaught = 0
-        var variantsTotal = 0
-        if let family = match?.family {
-            let progress = CardSets.progress(of: family, againstKeys: CardSets.distinctMatchKeys(for: hangar))
-            variantsCaught = progress.caught
-            variantsTotal = progress.total
-        }
-
-        return TypeHistory(
-            timesCaught: airframes.count,
-            firstCaughtAt: firstCaughtAt,
-            airlines: airlines,
-            familyTitle: match?.family.title,
-            variantsCaught: variantsCaught,
-            variantsTotal: variantsTotal
-        )
+        return TypeHistory(firstCaughtAt: firstCaughtAt, airlines: airlines)
     }
 
     /// Hangar dedupe key: icao24, trimmed + lowercased (rows are stored

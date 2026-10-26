@@ -2,10 +2,9 @@
 //  TypeHistoryTests.swift
 //  TailspotTests
 //
-//  "You and this type" on the back of the catch card. Distinct airframes,
-//  first-caught date, airline tallies via the shared operator label, family
-//  progress via the Sets tab's matcher, and the same-typecode fallback when
-//  no CardSetEntry matches.
+//  "You and this type" on the back of the catch card: the first-caught date
+//  and the catch log (catches per operator, via the shared operator label),
+//  matched by CardSetEntry with a same-typecode fallback when none matches.
 //
 
 import Testing
@@ -27,28 +26,24 @@ struct TypeHistoryTests {
               typecode: typecode)
     }
 
-    private var fam737: CardSet {
-        CardSets.families.first { $0.id == "fam-737" }!
-    }
-
-    @Test func countsDistinctAirframesOfTheSameEntry() {
+    @Test func firstCaughtIsTheEarliestCatchOfTheSameEntry() {
         let shown = mk("a00001", typecode: "B738", callsign: "UAL100", minutes: 50)
         let all = [
             shown,
-            mk("a00001", typecode: "B738", callsign: "UAL200", minutes: 30),  // same airframe again
+            mk("a00001", typecode: "B738", callsign: "UAL200", minutes: 30),
             mk("a00002", typecode: "B738", callsign: "SWA300", minutes: 10),  // earliest
             mk("a00003", typecode: "B738", callsign: "UAL400", minutes: 20),
             mk("a00004", typecode: "A20N", callsign: "UAL500", minutes: 5),   // other type
         ]
         let h = TypeHistory.compute(for: shown, in: all)
-        #expect(h.timesCaught == 3)
         #expect(h.firstCaughtAt == t0.addingTimeInterval(10 * 60))
+        #expect(h.airlines.map(\.count).reduce(0, +) == 4)
     }
 
     @Test func maxCatchesWithA737DashEightModelDontCountAs737_800s() {
         // A B38M whose raw model reads "737-8" token-matches the 737-800
         // slot, but TypeInfoStore resolves it to the MAX 8 (exact typecode
-        // first), so it must not inflate the 737-800 card's numbers.
+        // first), so it must not show up in the 737-800 card's log.
         let shown = mk("d00001", typecode: "B738", callsign: "UAL1")
         let all = [
             shown,
@@ -56,18 +51,17 @@ struct TypeHistoryTests {
             mk("d00003", typecode: "B38M", model: "737-8 MAX", callsign: "SWA3"),
         ]
         let h = TypeHistory.compute(for: shown, in: all)
-        #expect(h.timesCaught == 1)
-        #expect(h.airlines.map(\.name) == ["United Airlines"])
+        #expect(h.airlines == [.init(name: "United Airlines", count: 1)])
 
         let max = TypeHistory.compute(for: all[1], in: all)
-        #expect(max.timesCaught == 2)
+        #expect(max.airlines == [.init(name: "Southwest Airlines", count: 2)])
     }
 
-    @Test func talliesAirlinesByAirframeSortedByCountThenName() {
+    @Test func logsCatchesPerOperatorSortedByCountThenName() {
         let shown = mk("b00001", typecode: "B738", callsign: "UAL1")
         let all = [
             shown,
-            mk("b00001", typecode: "B738", callsign: "UAL2"),          // dup airframe: counts once
+            mk("b00001", typecode: "B738", callsign: "UAL2"),          // same jet again: a second catch
             mk("b00002", typecode: "B738", callsign: "UAL3"),
             mk("b00003", typecode: "B738", callsign: "SWA4"),
             mk("b00004", typecode: "B738", callsign: "DAL5"),
@@ -75,67 +69,44 @@ struct TypeHistoryTests {
             mk("b00006", typecode: "B738", callsign: "ZQX9",
                operatorName: "Southwest Airlines"),                    // recorded operator wins
             mk("b00007", typecode: "B738", callsign: "QQQ123"),        // unknown airline: omitted
+            mk("b00008", typecode: "B738"),                            // no operator, no callsign: omitted
         ]
         let h = TypeHistory.compute(for: shown, in: all)
         #expect(h.airlines == [
+            .init(name: "United Airlines", count: 3),
             .init(name: "Southwest Airlines", count: 2),
-            .init(name: "United Airlines", count: 2),
             .init(name: "Delta Air Lines", count: 1),
             .init(name: "Private", count: 1),
         ])
-        #expect(h.timesCaught == 7)
-    }
-
-    @Test func familyProgressMatchesTheSetsTab() {
-        let shown = mk("c00001", typecode: "B738")
-        let all = [
-            shown,
-            mk("c00002", typecode: "B739"),
-            mk("c00003", typecode: "B739"),
-            mk("c00004", typecode: "A20N"),
-        ]
-        let h = TypeHistory.compute(for: shown, in: all)
-        #expect(h.familyTitle == "Boeing 737")
-        #expect(h.variantsTotal == fam737.entries.count)
-        #expect(h.variantsCaught == 2)
-        let sets = CardSets.progress(of: fam737, against: all)
-        #expect(h.variantsCaught == sets.caught)
-        #expect(h.variantsTotal == sets.total)
     }
 
     @Test func countsTheShownCatchEvenWhenTheListPredatesIt() {
         let shown = mk("d00001", typecode: "B738", callsign: "UAL9", minutes: 99)
         let h = TypeHistory.compute(for: shown, in: [mk("d00002", typecode: "B738", minutes: 1)])
-        #expect(h.timesCaught == 2)
         #expect(h.firstCaughtAt == t0.addingTimeInterval(60))
-        #expect(h.variantsCaught == 1)
-        #expect(h.airlines.contains(.init(name: "United Airlines", count: 1)))
+        #expect(h.airlines == [.init(name: "United Airlines", count: 1)])
     }
 
     @Test func noEntryFallsBackToSameTypecode() {
-        // ZZZZ resolves to nothing: no CardSetEntry, no family.
+        // ZZZZ resolves to no CardSetEntry.
         let shown = mk("e00001", typecode: "ZZZZ", callsign: "UAL7", minutes: 40)
         let all = [
             shown,
             mk("e00002", typecode: "zzzz", callsign: "UAL8", minutes: 20),   // case-insensitive
-            mk("e00002", typecode: "ZZZZ", minutes: 30),                      // dup airframe
-            mk("e00003", typecode: "B738", minutes: 1),                       // different type
+            mk("e00002", typecode: "ZZZZ", minutes: 30),                      // no operator: not logged
+            mk("e00003", typecode: "B738", callsign: "UAL1", minutes: 1),     // different type
         ]
         let h = TypeHistory.compute(for: shown, in: all)
-        #expect(h.familyTitle == nil)
-        #expect(h.variantsCaught == 0)
-        #expect(h.variantsTotal == 0)
-        #expect(h.timesCaught == 2)
         #expect(h.firstCaughtAt == t0.addingTimeInterval(20 * 60))
         #expect(h.airlines == [.init(name: "United Airlines", count: 2)])
     }
 
     @Test func noEntryNoTypecodeIsJustThisAirframe() {
-        let shown = mk("f00001", typecode: nil, minutes: 5)
-        let all = [shown, mk("f00001", typecode: nil, minutes: 2), mk("f00002", typecode: nil)]
+        let shown = mk("f00001", typecode: nil, callsign: "UAL1", minutes: 5)
+        let all = [shown, mk("f00001", typecode: nil, callsign: "UAL2", minutes: 2),
+                   mk("f00002", typecode: nil, callsign: "UAL3")]
         let h = TypeHistory.compute(for: shown, in: all)
-        #expect(h.timesCaught == 1)
         #expect(h.firstCaughtAt == t0.addingTimeInterval(2 * 60))
-        #expect(h.familyTitle == nil)
+        #expect(h.airlines == [.init(name: "United Airlines", count: 2)])
     }
 }

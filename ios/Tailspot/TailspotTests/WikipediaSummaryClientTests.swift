@@ -38,6 +38,8 @@ struct WikipediaSummaryClientTests {
         let data = payload(extract: "The Boeing 737 is an American narrow-body aircraft. It was developed in the 1960s. It is the most-produced jetliner.")
         let s = WikipediaSummaryClient.parse(data)
         #expect(s?.extract == "The Boeing 737 is an American narrow-body aircraft. It was developed in the 1960s.")
+        // The sheet gets the whole intro, unedited.
+        #expect(s?.intro == "The Boeing 737 is an American narrow-body aircraft. It was developed in the 1960s. It is the most-produced jetliner.")
         #expect(s?.pageURL.absoluteString == "https://en.m.wikipedia.org/wiki/Boeing_737")
     }
 
