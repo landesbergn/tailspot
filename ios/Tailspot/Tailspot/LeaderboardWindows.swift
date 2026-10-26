@@ -126,7 +126,7 @@ nonisolated struct RaceGap: Equatable, Sendable {
         ///
         /// `full`: the board already has its 50 rows, so the goal is
         /// beating the last one ("31 points to make the top 50"); with
-        /// room left, any point earns a row ("1 point to get on the
+        /// room left, any catch earns a row ("1 catch to get on the
         /// board").
         case makeBoard(full: Bool)
     }
@@ -199,10 +199,12 @@ nonisolated struct RaceGap: Equatable, Sendable {
             // either — see `LeaderboardEntry.myIndex`.)
             guard handleConfirmed else { return nil }
             // Handled but not a row on the board. With room left, any
-            // point earns a row; a full board means beating the last row.
+            // catch earns a row (every catch scores > 0, and the server
+            // lists any handled device with points in the window); a full
+            // board means beating the last row.
             // "Full" trusts the server's `totalCatchers` (qualifying
             // spotters before the row limit) as well as the row count, so
-            // a short response can't promise "1 PT" when the real board is
+            // a short response can't promise "1 catch" when the real board is
             // full. An older server without the count falls back to rows.
             //
             // Belt and braces for a strand the marker missed: a device
@@ -232,7 +234,9 @@ nonisolated struct RaceGap: Equatable, Sendable {
     ///   (ties break by registration time). Level on points reads "1 point
     ///   to pass @randy98", because "0 points behind" would be no goal.
     /// - make the board: "31 points to make the top 50" on a full board,
-    ///   "1 point to get on the board" with room left.
+    ///   "1 catch to get on the board" with room left — any catch earns a
+    ///   row there, and a catch is the action the player takes (Noah,
+    ///   2026-10-26).
     var prose: String {
         switch target {
         case .pass(let handle, _):
@@ -243,7 +247,7 @@ nonisolated struct RaceGap: Equatable, Sendable {
         case .makeBoard(let full):
             return full
                 ? "\(Self.pointsText(points)) to make the top \(LeaderboardResponse.displayLimit)"
-                : "\(Self.pointsText(points)) to get on the board"
+                : "1 catch to get on the board"
         }
     }
 
