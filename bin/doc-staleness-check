@@ -63,5 +63,5 @@ jq -nc \
   --arg n "$unpushed" \
   '{
     decision: "block",
-    reason: ("There are " + $n + " unpushed commit(s) on main but neither CLAUDE.md nor PLAN.md has been touched in any of them. Before ending this session, refresh CLAUDE.md \"Current state\" and PLAN.md §9 (or the equivalent backlog section) to reflect what shipped, commit those updates, then push origin main. This keeps the on-disk docs aligned with code so a fresh session can resume cleanly without spelunking the commit log.")
+    reason: ("There are " + $n + " unpushed commit(s) on main but neither CLAUDE.md nor PLAN.md has been touched in any of them. Before ending this session, refresh PLAN.md §9 (and CLAUDE.md only if durable guidance changed) to reflect what shipped and commit those updates. main is protected, so land them through a branch and PR, never a direct push. This keeps the on-disk docs aligned with code so a fresh session can resume cleanly without spelunking the commit log.")
   }'

@@ -147,14 +147,16 @@ Noah's: no `~/.claude` (global CLAUDE.md, auto-memory), no
 `settings.local.json`, no credentials, and no macOS. They are for **backend,
 `web/`, `tools/`, and docs work that ends at an open PR.** `bin/cloud-session-start`
 (a SessionStart hook, no-op unless `CLAUDE_CODE_REMOTE=true`) runs `npm ci` in
-`backend/` and prints the cloud ground rules into context; keep that message
-and this section in sync.
+`backend/` and prints a one-line status pointing here. **This section is the
+only copy of the cloud rules.**
 
+- **Work on a branch and stop at an open PR.** Merging, deploys, TestFlight,
+  and App Store work stay on the Mac, even though a REST merge would work.
 - **The boundary is credentials, not prompts.** The environment holds no
   Fly/ASC/PostHog/Sentry secrets and uses *Trusted* network access, which
   excludes `api.tailspot.app` and Fly, so production is unreachable. Don't add
-  deploy tokens to a cloud environment; deploys, merges, TestFlight, and App
-  Store work stay on the Mac.
+  deploy tokens to a cloud environment, and a cloud session shouldn't ask for
+  one to be pasted in or try to reach prod another way.
 - **GitHub** goes through Anthropic's proxy: it blocks tags and branch deletes but
   not branch names, so `main`'s branch protection is the real guard. `gh pr` /
   `gh issue` fail (GraphQL rejected); open PRs with the Create PR button or

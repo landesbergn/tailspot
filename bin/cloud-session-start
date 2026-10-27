@@ -4,41 +4,36 @@
 # Local sessions: exits immediately (CLAUDE_CODE_REMOTE is only "true" inside
 # the cloud VM), so this costs nothing on the Mac.
 #
-# Cloud sessions: installs backend deps so `npm test` works straight away, then
-# prints the cloud ground rules. A SessionStart hook's stdout is added to
-# Claude's context, and that is the only way to brief a cloud session: it can't
-# see Noah's ~/.claude (global CLAUDE.md, auto-memory) or settings.local.json.
+# Cloud sessions: installs backend deps so `npm test` works straight away, and
+# prints one status line into Claude's context (a SessionStart hook's stdout is
+# added to context). The rules themselves live only in CLAUDE.md "Cloud
+# sessions", which the clone loads anyway; this just points at them.
 #
-# Must always exit 0. A failed install is reported in the context, not fatal.
+# Must always exit 0, and always print: a failed install is reported, not fatal.
 
 [ "${CLAUDE_CODE_REMOTE:-}" = "true" ] || exit 0
 
 repo_root="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null)}"
-cd "$repo_root/backend" 2>/dev/null || exit 0
 
-# Resumed sessions keep node_modules; only reinstall when the lockfile changed.
-lock_hash=$(sha256sum package-lock.json 2>/dev/null | cut -d' ' -f1)
-marker=node_modules/.tailspot-lock-hash
-if [ -n "$lock_hash" ] && [ "$(cat "$marker" 2>/dev/null)" = "$lock_hash" ]; then
-  install_status="backend node_modules already current"
-elif npm ci --no-audit --no-fund --loglevel=error >/tmp/tailspot-npm-ci.log 2>&1; then
-  echo "$lock_hash" >"$marker"
-  install_status="backend deps installed (npm ci)"
-else
-  install_status="backend npm ci FAILED, see /tmp/tailspot-npm-ci.log"
-fi
+install_backend() {
+  cd "$repo_root/backend" 2>/dev/null || { echo "backend/ not found, skipped npm ci"; return; }
 
-cat <<MSG
-Cloud session (claude.ai/code, Ubuntu VM). Setup: $install_status.
+  # Resumed sessions keep node_modules; reinstall only when the lockfile or the
+  # Node version changed (native deps are ABI-specific).
+  local key marker=node_modules/.tailspot-install-key
+  key="$(sha256sum package-lock.json 2>/dev/null | cut -d' ' -f1) $(node -v 2>/dev/null)"
+  if [ -d node_modules/.bin ] && [ "$(cat "$marker" 2>/dev/null)" = "$key" ]; then
+    echo "backend node_modules already current"
+  # Capped below the 300 s hook timeout so a slow registry can't swallow this
+  # status line. (Ubuntu has timeout(1); macOS doesn't, hence the fallback.)
+  elif $(command -v timeout >/dev/null && echo timeout 240) npm ci --no-audit --no-fund --loglevel=error >/tmp/tailspot-npm-ci.log 2>&1; then
+    case "$key" in " "*) ;; *) echo "$key" >"$marker" ;; esac
+    echo "backend deps installed (npm ci)"
+  else
+    echo "backend npm ci FAILED or timed out, see /tmp/tailspot-npm-ci.log"
+  fi
+}
 
-What works here: backend typecheck/lint/test (cd backend && npm run typecheck && npm run lint && npm test; PGlite, no Postgres needed), web/ static site edits, tools/ Python, docs.
-
-What does not, so don't try or work around it:
-- No macOS: no xcodebuild, no iOS tests, no bin/deploy, no Simulator. Swift edits are allowed but only the PR's "Unit tests" CI check verifies them; say so in the PR.
-- No credentials: no fly, no App Store Connect, no bin/xcode-cloud-build, no PostHog/Sentry. Don't ask for tokens to be pasted into the session.
-- The network allowlist excludes api.tailspot.app and Fly; never point anything at production.
-- gh pr/issue fail (the GitHub proxy rejects GraphQL). Push the branch and use the Create PR button, or gh api repos/landesbergn/tailspot/pulls (REST).
-
-Ground rules: work on a branch, never push to main (it is protected anyway), stop at an open PR. Merging, TestFlight builds, deploys and App Store work happen from Noah's Mac.
-MSG
+status=$(install_backend)
+echo "Cloud session (claude.ai/code, Ubuntu VM, no macOS, no credentials). Setup: $status. Follow the \"Cloud sessions\" section of CLAUDE.md: backend/web/tools/docs work only, stop at an open PR."
 exit 0
