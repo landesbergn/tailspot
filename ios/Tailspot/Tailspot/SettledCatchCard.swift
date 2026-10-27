@@ -49,6 +49,10 @@ struct SettledCatchCard: View {
     /// renders the "ABOUT THIS PLANE" control at the foot of the card; nil
     /// (share renders and every other caller) leaves the card unchanged.
     var onTurnOver: (() -> Void)? = nil
+    /// When the catch happened, shown as a timestamp under the callsign
+    /// (CatchDetailView, 2026-10-26 — it replaced the CAUGHT block that
+    /// floated under the card). nil (the share card) leaves it out.
+    var caughtAt: Date? = nil
     /// Set by the swipe card-back pagers: keep the turn-over button's room
     /// without drawing it, so the card is the same size as its back (see
     /// `CardBackStyles.swift`). False everywhere else.
@@ -117,8 +121,20 @@ struct SettledCatchCard: View {
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(Text(plane.model ?? "Unknown aircraft"))
 
-                identityRow(callsign: plane.callsign, carrier: plane.carrier,
-                            rarity: plane.rarity, scale: scale)
+                VStack(alignment: .leading, spacing: 5 * scale) {
+                    identityRow(callsign: plane.callsign, carrier: plane.carrier,
+                                rarity: plane.rarity, scale: scale)
+                    if let caughtAt {
+                        Text(caughtAt.formatted(date: .abbreviated, time: .shortened).uppercased())
+                            .font(.system(size: 10.5 * scale, weight: .medium, design: .monospaced))
+                            .tracking(1)
+                            .foregroundStyle(RP.faint)
+                            .monospacedDigit()
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                            .accessibilityLabel("Caught \(caughtAt.formatted(date: .long, time: .shortened))")
+                    }
+                }
 
                 Rectangle().fill(RP.rule).frame(height: 1)
 

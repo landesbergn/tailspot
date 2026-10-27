@@ -290,7 +290,11 @@ struct RealisticFlipCard<Front: View, Back: View>: View {
     private let front: Front
     private let back: Back
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// The flip ignores the system Reduce Motion setting (Noah, 2026-10-26):
+    /// the turn IS the interaction, and the crossfade read as "nothing
+    /// happened". The crossfade path stays below, unused, until the
+    /// card-back experiment picks a winner and the losers are deleted.
+    private let reduceMotion = false
     /// The card's current angle (degrees, unwrapped). Animated with
     /// `withAnimation` for taps / programmatic turns; set directly while a
     /// finger drags it.

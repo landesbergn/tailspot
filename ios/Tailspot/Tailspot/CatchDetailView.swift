@@ -117,7 +117,8 @@ struct CatchDetailView: View {
                                 ? "View photo full screen"
                                 : "View photo on Planespotters.net",
                             heroZoom: hasCatchPhoto ? heroZoom : nil,
-                            onTurnOver: cardBackStyle.frontShowsTurnOverButton ? showBack : nil
+                            onTurnOver: cardBackStyle.frontShowsTurnOverButton ? showBack : nil,
+                            caughtAt: first.caughtAt
                         )
                     } back: {
                         CatchCardBack(model: backModel, width: cardWidth,
@@ -128,7 +129,6 @@ struct CatchDetailView: View {
                     // inherits another style's mid-gesture state.
                     .id(cardBackStyle)
                     .frame(maxWidth: .infinity)
-                    finePrint
                     if let photo = planespottersPhoto, !hasCatchPhoto {
                         attribution(photo)
                     }
@@ -321,41 +321,6 @@ struct CatchDetailView: View {
     private var wasFirstOfType: Bool {
         guard let tc = first.typecode else { return false }
         return !allCatches.contains { $0.typecode == tc && $0.caughtAt < first.caughtAt }
-    }
-
-    // MARK: - Fine print (below the card)
-
-    /// The catch moment under the card (date · time · place). The REG /
-    /// ICAO / TYPE row that sat above it was dropped in the 2026-10-26
-    /// card-back experiment: the card and its back already say those.
-    private var finePrint: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text("CAUGHT")
-                .font(Brand.Font.mono(size: 8, weight: .semibold, relativeTo: .caption2))
-                .tracking(0.6)
-                .foregroundStyle(Brand.Color.textTertiary)
-            Text("\(first.caughtAt.formatted(date: .abbreviated, time: .shortened)) · \(first.placeName ?? observerCoordText)")
-                .font(Brand.Font.mono(size: 12, weight: .regular, relativeTo: .caption))
-                .foregroundStyle(Brand.Color.textSecondary)
-                .monospacedDigit()
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-                // No place name → this line shows the observer's own
-                // ~11 m coordinates; keep them out of session replay.
-                .locationReplayMask(first.placeName == nil)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .background(Brand.Color.bgElevated, in: .rect(cornerRadius: Brand.Radius.row))
-        .accessibilityElement(children: .combine)
-    }
-
-    private var observerCoordText: String {
-        let lat = first.observerLat
-        let lon = first.observerLon
-        let latH = lat >= 0 ? "N" : "S"
-        let lonH = lon >= 0 ? "E" : "W"
-        return String(format: "%.4f° %@, %.4f° %@", abs(lat), latH, abs(lon), lonH)
     }
 
     // MARK: - Floating chrome pills

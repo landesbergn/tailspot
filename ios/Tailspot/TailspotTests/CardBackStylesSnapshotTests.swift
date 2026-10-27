@@ -45,15 +45,13 @@ struct CardBackStylesSnapshotTests {
                                      isFirstOfType: false,
                                      width: CardBackStylesSnapshotTests.cardWidth - style.cardWidthInset,
                                      onPhotoTap: nil,
-                                     onTurnOver: style.frontShowsTurnOverButton ? showBack : nil)
+                                     onTurnOver: style.frontShowsTurnOverButton ? showBack : nil,
+                                     caughtAt: Date(timeIntervalSince1970: 1_793_040_000))
                 } back: {
                     CatchCardBack(model: BackFixtures.b738,
                                   width: CardBackStylesSnapshotTests.cardWidth - style.cardWidthInset,
                                   onOpenURL: { _ in }, onTurnBack: { showingBack = false })
                 }
-                Text("Fine print below the card")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
             .padding(.horizontal, 20)
             .padding(.top, 56)
