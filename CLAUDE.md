@@ -135,8 +135,34 @@ there are unpushed commits on `main` and **none touched `CLAUDE.md` or `PLAN.md`
 it blocks the turn and asks for a doc refresh. In this repo's model the live status
 lives in **PLAN §9** (prior rounds in `CHANGELOG.md`), so finishing a round means
 updating **PLAN §9** — which satisfies the hook. Update *this* file only when
-*durable guidance* changes. (`.claude/settings.json` is gitignored; to make the
-hook follow the repo, `!`-allow it in `.gitignore` and commit.)
+*durable guidance* changes. `.claude/settings.json` is committed (the rest of
+`.claude/` stays gitignored), so the hooks follow every worktree and cloud
+session. Machine-specific permissions go in the gitignored
+`.claude/settings.local.json`, never in the shared file.
+
+### Cloud sessions (claude.ai/code)
+
+Cloud sessions run on an Ubuntu VM with the repo cloned and nothing else of
+Noah's: no `~/.claude` (global CLAUDE.md, auto-memory), no
+`settings.local.json`, no credentials, and no macOS. They are for **backend,
+`web/`, `tools/`, and docs work that ends at an open PR.** `bin/cloud-session-start`
+(a SessionStart hook, no-op unless `CLAUDE_CODE_REMOTE=true`) runs `npm ci` in
+`backend/` and prints the cloud ground rules into context; keep that message
+and this section in sync.
+
+- **The boundary is credentials, not prompts.** The environment holds no
+  Fly/ASC/PostHog/Sentry secrets and uses *Trusted* network access, which
+  excludes `api.tailspot.app` and Fly, so production is unreachable. Don't add
+  deploy tokens to a cloud environment; deploys, merges, TestFlight, and App
+  Store work stay on the Mac.
+- **GitHub** goes through Anthropic's proxy: it blocks tags and branch deletes but
+  not branch names, so `main`'s branch protection is the real guard. `gh pr` /
+  `gh issue` fail (GraphQL rejected); open PRs with the Create PR button or
+  `gh api` REST.
+- **iOS can't be built or tested** there. Swift edits are verified only by the
+  PR's Unit tests check, so say so in the PR and field-test locally before merge.
+- The backend suite takes ~2 min, close to the Bash tool's default timeout:
+  run `npm test` with a longer timeout.
 
 ## Secrets: PostHog key only
 

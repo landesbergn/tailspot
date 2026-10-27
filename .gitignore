@@ -98,7 +98,10 @@ yarn-error.log*
 *~
 
 # Tooling / local
-.claude/
+# .claude/ stays local (worktrees, settings.local.json), except the shared
+# settings.json: committed so cloud sessions and fresh worktrees get the hooks.
+.claude/*
+!.claude/settings.json
 tools/replay-harness/recordings/
 
 # Deploy-loop artifacts and per-user overrides
