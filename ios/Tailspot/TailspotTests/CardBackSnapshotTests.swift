@@ -274,7 +274,7 @@ struct CardBackSnapshotTests {
         #expect(!png.isEmpty)
     }
 
-    @Test(arguments: [0.0, 45, 90, 135, 180])
+    @Test(arguments: [0.0, 45, 90, 135, 180, -45, -135])
     func flipFrame(_ degrees: Double) async throws {
         let plane = CardPlane(
             callsign: "UAL1532", model: "Boeing 737-800", carrier: "United Airlines",

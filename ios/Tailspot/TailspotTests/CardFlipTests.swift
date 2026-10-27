@@ -3,9 +3,9 @@
 //  TailspotTests
 //
 //  Pins the card flip's pure decisions (CardFlipMath): the face switch at
-//  exactly 90°, swipe classification against vertical scrolling, the sheen
-//  and Reduce Motion crossfade curves, and the turn-over button's VoiceOver
-//  label.
+//  exactly 90°, which way a swipe or tap turns the card, swipe
+//  classification against vertical scrolling, the sheen, the peek's
+//  policy, and the turn-over button's VoiceOver label.
 //
 
 import Testing
@@ -64,7 +64,7 @@ struct CardFlipTests {
         #expect(CardFlipMath.swipeThreshold == 40)
     }
 
-    // MARK: Sheen + crossfade
+    // MARK: Sheen
 
     @Test func sheenIsInvisibleAtRestAndPeaksEdgeOn() {
         #expect(abs(CardFlipMath.sheenOpacity(angle: 0)) < 1e-9)
@@ -74,14 +74,64 @@ struct CardFlipTests {
         #expect(quarter > 0 && quarter < CardFlipMath.sheenPeak)
     }
 
-    @Test func reduceMotionCrossfadeIsLinearAndClamped() {
-        #expect(CardFlipMath.crossfadeOpacity(angle: 0, face: .front) == 1)
-        #expect(CardFlipMath.crossfadeOpacity(angle: 0, face: .back) == 0)
-        #expect(CardFlipMath.crossfadeOpacity(angle: 90, face: .front) == 0.5)
-        #expect(CardFlipMath.crossfadeOpacity(angle: 90, face: .back) == 0.5)
-        #expect(CardFlipMath.crossfadeOpacity(angle: 180, face: .back) == 1)
-        #expect(CardFlipMath.crossfadeOpacity(angle: 200, face: .back) == 1)
-        #expect(CardFlipMath.crossfadeOpacity(angle: -20, face: .front) == 1)
+    /// The sheen sweeps across the face the same way whichever way, and
+    /// however many times, the card has turned.
+    @Test func halfTurnProgressCountsInTheTurnsDirection() {
+        #expect(CardFlipMath.halfTurnProgress(angle: 0) == 0)
+        #expect(CardFlipMath.halfTurnProgress(angle: 45) == 0.25)
+        #expect(CardFlipMath.halfTurnProgress(angle: 225) == 0.25)
+        #expect(CardFlipMath.halfTurnProgress(angle: -45) == 0.75)
+        #expect(CardFlipMath.halfTurnProgress(angle: -135) == 0.25)
+    }
+
+    // MARK: Turn direction
+
+    /// Swipe right, or tap the right half: the right edge goes away and
+    /// the angle grows. Left is the mirror.
+    @Test func swipeAndTapSidePickTheTurnsDirection() {
+        #expect(CardFlipMath.turnedAngle(from: 0, direction: .right) == 180)
+        #expect(CardFlipMath.turnedAngle(from: 0, direction: .left) == -180)
+        #expect(CardFlipMath.turnedAngle(from: 180, direction: .right) == 360)
+        #expect(CardFlipMath.tapDirection(x: 300, width: 353) == .right)
+        #expect(CardFlipMath.tapDirection(x: 20, width: 353) == .left)
+        #expect(CardFlipMath.tapDirection(x: 176.5, width: 353) == .right)
+    }
+
+    /// Turning the same way twice keeps going round: back, then the front
+    /// again, never a snap backwards.
+    @Test func turningTheSameWayKeepsGoingRound() {
+        var angle = 0.0
+        angle = CardFlipMath.turnedAngle(from: angle, direction: .left)
+        #expect(CardFlipMath.visibleFace(angle: angle) == .back)
+        angle = CardFlipMath.turnedAngle(from: angle, direction: .left)
+        #expect(angle == -360)
+        #expect(CardFlipMath.visibleFace(angle: angle) == .front)
+    }
+
+    /// With no gesture to say which way (VoiceOver, the screen), the card
+    /// unwinds toward 0 — back the way it came.
+    @Test func defaultDirectionUnwinds() {
+        #expect(CardFlipMath.defaultDirection(from: 0) == .right)
+        #expect(CardFlipMath.defaultDirection(from: 180) == .left)
+        #expect(CardFlipMath.defaultDirection(from: -180) == .right)
+        #expect(CardFlipMath.turnedAngle(from: 180, direction: CardFlipMath.defaultDirection(from: 180)) == 0)
+    }
+
+    // MARK: Peek
+
+    @Test func peekShowsUntilACardIsTurnedOrItHasRunItsCourse() {
+        #expect(CardFlipTease.shouldTease(hasTurnedACard: false, timesShown: 0))
+        #expect(CardFlipTease.shouldTease(hasTurnedACard: false, timesShown: CardFlipTease.maxShows - 1))
+        #expect(!CardFlipTease.shouldTease(hasTurnedACard: false, timesShown: CardFlipTease.maxShows))
+        #expect(!CardFlipTease.shouldTease(hasTurnedACard: true, timesShown: 0))
+    }
+
+    /// The peek tilts far enough for the sheen to catch, never far enough
+    /// to show the back.
+    @Test func peekNeverShowsTheBack() {
+        #expect(CardFlipMath.visibleFace(angle: CardFlipTease.peakDegrees) == .front)
+        #expect(CardFlipMath.visibleFace(angle: -CardFlipTease.peakDegrees) == .front)
+        #expect(CardFlipMath.sheenOpacity(angle: CardFlipTease.peakDegrees) > CardFlipMath.sheenPeak / 2)
     }
 
     // MARK: Button label

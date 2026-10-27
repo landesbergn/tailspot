@@ -63,9 +63,6 @@ struct CatchDetailView: View {
     /// Which face of the card is up. FlipCard also toggles it on a swipe,
     /// so side effects hang off `onChange(of: isFlipped)`, not the buttons.
     @State private var isFlipped = false
-    /// Which card-back style is live (`CardBackStyles.swift`). Always
-    /// `.flip` in Release; Debug builds switch it from the top bar.
-    @State private var cardBackStyle = CardBackStyle.current
     /// A turn to the back made before the Planespotters lookup answered;
     /// reported once the closeup resolves (`CardTurnAnalytics.sendsImmediately`).
     @State private var pendingTurnReport = false
@@ -99,10 +96,7 @@ struct CatchDetailView: View {
                     // Direction B (2026-07-05): the reveal card at rest IS
                     // the detail screen — one card design across the app.
                     let cardWidth = min(geo.size.width - 36, 420)
-                    // How the card gets to its back is a Debug-switchable
-                    // design experiment (`CardBackStyles.swift`); Release
-                    // is always the shipped flip.
-                    CardBackPresenter(style: cardBackStyle, showingBack: $isFlipped) { showBack in
+                    FlipCard(isFlipped: $isFlipped) {
                         SettledCatchCard(
                             plane: detailPlane,
                             isFirstOfType: wasFirstOfType,
@@ -117,18 +111,14 @@ struct CatchDetailView: View {
                                 ? "View photo full screen"
                                 : "View photo on Planespotters.net",
                             heroZoom: hasCatchPhoto ? heroZoom : nil,
-                            onTurnOver: cardBackStyle.frontShowsTurnOverButton ? showBack : nil,
+                            onTurnOver: { isFlipped = true },
                             caughtAt: first.caughtAt
                         )
                     } back: {
                         CatchCardBack(model: backModel, width: cardWidth,
                                       onOpenURL: { openURL($0) },
-                                      onTurnBack: cardBackStyle.backShowsTurnBackButton
-                                          ? { isFlipped = false } : nil)
+                                      onTurnBack: { isFlipped = false })
                     }
-                    // A fresh container per style, so switching never
-                    // inherits another style's mid-gesture state.
-                    .id(cardBackStyle)
                     .frame(maxWidth: .infinity)
                     if let photo = planespottersPhoto, !hasCatchPhoto {
                         attribution(photo)
@@ -334,10 +324,6 @@ struct CatchDetailView: View {
             chromePill(icon: presentedModally ? "xmark" : "chevron.left") { dismiss() }
                 .accessibilityLabel(presentedModally ? "Close" : "Back")
             Spacer()
-            #if DEBUG
-            cardBackStyleMenu
-                .padding(.trailing, 8)
-            #endif
             Button {
                 showDeleteConfirm = true
             } label: {
@@ -361,30 +347,6 @@ struct CatchDetailView: View {
         }
         .padding(.horizontal, 16)
     }
-
-    #if DEBUG
-    /// Debug only: try each card-back style on a real catch. The choice
-    /// sticks across launches (`CardBackStyle.current`).
-    private var cardBackStyleMenu: some View {
-        Menu {
-            Picker("Card back", selection: Binding(
-                get: { cardBackStyle },
-                set: { style in
-                    isFlipped = false
-                    cardBackStyle = style
-                    CardBackStyle.current = style
-                }
-            )) {
-                ForEach(CardBackStyle.allCases) { style in
-                    Text(style.title).tag(style)
-                }
-            }
-        } label: {
-            chromePillBody(icon: "rectangle.on.rectangle.angled")
-        }
-        .accessibilityLabel("Card back style")
-    }
-    #endif
 
     private func chromePill(icon: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {

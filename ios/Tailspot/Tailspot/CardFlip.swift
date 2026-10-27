@@ -8,14 +8,27 @@
 //  flip around the vertical axis. `CardTurnOverButton` is the mono-caps
 //  control at the bottom of each face ("ABOUT THIS PLANE" / "BACK TO CATCH").
 //
+//  Turn direction (2026-10-27, Noah: "fix the flip direction so it depends
+//  which way you swipe or where you tap"): a swipe turns the card the way
+//  the finger went, and a tap on the turn-over control turns it the way
+//  pressing that side of a real card would (tap the right half, the right
+//  edge goes away). So the angle is no longer just 0 or 180: each turn adds
+//  or takes away 180°, and the card can keep turning the same way.
+//
+//  The peek (2026-10-27): turning the card over isn't obvious, so the first
+//  few times a card is shown it tilts about halfway over on its own and
+//  springs back, with a tap of haptics. It stops for good once you've
+//  turned a card yourself (`CardFlipTease`).
+//
 //  Explain-as-we-go — how the flip works:
 //   - `rotation3DEffect(_:axis:perspective:)` draws a view as if it were a
 //     flat plate rotated in 3D. Axis (0, 1, 0) is the vertical (Y) axis, so
 //     the card turns like a page; `perspective` controls how strongly the
 //     near edge grows and the far edge shrinks (0 = flat, 1 = extreme).
+//     A positive angle sends the right edge away from you.
 //   - Both faces sit in one ZStack and rotate together. The back is
 //     PRE-ROTATED by 180° (its rotation is `angle − 180`), so when the card
-//     has turned 180° the back has turned 0° and reads the right way round
+//     has turned 180° (either way) the back reads the right way round
 //     instead of mirrored.
 //   - Which face is showing must switch at EXACTLY 90°, the instant the card
 //     is edge-on. If we just set `opacity(isFlipped ? …)`, SwiftUI would
@@ -24,7 +37,13 @@
 //     conforms to `Animatable`: SwiftUI then calls its `body` on EVERY frame
 //     of the animation with the in-between angle (via `animatableData`),
 //     and the modifier decides per frame which face is visible.
-//   - Reduce Motion: no rotation at all, a short crossfade instead.
+//   - The turn-over control inside a face doesn't know about the flip, so
+//     the flip hands it a "which way" callback through the environment
+//     (`cardTurnDirection`); the control reports the side it was tapped on,
+//     then runs its action as before.
+//   - Reduce Motion: the turn itself ignores it (Noah, 2026-10-26: the turn
+//     IS the interaction, and a crossfade read as "nothing happened"). The
+//     peek is motion nobody asked for, so it respects it and doesn't run.
 //
 
 import SwiftUI
@@ -35,21 +54,21 @@ import SwiftUI
 /// `nonisolated` — plain math, no UI state.
 nonisolated enum CardFlipMath {
     enum Face: Equatable, Sendable { case front, back }
-    enum SwipeDirection: Equatable, Sendable { case left, right }
+    /// Which way the card turns: `.right` sends the right edge away (the
+    /// angle grows), `.left` the left edge (it shrinks).
+    enum TurnDirection: Equatable, Sendable { case left, right }
 
     /// A horizontal drag must travel at least this far to flip the card.
     static let swipeThreshold: CGFloat = 40
-    /// The resting angles: 0° shows the front, 180° the back.
-    static let frontAngle: Double = 0
-    static let backAngle: Double = 180
     /// `rotation3DEffect` perspective — enough depth to read as 3D without
     /// the near edge ballooning past the screen on a 393 pt card.
     static let perspective: CGFloat = 0.45
     /// Peak opacity of the light sheen (reached edge-on, at 90°).
     static let sheenPeak: Double = 0.22
 
+    /// Where a card first shows: 0° the front, 180° the back.
     static func restingAngle(isFlipped: Bool) -> Double {
-        isFlipped ? backAngle : frontAngle
+        isFlipped ? 180 : 0
     }
 
     /// Which face faces the viewer at `angle` degrees. The switch happens at
@@ -61,21 +80,34 @@ nonisolated enum CardFlipMath {
         return (a >= 90 && a < 270) ? .back : .front
     }
 
+    /// The angle after one turn in `direction`.
+    static func turnedAngle(from angle: Double, direction: TurnDirection) -> Double {
+        angle + (direction == .right ? 180 : -180)
+    }
+
+    /// The way to turn when nothing says which (VoiceOver, a turn the
+    /// screen asks for): back toward 0, so the card unwinds the way it
+    /// came; from 0 (or below), to the right.
+    static func defaultDirection(from angle: Double) -> TurnDirection {
+        angle > 0 ? .left : .right
+    }
+
+    /// A tap on the turn-over control: the side tapped goes away, as if
+    /// you'd pressed that edge of a real card.
+    static func tapDirection(x: CGFloat, width: CGFloat) -> TurnDirection {
+        x < width / 2 ? .left : .right
+    }
+
     /// Classifies a drag's total translation: a horizontal swipe (|dx| > |dy|
-    /// and |dx| ≥ threshold) in either direction, or nil — a vertical drag
-    /// belongs to the scroll view, a short one to nothing.
+    /// and |dx| ≥ threshold) turns the card the way the finger went
+    /// (dragging the surface right sends the right edge away); anything
+    /// else is nil — a vertical drag belongs to the scroll view, a short
+    /// one to nothing.
     static func swipeDirection(translation: CGSize,
-                               threshold: CGFloat = swipeThreshold) -> SwipeDirection? {
+                               threshold: CGFloat = swipeThreshold) -> TurnDirection? {
         let dx = translation.width, dy = translation.height
         guard abs(dx) > abs(dy), abs(dx) >= threshold else { return nil }
         return dx < 0 ? .left : .right
-    }
-
-    /// Reduce Motion crossfade: the face's opacity at `angle` (0…180 maps to
-    /// a linear dissolve front → back; clamped outside that range).
-    static func crossfadeOpacity(angle: Double, face: Face) -> Double {
-        let progress = min(1, max(0, angle / backAngle))
-        return face == .back ? progress : 1 - progress
     }
 
     /// The sheen's opacity: zero at rest, peaking at `sheenPeak` when the card
@@ -84,81 +116,176 @@ nonisolated enum CardFlipMath {
         let s = sin(angle * .pi / 180)
         return sheenPeak * s * s
     }
+
+    /// How far through the current half-turn the card is, 0…1, counted in
+    /// the direction it's turning — what sweeps the sheen across the face.
+    static func halfTurnProgress(angle: Double) -> Double {
+        let r = angle.truncatingRemainder(dividingBy: 180)
+        return r >= 0 ? r / 180 : 1 + r / 180
+    }
+}
+
+/// When the card peeks over on its own. `nonisolated` — plain policy.
+nonisolated enum CardFlipTease {
+    /// The peek stops after this many showings even if nobody turns a card.
+    static let maxShows = 5
+    /// How far the card tilts: past halfway to edge-on, enough for the
+    /// sheen to catch, never far enough to show the back.
+    static let peakDegrees: Double = 50
+    /// The wait after the card is ready (the reveal settles; the detail
+    /// screen opens) before it peeks, so it reads as the card's own move.
+    static let delay: Duration = .milliseconds(900)
+
+    static func shouldTease(hasTurnedACard: Bool, timesShown: Int) -> Bool {
+        !hasTurnedACard && timesShown < maxShows
+    }
+}
+
+/// Where the peek's two numbers live, across launches.
+enum CardFlipTeaseStore {
+    static let turnedKey = "tailspot.cardFlip.hasTurned"
+    static let shownKey = "tailspot.cardFlip.teasesShown"
+
+    static var hasTurnedACard: Bool {
+        get { UserDefaults.standard.bool(forKey: turnedKey) }
+        set { UserDefaults.standard.set(newValue, forKey: turnedKey) }
+    }
+
+    static var timesShown: Int {
+        get { UserDefaults.standard.integer(forKey: shownKey) }
+        set { UserDefaults.standard.set(newValue, forKey: shownKey) }
+    }
+}
+
+extension EnvironmentValues {
+    /// Set by `FlipCard` on its faces: a turn-over control calls it with the
+    /// side it was tapped on just before its action turns the card. nil
+    /// outside a FlipCard. `@Entry` declares an environment key and its
+    /// default in one line.
+    @Entry var cardTurnDirection: ((CardFlipMath.TurnDirection) -> Void)? = nil
 }
 
 // MARK: - FlipCard
 
 struct FlipCard<Front: View, Back: View>: View {
     @Binding var isFlipped: Bool
-    /// Swipe-to-flip only when true (the reveal enables it once the catch
-    /// has settled). The turn-over buttons live inside the faces and are the
-    /// caller's to enable.
+    /// Swipe-to-flip and the peek only when true (the reveal enables them
+    /// once the catch has settled). The turn-over buttons live inside the
+    /// faces and are the caller's to enable.
     let enabled: Bool
+    /// Whether this card may peek over on its own (`CardFlipTease`).
+    let teases: Bool
     private let front: Front
     private let back: Back
 
-    /// The flip ignores the system Reduce Motion setting (Noah, 2026-10-26):
-    /// the turn IS the interaction, and the crossfade read as "nothing
-    /// happened". The crossfade path stays below, unused, until the
-    /// card-back experiment picks a winner and the losers are deleted.
-    private let reduceMotion = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// The front's measured size. The back is laid out at exactly this size
     /// so the card doesn't change shape when it turns over.
     @State private var frontSize: CGSize = .zero
+    /// The card's turn, in degrees: 0 the front, ±180 the back, ±360 the
+    /// front again… Its sign says which way it went.
+    @State private var angle: Double
+    /// The peek's extra tilt on top of `angle`; 0 except mid-peek.
+    @State private var teaseAngle: Double = 0
+    /// The way the next turn goes, from the gesture or tap that asked for
+    /// it; nil = `CardFlipMath.defaultDirection`.
+    @State private var pendingDirection: CardFlipMath.TurnDirection?
+    @State private var teaseCount = 0
 
     #if DEBUG
     /// Test hook: render a frozen mid-flip frame (degrees) instead of the
-    /// angle `isFlipped` implies. See `_snapshotAngle(_:)`.
+    /// card's own angle. See `_snapshotAngle(_:)`.
     fileprivate var snapshotAngle: Double? = nil
     #endif
 
-    init(isFlipped: Binding<Bool>, enabled: Bool = true,
+    init(isFlipped: Binding<Bool>, enabled: Bool = true, teases: Bool = true,
          @ViewBuilder front: () -> Front, @ViewBuilder back: () -> Back) {
         self._isFlipped = isFlipped
         self.enabled = enabled
+        self.teases = teases
+        self._angle = State(initialValue: CardFlipMath.restingAngle(isFlipped: isFlipped.wrappedValue))
         self.front = front()
         self.back = back()
     }
 
-    private var angle: Double {
+    private var shownAngle: Double {
         #if DEBUG
         if let snapshotAngle { return snapshotAngle }
         #endif
-        return CardFlipMath.restingAngle(isFlipped: isFlipped)
+        return angle + teaseAngle
     }
 
     var body: some View {
-        let angle = self.angle
+        let shownAngle = self.shownAngle
         ZStack {
             front
                 .onGeometryChange(for: CGSize.self) { $0.size } action: { frontSize = $0 }
-                .modifier(FlipFace(angle: angle, isBack: false, reduceMotion: reduceMotion))
+                .modifier(FlipFace(angle: shownAngle, isBack: false))
 
             // Not laid out until the front has been measured — otherwise a
             // back that fills its proposal would size the ZStack to it.
             if frontSize.width > 0, frontSize.height > 0 {
                 back
                     .frame(width: frontSize.width, height: frontSize.height)
-                    .modifier(FlipFace(angle: angle, isBack: true, reduceMotion: reduceMotion))
+                    .modifier(FlipFace(angle: shownAngle, isBack: true))
             }
         }
-        // Spring for the turn; a short ease for the Reduce Motion crossfade.
-        // `value: isFlipped` scopes the animation to the flip alone.
-        .animation(reduceMotion
-                       ? .easeInOut(duration: 0.25)
-                       : .spring(duration: 0.55, bounce: 0.18),
-                   value: isFlipped)
-        // A horizontal swipe also turns the card. `simultaneousGesture` lets
-        // the enclosing ScrollView keep its vertical drag, and buttons inside
-        // the faces keep their taps (a tap never travels 20 pt).
+        .environment(\.cardTurnDirection) { pendingDirection = $0 }
+        // `value: angle` scopes the spring to turns; the peek animates its
+        // own `teaseAngle` with `withAnimation`.
+        .animation(.spring(duration: 0.55, bounce: 0.18), value: angle)
+        // A horizontal swipe also turns the card, the way the finger went.
+        // `simultaneousGesture` lets the enclosing ScrollView keep its
+        // vertical drag, and buttons inside the faces keep their taps (a tap
+        // never travels 20 pt).
         .simultaneousGesture(
             DragGesture(minimumDistance: 20).onEnded { value in
-                guard CardFlipMath.swipeDirection(translation: value.translation) != nil else { return }
+                guard let direction = CardFlipMath.swipeDirection(translation: value.translation)
+                else { return }
+                pendingDirection = direction
                 isFlipped.toggle()
             },
             isEnabled: enabled
         )
+        .onChange(of: isFlipped) { _, flipped in turn(toBack: flipped) }
+        .task(id: enabled) { await peekIfDue() }
         .sensoryFeedback(.impact(weight: .light), trigger: isFlipped)
+        .sensoryFeedback(.impact(weight: .light, intensity: 0.6), trigger: teaseCount)
+    }
+
+    /// `isFlipped` changed (a swipe, a turn-over control, or the screen):
+    /// turn the card the asked-for way, unless it already shows that face.
+    private func turn(toBack: Bool) {
+        let direction = pendingDirection ?? CardFlipMath.defaultDirection(from: angle)
+        pendingDirection = nil
+        guard (CardFlipMath.visibleFace(angle: angle) == .back) != toBack else { return }
+        angle = CardFlipMath.turnedAngle(from: angle, direction: direction)
+        CardFlipTeaseStore.hasTurnedACard = true
+    }
+
+    /// The peek: once the card is ready, if this person hasn't found the
+    /// turn yet, tilt it most of the way to edge-on and let it spring back.
+    /// Re-runs when `enabled` changes (`.task(id:)`), and is cancelled with
+    /// the view.
+    private func peekIfDue() async {
+        guard teases, enabled, !reduceMotion,
+              CardFlipTease.shouldTease(hasTurnedACard: CardFlipTeaseStore.hasTurnedACard,
+                                        timesShown: CardFlipTeaseStore.timesShown)
+        else { return }
+        #if DEBUG
+        guard snapshotAngle == nil else { return }
+        #endif
+        try? await Task.sleep(for: CardFlipTease.delay)
+        guard !Task.isCancelled, !isFlipped,
+              CardFlipMath.visibleFace(angle: angle) == .front else { return }
+        CardFlipTeaseStore.timesShown += 1
+        teaseCount += 1
+        // Tilt the way an untouched card would turn, then back with a bounce.
+        let peak = CardFlipMath.defaultDirection(from: angle) == .right
+            ? CardFlipTease.peakDegrees : -CardFlipTease.peakDegrees
+        withAnimation(.easeOut(duration: 0.32)) { teaseAngle = peak }
+        try? await Task.sleep(for: .milliseconds(380))
+        withAnimation(.spring(duration: 0.7, bounce: 0.45)) { teaseAngle = 0 }
     }
 }
 
@@ -183,7 +310,6 @@ extension FlipCard {
 private struct FlipFace: ViewModifier, Animatable {
     var angle: Double
     let isBack: Bool
-    let reduceMotion: Bool
 
     nonisolated var animatableData: Double {
         get { angle }
@@ -192,36 +318,24 @@ private struct FlipFace: ViewModifier, Animatable {
 
     func body(content: Content) -> some View {
         let me: CardFlipMath.Face = isBack ? .back : .front
-        if reduceMotion {
-            // Crossfade: no rotation. The angle still animates 0 → 180, but
-            // here it only drives a continuous opacity ramp, so the faces
-            // dissolve into each other. VoiceOver / hits follow whichever
-            // face is past the midpoint.
-            let shown = CardFlipMath.visibleFace(angle: angle) == me
-            content
-                .opacity(CardFlipMath.crossfadeOpacity(angle: angle, face: me))
-                .accessibilityHidden(!shown)
-                .allowsHitTesting(shown)
-        } else {
-            let shown = CardFlipMath.visibleFace(angle: angle) == me
-            content
-                .overlay { sheen }
-                // The back's rotation is offset by 180° (pre-rotated), so at
-                // angle 180 it sits at 0° and reads correctly.
-                .rotation3DEffect(.degrees(isBack ? angle - 180 : angle),
-                                  axis: (x: 0, y: 1, z: 0),
-                                  perspective: CardFlipMath.perspective)
-                .opacity(shown ? 1 : 0)
-                .accessibilityHidden(!shown)
-                .allowsHitTesting(shown)
-        }
+        let shown = CardFlipMath.visibleFace(angle: angle) == me
+        content
+            .overlay { sheen }
+            // The back's rotation is offset by 180° (pre-rotated), so at
+            // ±180 it sits at 0° or −360° and reads correctly.
+            .rotation3DEffect(.degrees(isBack ? angle - 180 : angle),
+                              axis: (x: 0, y: 1, z: 0),
+                              perspective: CardFlipMath.perspective)
+            .opacity(shown ? 1 : 0)
+            .accessibilityHidden(!shown)
+            .allowsHitTesting(shown)
     }
 
     /// A soft diagonal highlight that brightens as the card turns edge-on —
     /// the light catching the card. Clipped to the card's hero radius, never
     /// interactive or read by VoiceOver.
     private var sheen: some View {
-        let progress = min(1, max(0, angle / 180))
+        let progress = CardFlipMath.halfTurnProgress(angle: angle)
         return LinearGradient(
             colors: [.white.opacity(0), .white, .white.opacity(0)],
             startPoint: UnitPoint(x: -0.6 + progress * 1.2, y: 0),
@@ -238,8 +352,8 @@ private struct FlipFace: ViewModifier, Animatable {
 // MARK: - Turn-over button
 
 /// The full-width text control at the bottom of a card face — mono caps in
-/// the card's label vocabulary, with a rotate glyph. A real Button, so
-/// VoiceOver reads "About this plane, button"; the hit target is at least
+/// the card's label vocabulary, with a rotate glyph. VoiceOver reads it
+/// as "About this plane, button"; the hit target is at least
 /// 44 pt tall whatever the card scale.
 struct CardTurnOverButton: View {
     let title: String
@@ -252,25 +366,38 @@ struct CardTurnOverButton: View {
         self.action = action
     }
 
+    /// Inside a FlipCard: report which half was tapped (see `body`).
+    @Environment(\.cardTurnDirection) private var noteTurnDirection
+    @State private var width: CGFloat = 0
+
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 7 * scale) {
-                Image(systemName: "arrow.trianglehead.2.counterclockwise.rotate.90")
-                    .font(.system(size: 11 * scale, weight: .semibold))
-                Text(title.uppercased())
-                    .font(.system(size: 11 * scale, weight: .semibold, design: .monospaced))
-                    .tracking(1.5)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-            }
-            .foregroundStyle(RP.muted)
-            .frame(maxWidth: .infinity, minHeight: 44)
-            .contentShape(Rectangle())
+        HStack(spacing: 7 * scale) {
+            Image(systemName: "arrow.trianglehead.2.counterclockwise.rotate.90")
+                .font(.system(size: 11 * scale, weight: .semibold))
+            Text(title.uppercased())
+                .font(.system(size: 11 * scale, weight: .semibold, design: .monospaced))
+                .tracking(1.5)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
         }
-        .buttonStyle(.plain)
+        .foregroundStyle(RP.muted)
+        .frame(maxWidth: .infinity, minHeight: 44)
+        .contentShape(Rectangle())
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+        // A tap with a location instead of a Button, so the card turns the
+        // way the tapped side would (2026-10-27): the side is reported to
+        // the enclosing FlipCard first, then the action turns the card.
+        .onTapGesture { location in
+            noteTurnDirection?(CardFlipMath.tapDirection(x: location.x, width: width))
+            action()
+        }
+        // What the Button gave VoiceOver: one element, a button, that acts.
         // "ABOUT THIS PLANE" → "About this plane": VoiceOver would otherwise
         // spell an all-caps label out or read it shouty.
+        .accessibilityElement(children: .ignore)
         .accessibilityLabel(Self.accessibilityLabel(for: title))
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { action() }
     }
 
     /// Sentence case for VoiceOver: "ABOUT THIS PLANE" → "About this plane".

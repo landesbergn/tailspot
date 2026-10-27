@@ -53,10 +53,6 @@ struct SettledCatchCard: View {
     /// (CatchDetailView, 2026-10-26 — it replaced the CAUGHT block that
     /// floated under the card). nil (the share card) leaves it out.
     var caughtAt: Date? = nil
-    /// Set by the swipe card-back pagers: keep the turn-over button's room
-    /// without drawing it, so the card is the same size as its back (see
-    /// `CardBackStyles.swift`). False everywhere else.
-    @Environment(\.catchCardReservesTurnOverSpace) private var reservesTurnOverSpace
 
     private var base: Int { plane.rarity.basePoints }
     private var bonus: Int { isFirstOfType ? Int((Double(base) * 0.5).rounded()) : 0 }
@@ -151,7 +147,7 @@ struct SettledCatchCard: View {
                 }
             }
             .padding(.horizontal, hPad)
-            .padding(.bottom, onTurnOver == nil && !reservesTurnOverSpace ? 22 * scale : 6 * scale)
+            .padding(.bottom, onTurnOver == nil ? 22 * scale : 6 * scale)
             // Everything below the hero reads as one card (name, tier,
             // stats, route, ledger). The hero stays OUTSIDE the combine so
             // its Planespotters link remains an actionable element.
@@ -162,11 +158,6 @@ struct SettledCatchCard: View {
                 CardTurnOverButton(title: "ABOUT THIS PLANE", scale: scale, action: onTurnOver)
                     .padding(.horizontal, hPad)
                     .padding(.bottom, 8 * scale)
-            } else if reservesTurnOverSpace {
-                CardTurnOverButton(title: "ABOUT THIS PLANE", scale: scale, action: {})
-                    .padding(.horizontal, hPad)
-                    .padding(.bottom, 8 * scale)
-                    .hidden()
             }
         }
         .frame(width: width)
