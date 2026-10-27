@@ -46,9 +46,28 @@ req() {
 }
 
 posthog_get()  { req POSTHOG_PERSONAL_API_KEY Bearer "$POSTHOG/$1"; }
+# {noah} in a query becomes Noah's quoted person_id, so callers can single-quote
+# HogQL (keeping $app_build etc. away from the shell). Unset is an error, never
+# a silent `person_id != ''` that excludes nobody.
 posthog_sql()  {
+  local q="$1"
+  case "$q" in *"{noah}"*)
+    [ -n "${TAILSPOT_NOAH_PERSON_ID:-}" ] ||
+      { echo "obs: {noah} used but TAILSPOT_NOAH_PERSON_ID is unset (set it in the environment)" >&2; return 2; }
+    # Via a variable: bash 3.2 keeps backslashes from an inline \' replacement.
+    local pattern="{noah}" quoted="'$TAILSPOT_NOAH_PERSON_ID'"
+    q="${q//"$pattern"/$quoted}" ;;
+  esac
   req POSTHOG_PERSONAL_API_KEY Bearer -H "Content-Type: application/json" \
-    -d "$(jq -nc --arg q "$1" '{query: {kind: "HogQLQuery", query: $q}}')" "$POSTHOG/query/"
+    -d "$(jq -nc --arg q "$q" '{query: {kind: "HogQLQuery", query: $q}}')" "$POSTHOG/query/"
+}
+
+# then_jq <filter> <command...>: runs the command and pipes its JSON through
+# jq on success; on failure prints the raw error body instead of jq'ing it.
+then_jq() {
+  local filter="$1" out; shift
+  if out=$("$@"); then jq "${JQ_FLAGS[@]+"${JQ_FLAGS[@]}"}" "$filter" <<<"$out"
+  else local rc=$?; printf '%s\n' "$out" >&2; return "$rc"; fi
 }
 sentry_get()   { req SENTRY_AUTH_TOKEN Bearer "$SENTRY/$1"; }
 # Fly's logs endpoint only accepts the "FlyV1 <token>" scheme (Bearer gets a
@@ -63,6 +82,7 @@ probe() {  # probe <label> <command...>
   else echo "$1 FAILED: $(printf '%s' "$out" | tr '\n' ' ' | cut -c1-140)"; fi
 }
 
+JQ_FLAGS=()
 cmd="${1:-}"; [ $# -gt 0 ] && shift
 case "$cmd" in
   check)
@@ -71,17 +91,20 @@ case "$cmd" in
     probe fly-machines fly_mach_get "apps/tailspot-api/machines"
     probe fly-logs     fly_api_get "apps/tailspot-api/logs"
     ;;
-  posthog-sql)  posthog_sql "${1:?HogQL query}" | jq '{columns, results}' ;;
+  # hasMore=true means HogQL's default LIMIT truncated the rows.
+  posthog-sql)  then_jq '{columns, results, hasMore}' posthog_sql "${1:?HogQL query}" ;;
   posthog)      posthog_get "${1:?path}" ;;
   sentry)       sentry_get "${1:?path}" ;;
   fly)          fly_mach_get "${1:?path}" ;;
   fly-machines)
-    fly_mach_get "apps/${1:?app}/machines" |
-      jq -c '.[] | {id, state, region, updated_at, image: .config.image}'
+    JQ_FLAGS=(-c); then_jq '.[] | {id, state, region, updated_at, image: .config.image}' \
+      fly_mach_get "apps/${1:?app}/machines"
     ;;
   fly-logs)
-    fly_api_get "apps/${1:?app}/logs${2:+?next_token=$2}" |
-      jq -r '(.data[].attributes | "\(.timestamp) \(.region) \(.level) \(.message)"), "next_token: \(.meta.next_token)"'
+    page=""
+    [ -n "${2:-}" ] && page="?next_token=$(jq -rn --arg t "$2" '$t | @uri')"
+    JQ_FLAGS=(-r); then_jq '(.data[].attributes | "\(.timestamp) \(.region) \(.level) \(.message)"), "next_token: \(.meta.next_token)"' \
+      fly_api_get "apps/${1:?app}/logs$page"
     ;;
   *) sed -n '2,21p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac

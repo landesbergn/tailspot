@@ -66,7 +66,8 @@ query endpoint with only `query:read`.
 
 ```
 bin/obs check
-bin/obs posthog-sql "select event, count() from events where timestamp > now() - interval 1 day group by event order by 2 desc limit 20"
+bin/obs posthog-sql 'select event, count() from events where timestamp > now() - interval 1 day group by event order by 2 desc limit 20'
+bin/obs posthog-sql 'select count(distinct person_id) from events where person_id != {noah} and timestamp > now() - interval 7 day'
 bin/obs posthog "session_recordings/?limit=5"
 bin/obs sentry "organizations/noah-lc/issues/?query=is:unresolved&statsPeriod=24h"
 bin/obs sentry "organizations/noah-lc/issues/<id>/events/latest/"
@@ -81,14 +82,16 @@ bin/obs fly-logs tailspot-api            # then: bin/obs fly-logs tailspot-api <
   The feed alerters use the fingerprints `position-feed-fallback` (degraded)
   and `position-feed-outage` (users get 503). The uptime monitor watches
   `https://api.tailspot.app/readyz`.
-- PostHog: project 466448, US cloud. The query endpoint can be slow; `bin/obs`
-  allows 60 s.
+- PostHog: project 466448, US cloud. **Single-quote HogQL** so the shell leaves
+  `$app_build`, `$is_testflight` etc. alone. `{noah}` expands to Noah's quoted
+  person_id (it errors if `TAILSPOT_NOAH_PERSON_ID` is unset). Output keeps
+  `hasMore`: `true` means HogQL's default LIMIT (100) cut the rows, so add an
+  explicit `limit`. The query endpoint can be slow; `bin/obs` allows 60 s.
 
 ## Traps that make Tailspot numbers wrong
 
 - **Exclude Noah before any per-user number.** Filter
-  `person_id != '$TAILSPOT_NOAH_PERSON_ID'` (the full UUID, never a short
-  prefix) and/or `properties.$app_build not in ('1', '1.0')`: only his phone
+  `person_id != {noah}` (the full UUID, never a short prefix) and/or `properties.$app_build not in ('1', '1.0')`: only his phone
   runs `bin/deploy` dev builds, so build 1 / 1.0 is him.
 - **HogQL datetime literals are Pacific**, the project timezone. A UTC window
   silently returns nothing and looks like missing data. Write times in Pacific
