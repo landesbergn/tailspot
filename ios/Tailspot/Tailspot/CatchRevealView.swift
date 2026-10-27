@@ -723,6 +723,21 @@ struct CatchRevealView: View {
     /// The streak stamp's day count, whether threaded at presentation or
     /// delivered late through the shell's loader.
     private var liveStreakDays: Int? { loader?.streakDays ?? streakDays }
+    /// The early shell is up and the pipeline hasn't delivered yet.
+    private var stillLoading: Bool { loader.map { !$0.pipelineFinished } ?? false }
+
+    /// Everything the pipeline delivers after the card is already on screen
+    /// (route, photo, first-of-type, streak, and with them Share and the
+    /// turn-over). Watched as one value so they land as ONE animated change
+    /// instead of popping in, which read as glitchy on the device.
+    private struct LateLanding: Equatable {
+        var plane: CardPlane
+        var streakDays: Int?
+        var finished: Bool
+    }
+    private var lateLanding: LateLanding {
+        LateLanding(plane: livePlane, streakDays: liveStreakDays, finished: !stillLoading)
+    }
 
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
 
@@ -1216,6 +1231,10 @@ struct CatchRevealView: View {
                     .contentShape(Rectangle())
                     .onTapGesture {}
             }
+            // The late pipeline data lands as one smooth change (see
+            // `lateLanding`). Scoped by value, so the ceremony's own
+            // frame-by-frame updates aren't animated.
+            .animation(.smooth(duration: 0.45), value: lateLanding)
         }, cta: {
             // The streak lives INSIDE the card (the entry-stamp row) since
             // 2026-08-26 — as a free line here it crowded the card's outline
@@ -1784,6 +1803,13 @@ struct CatchRevealView: View {
                     }
                 } else {
                     realRouteOrDist(hasRoute: hasRoute, scale: scale, accent: accent)
+                        // While the catch is still saving, the shell has no
+                        // route yet (it lands with the finished snapshot), so
+                        // DIST holds the taller ROUTE row's height: the card
+                        // doesn't grow when the route arrives (Noah's device
+                        // recording, 2026-10-26). 58 × scale = the ROUTE
+                        // cell's label + codes + city line.
+                        .frame(minHeight: stillLoading ? 58 * scale : nil, alignment: .topLeading)
                 }
             }
             .opacity(ss(0.66, 0.82, t))

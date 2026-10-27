@@ -10,9 +10,11 @@
 //      sky. The photo itself links to its source page (Planespotters TOS;
 //      Commons asks for a link to the file page).
 //   2. The model name.
-//   3. YOU AND THIS TYPE — computed from the Hangar (`TypeHistory`).
-//   4. SPECS — bundled Wikidata facts (`TypeInfo`). Missing facts are
-//      omitted, never guessed; a section with nothing in it disappears.
+//   3. You and this type, no header (Noah, 2026-10-26: the rules between
+//      sections are enough) — computed from the Hangar (`TypeHistory`).
+//   4. Specs, no header, on one row — bundled Wikidata facts (`TypeInfo`).
+//      Missing facts are omitted, never guessed; a section with nothing in
+//      it disappears.
 //   5. The Wikipedia summary, unedited, with its CC BY-SA credit and a
 //      "Read more" link.
 //   6. BACK TO CATCH.
@@ -210,7 +212,7 @@ nonisolated enum CardBackFormat {
         var cells: [CardBackCell] = []
         if let y = info.firstFlightYear, y > 0 {
             // A year is not a quantity: no grouping ("1967", not "1,967").
-            cells.append(CardBackCell(label: "FIRST FLIGHT", value: String(y)))
+            cells.append(CardBackCell(label: "FIRST FLEW", value: String(y)))
         }
         if let n = info.numberBuilt, n > 0 {
             cells.append(CardBackCell(label: "BUILT", value: numberBuilt(n, locale: locale)))
@@ -328,7 +330,6 @@ struct CatchCardBack: View {
 
                 if hasHistory {
                     Rectangle().fill(RP.rule).frame(height: 1)
-                    sectionLabel("YOU AND THIS TYPE", scale: scale)
                     VStack(spacing: 6 * scale) {
                         if let first { ledgerLine("FIRST CAUGHT", first, scale: scale) }
                         // The catch log: who was flying the ones you caught.
@@ -344,7 +345,6 @@ struct CatchCardBack: View {
 
                 if !specs.isEmpty {
                     Rectangle().fill(RP.rule).frame(height: 1)
-                    sectionLabel("SPECS", scale: scale)
                     specGrid(specs, scale: scale)
                 }
 
@@ -508,14 +508,6 @@ struct CatchCardBack: View {
 
     // MARK: Sections
 
-    private func sectionLabel(_ text: String, scale: CGFloat) -> some View {
-        Text(text)
-            .font(.system(size: 9.5 * scale, weight: .semibold, design: .monospaced))
-            .tracking(1.5)
-            .foregroundStyle(RP.faint)
-            .accessibilityAddTraits(.isHeader)
-    }
-
     /// Label left, value right — the front ledger's shape, quieter.
     private func ledgerLine(_ label: String, _ value: String, scale: CGFloat,
                             lines: Int = 1) -> some View {
@@ -553,20 +545,18 @@ struct CatchCardBack: View {
     }
 
     /// Two-column grid of the known specs, in the front's statCell style.
+    /// All the specs on one row (Noah, 2026-10-26). Each cell keeps its
+    /// natural width and the leftover space is shared out between them —
+    /// equal columns squeezed "FIRST FLEW" smaller than its neighbours.
+    /// Four cells (with BUILT) fit the detail card's width with ~8 pt
+    /// between the middle two; three leave plenty of room.
     private func specGrid(_ cells: [CardBackCell], scale: CGFloat) -> some View {
-        let rows = stride(from: 0, to: cells.count, by: 2).map { Array(cells[$0..<min($0 + 2, cells.count)]) }
-        return VStack(alignment: .leading, spacing: 8 * scale) {
-            ForEach(rows.indices, id: \.self) { r in
-                HStack(spacing: 14 * scale) {
-                    ForEach(rows[r], id: \.label) { cell in
-                        specCell(cell, scale: scale)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    if rows[r].count == 1 {
-                        Color.clear.frame(maxWidth: .infinity, maxHeight: 1)
-                    }
-                }
+        HStack(alignment: .top, spacing: 0) {
+            ForEach(Array(cells.enumerated()), id: \.element.label) { i, cell in
+                if i > 0 { Spacer(minLength: 8 * scale) }
+                specCell(cell, scale: scale).fixedSize()
             }
+            if cells.count == 1 { Spacer(minLength: 0) }
         }
     }
 
