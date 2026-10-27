@@ -69,6 +69,9 @@ nonisolated enum SwipePeekMath {
 
 struct SwipePeekCard<Front: View, Back: View>: View {
     @Binding var showingBack: Bool
+    /// False while the host isn't ready for a turn-over (the catch reveal
+    /// before it settles): no swipe or drag, and no tease of the back.
+    let enabled: Bool
     private let front: Front
     private let back: Back
 
@@ -86,9 +89,10 @@ struct SwipePeekCard<Front: View, Back: View>: View {
     @State private var restingPage: CardPagerMath.Page?
     @State private var position = ScrollPosition()
 
-    init(showingBack: Binding<Bool>,
+    init(showingBack: Binding<Bool>, enabled: Bool = true,
          @ViewBuilder front: () -> Front, @ViewBuilder back: () -> Back) {
         self._showingBack = showingBack
+        self.enabled = enabled
         let initial = CardPagerMath.page(showingBack: showingBack.wrappedValue)
         self._page = State(initialValue: initial)
         self._restingPage = State(initialValue: initial)
@@ -126,6 +130,9 @@ struct SwipePeekCard<Front: View, Back: View>: View {
                     }
                 }
                 .modifier(PeekDim(reduceMotion: reduceMotion))
+                // No peeking edge until the host enables the turn-over.
+                .opacity(enabled ? 1 : 0)
+                .animation(.easeOut(duration: 0.25), value: enabled)
                 .accessibilityElement(children: .contain)
                 .accessibilityAction(named: "Back to catch") { showingBack = false }
                 .accessibilityHidden(page != .back)
@@ -135,6 +142,7 @@ struct SwipePeekCard<Front: View, Back: View>: View {
         .scrollIndicators(.hidden)
         .scrollClipDisabled()
         .scrollTargetBehavior(.viewAligned(limitBehavior: .alwaysByOne))
+        .scrollDisabled(!enabled)
         .scrollPosition($position)
         // `onScrollGeometryChange` runs `of:` on every scroll frame but only
         // calls `action` when its result changes — here, when the scroll
@@ -149,13 +157,13 @@ struct SwipePeekCard<Front: View, Back: View>: View {
         // neighbour sits just outside, in the gutter.
         .frame(width: frontSize.width > 0 ? frontSize.width : nil)
         .overlay(alignment: .trailing) {
-            peekTab(edge: .trailing, shown: restingPage == .front) {
+            peekTab(edge: .trailing, shown: enabled && restingPage == .front) {
                 showingBack = true
             }
             .offset(x: gutter)
         }
         .overlay(alignment: .leading) {
-            peekTab(edge: .leading, shown: restingPage == .back) {
+            peekTab(edge: .leading, shown: enabled && restingPage == .back) {
                 showingBack = false
             }
             .offset(x: -gutter)

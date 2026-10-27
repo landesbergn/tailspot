@@ -287,6 +287,9 @@ nonisolated enum RealFlipMath {
 
 struct RealisticFlipCard<Front: View, Back: View>: View {
     @Binding var showingBack: Bool
+    /// False while the host isn't ready for a turn-over (the catch reveal
+    /// before it settles): no swipe or drag, and no tease of the back.
+    let enabled: Bool
     private let front: Front
     private let back: Back
 
@@ -322,9 +325,10 @@ struct RealisticFlipCard<Front: View, Back: View>: View {
     fileprivate var snapshotAngle: Double? = nil
     #endif
 
-    init(showingBack: Binding<Bool>,
+    init(showingBack: Binding<Bool>, enabled: Bool = true,
          @ViewBuilder front: () -> Front, @ViewBuilder back: () -> Back) {
         self._showingBack = showingBack
+        self.enabled = enabled
         // `State(initialValue:)` seeds @State from an init argument; after the
         // first render SwiftUI owns the value and ignores this.
         self._angle = State(initialValue: showingBack.wrappedValue ? 180 : 0)
@@ -396,7 +400,7 @@ struct RealisticFlipCard<Front: View, Back: View>: View {
         // never travels 12 pt, so buttons and photo taps are untouched; a
         // vertical drag is classified `.ignore` on its first update and left
         // to the scroll view.
-        .simultaneousGesture(turnGesture)
+        .simultaneousGesture(turnGesture, isEnabled: enabled)
         .onChange(of: showingBack) { _, back in
             // Taps on the faces' buttons and any other binding change animate
             // the full turn. During a drag the drag owns the angle.

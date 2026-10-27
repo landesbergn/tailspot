@@ -86,6 +86,9 @@ nonisolated struct PullUpScrollState: Equatable, Sendable {
 
 struct PullUpCard<Front: View, Back: View>: View {
     @Binding var showingBack: Bool
+    /// False while the host isn't ready for a turn-over (the catch reveal
+    /// before it settles): no swipe or drag, and no tease of the back.
+    let enabled: Bool
     private let front: Front
     private let back: Back
 
@@ -101,9 +104,10 @@ struct PullUpCard<Front: View, Back: View>: View {
     @State private var progress: Double
     @State private var position = ScrollPosition()
 
-    init(showingBack: Binding<Bool>,
+    init(showingBack: Binding<Bool>, enabled: Bool = true,
          @ViewBuilder front: () -> Front, @ViewBuilder back: () -> Back) {
         self._showingBack = showingBack
+        self.enabled = enabled
         let initial = CardPagerMath.page(showingBack: showingBack.wrappedValue)
         self._page = State(initialValue: initial)
         self._restingPage = State(initialValue: initial)
@@ -142,11 +146,16 @@ struct PullUpCard<Front: View, Back: View>: View {
                             .accessibilityHidden(page != .back)
                     }
                 }
+                // No tab or peek until the host enables the turn-over.
+                .opacity(enabled ? 1 : 0)
+                .allowsHitTesting(enabled)
+                .animation(.easeOut(duration: 0.25), value: enabled)
             }
             .scrollTargetLayout()
         }
         .scrollIndicators(.hidden)
         .scrollTargetBehavior(.viewAligned(limitBehavior: .alwaysByOne))
+        .scrollDisabled(!enabled)
         .scrollPosition($position)
         // ONE scroll watcher reporting both values: a second
         // `onScrollGeometryChange` on the same scroll view never fired on

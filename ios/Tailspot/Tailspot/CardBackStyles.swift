@@ -3,8 +3,9 @@
 //  Tailspot
 //
 //  Design experiment (2026-10-26): four ways to get from the catch card to
-//  its back (the closeup + "about this plane"), switchable on the catch
-//  detail screen in Debug builds so each can be tried by feel on a phone.
+//  its back (the closeup + "about this plane"), used by both the catch
+//  detail screen and the catch reveal, switchable from the detail screen
+//  in Debug builds so each can be tried by feel on a phone.
 //  Release builds always use `.flip`, the shipped behaviour; the switch is
 //  never read there.
 //
@@ -78,14 +79,18 @@ enum CardBackStyle: String, CaseIterable, Identifiable, Sendable {
 struct CardBackPresenter<Front: View, Back: View>: View {
     let style: CardBackStyle
     @Binding var showingBack: Bool
+    /// False while the host isn't ready for a turn-over (the catch reveal
+    /// before it settles); passed through to the style.
+    let enabled: Bool
     private let front: Front
     private let back: Back
 
-    init(style: CardBackStyle, showingBack: Binding<Bool>,
+    init(style: CardBackStyle, showingBack: Binding<Bool>, enabled: Bool = true,
          @ViewBuilder front: (_ showBack: @escaping () -> Void) -> Front,
          @ViewBuilder back: () -> Back) {
         self.style = style
         self._showingBack = showingBack
+        self.enabled = enabled
         let binding = showingBack
         self.front = front({ binding.wrappedValue = true })
         self.back = back()
@@ -94,13 +99,13 @@ struct CardBackPresenter<Front: View, Back: View>: View {
     var body: some View {
         switch style {
         case .flip:
-            FlipCard(isFlipped: $showingBack) { front } back: { back }
+            FlipCard(isFlipped: $showingBack, enabled: enabled) { front } back: { back }
         case .realFlip:
-            RealisticFlipCard(showingBack: $showingBack) { front } back: { back }
+            RealisticFlipCard(showingBack: $showingBack, enabled: enabled) { front } back: { back }
         case .swipeLeft:
-            SwipePeekCard(showingBack: $showingBack) { front } back: { back }
+            SwipePeekCard(showingBack: $showingBack, enabled: enabled) { front } back: { back }
         case .swipeUp:
-            PullUpCard(showingBack: $showingBack) { front } back: { back }
+            PullUpCard(showingBack: $showingBack, enabled: enabled) { front } back: { back }
         }
     }
 }

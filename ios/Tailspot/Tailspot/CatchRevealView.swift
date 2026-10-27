@@ -801,6 +801,8 @@ struct CatchRevealView: View {
     /// Which face of the card is up. FlipCard toggles it on a swipe too, so
     /// side effects hang off `onChange(of: cardFlipped)`.
     @State private var cardFlipped = false
+    /// How the card gets to its back: the Debug-picked style, read once.
+    @State private var cardBackStyle = CardBackStyle.current
     /// A turn to the back reported once its closeup resolves
     /// (`CardTurnAnalytics.sendsImmediately`).
     @State private var pendingTurnReport = false
@@ -1154,10 +1156,16 @@ struct CatchRevealView: View {
             // swipe-to-flip gated by `enabled` rather than an if/else, for the
             // same structural-identity reason. Everything below this comment
             // down to `back:` is the FRONT, exactly as before.
-            FlipCard(isFlipped: $cardFlipped,
-                     enabled: RevealCardTaps.turnOverAvailable(shareAvailable: shareAvailable)) {
+            //
+            // Since 2026-10-26 it's the Debug-switchable card-back style
+            // (CardBackStyles.swift; Release is always the flip), the same
+            // one the detail screen uses. The swipe styles show a tease of
+            // the back instead of the ABOUT THIS PLANE button.
+            CardBackPresenter(style: cardBackStyle, showingBack: $cardFlipped,
+                              enabled: RevealCardTaps.turnOverAvailable(shareAvailable: shareAvailable)) { _ in
                 card(t: t, bt: bt, width: width, render: render, shareVisible: shareAvailable,
-                     turnOverVisible: RevealCardTaps.turnOverAvailable(shareAvailable: shareAvailable))
+                     turnOverVisible: cardBackStyle.frontShowsTurnOverButton
+                        && RevealCardTaps.turnOverAvailable(shareAvailable: shareAvailable))
                     // Once the card takes hits (below), a tap on its body that no
                     // control claims (Share, photo zoom, chips) would otherwise
                     // be swallowed, so it does what the catcher behind would:
@@ -1200,7 +1208,8 @@ struct CatchRevealView: View {
             } back: {
                 CatchCardBack(model: backModel, width: width,
                               onOpenURL: { openURL($0) },
-                              onTurnBack: { cardFlipped = false })
+                              onTurnBack: cardBackStyle.backShowsTurnBackButton
+                                  ? { cardFlipped = false } : nil)
                     // Swallow body taps: without this a tap on the back's
                     // empty space would fall through to the dismiss catcher
                     // behind and end the reveal. Its buttons still win.
