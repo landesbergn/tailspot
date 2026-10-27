@@ -43,13 +43,13 @@ struct CardBackStylesSnapshotTests {
                 CardBackPresenter(style: style, showingBack: $showingBack) { showBack in
                     SettledCatchCard(plane: CardBackStylesSnapshotTests.plane,
                                      isFirstOfType: false,
-                                     width: CardBackStylesSnapshotTests.cardWidth - style.cardWidthInset,
+                                     width: CardBackStylesSnapshotTests.cardWidth,
                                      onPhotoTap: nil,
                                      onTurnOver: style.frontShowsTurnOverButton ? showBack : nil,
                                      caughtAt: Date(timeIntervalSince1970: 1_793_040_000))
                 } back: {
                     CatchCardBack(model: BackFixtures.b738,
-                                  width: CardBackStylesSnapshotTests.cardWidth - style.cardWidthInset,
+                                  width: CardBackStylesSnapshotTests.cardWidth,
                                   onOpenURL: { _ in }, onTurnBack: { showingBack = false })
                 }
             }

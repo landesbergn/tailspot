@@ -51,10 +51,6 @@ enum CardBackStyle: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
-    /// How much narrower than the usual card this style draws it. Swipe
-    /// left needs a wider side gutter for the next card to peek into; the
-    /// card fills the width otherwise, which left only a ~14 pt sliver.
-    var cardWidthInset: CGFloat { self == .swipeLeft ? 44 : 0 }
 
     #if DEBUG
     static let defaultsKey = "tailspot.debug.cardBackStyle"

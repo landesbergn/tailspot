@@ -98,7 +98,7 @@ struct CatchDetailView: View {
                 VStack(spacing: 14) {
                     // Direction B (2026-07-05): the reveal card at rest IS
                     // the detail screen — one card design across the app.
-                    let cardWidth = min(geo.size.width - 36, 420) - cardBackStyle.cardWidthInset
+                    let cardWidth = min(geo.size.width - 36, 420)
                     // How the card gets to its back is a Debug-switchable
                     // design experiment (`CardBackStyles.swift`); Release
                     // is always the shipped flip.

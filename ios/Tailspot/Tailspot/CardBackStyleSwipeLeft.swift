@@ -48,9 +48,9 @@ import os
 /// The carousel's own numbers; page bookkeeping is `CardPagerMath`.
 /// `nonisolated` — plain math, no UI state.
 nonisolated enum SwipePeekMath {
-    /// Space between the two cards. The peek visible on screen is the side
-    /// gutter minus this.
-    static let gap: CGFloat = 10
+    /// Space between the two cards. The card is full width, so the peek
+    /// visible on screen is the 18 pt side gutter minus this.
+    static let gap: CGFloat = 6
     /// Opacity of the card that's off to the side (it sits on the dark
     /// screen background, so lower opacity reads as dimmed).
     static let peekOpacity: Double = 0.55
