@@ -78,6 +78,19 @@ describe("UpstreamBudget", () => {
     expect(budget.tryTake()).toBe(false);
   });
 
+  it("take(intervalMs) waits out a near miss but not a queued waiter", async () => {
+    const clock = fakeTime();
+    const budget = new UpstreamBudget({ ratePerSecond: 1, now: clock.now, sleep: async () => {} });
+    expect(budget.tryTake()).toBe(true);
+    clock.advance(400);
+    // The last request went out 400 ms ago: the next slot is 600 ms away.
+    expect(await budget.take(budget.intervalMs)).toBe(true);
+    // That caller now holds the next slot, so a second one would be two
+    // slots out and is refused without reserving anything.
+    expect(await budget.take(budget.intervalMs)).toBe(false);
+    expect(budget.granted).toBe(2);
+  });
+
   it("rejects a non-positive rate", () => {
     expect(() => new UpstreamBudget({ ratePerSecond: 0 })).toThrow();
     expect(() => new UpstreamBudget({ ratePerSecond: Number.NaN })).toThrow();

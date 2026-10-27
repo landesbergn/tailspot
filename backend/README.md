@@ -113,9 +113,11 @@ Behind the route:
   surface as a 500.
 - **Upstream request budget** (2026-10-21) — at most `UPSTREAM_RPS` (default
   0.8) feed requests per second leave this process, under adsb.fi's 1/s. When
-  the budget is spent, a tile up to 30 s old is served from cache instead of
-  refreshed, and a tile with nothing usable waits up to 2 s for a slot (then
-  503s). Refreshes yield to cold tiles. See `src/providers/upstreamBudget.ts`.
+  the budget is spent, a tile up to 30 s old waits at most one slot (1.25 s)
+  to refresh and is otherwise served from cache, and a tile with nothing
+  usable waits up to 2 s for a slot (then 503s). Requests take slots in
+  arrival order; a refresh never queues behind another waiter, so refreshes
+  yield to cold tiles under load. See `src/providers/upstreamBudget.ts`.
 - **Circuit breakers** (2026-10-21) — each feed sits behind a breaker. A 429 or
   403 opens it at once for the upstream's `Retry-After` (else 30 s, clamped to
   10 s–10 min); three other failures in a row open it for 30 s. While open, the

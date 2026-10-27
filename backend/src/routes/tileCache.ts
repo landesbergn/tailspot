@@ -99,9 +99,10 @@ export interface UpstreamFetchEvent {
 
 /**
  * Optional cap on upstream requests (see providers/upstreamBudget.ts). With it,
- * a tile past its TTL is refreshed only when a slot is free; otherwise the
- * cached snapshot is served a little longer (up to `maxThrottledAgeSeconds`).
- * A tile with nothing servable waits up to `maxWaitMs` for a slot.
+ * a tile past its TTL waits at most one budget interval for a slot to refresh;
+ * otherwise the cached snapshot is served a little longer (up to
+ * `maxThrottledAgeSeconds`). A tile with nothing servable waits up to
+ * `maxWaitMs` for a slot.
  */
 export interface TileCacheThrottle {
   budget: UpstreamBudget;
@@ -273,25 +274,32 @@ export class TileCache {
       }
     }
 
-    // 3. Budget check (when configured). A refresh with a recent-enough cache
-    // takes a slot only if one is free right now, else serves the cache; a
-    // request with nothing servable waits for a slot inside the shared fetch
-    // below, so concurrent callers for the same tile wait once, together.
-    let waitForSlot = false;
+    // 3. Budget check (when configured). Every request takes the next slot in
+    // arrival order, inside the shared fetch below, so concurrent callers for
+    // the same tile wait once, together. How long it may wait depends on what
+    // it could serve instead:
+    //   - nothing servable (cold, or cache past maxAge): up to maxWaitMs;
+    //   - a recent-enough cache (a refresh): one slot at most, so it waits
+    //     out a request that just went out but never queues behind one that
+    //     is still waiting. Past that it serves the cache.
+    // The refresh used to take a slot only if one was free that instant.
+    // Two phones polling on the same 10 s rhythm less than a slot apart then
+    // collided on every poll, and one of them refreshed only every 30 s
+    // (2026-10-26: a "budget saturated" alert at ~0.12 fetches/s).
+    let slotWaitMs: number | undefined;
+    let refreshAge: number | undefined;
     if (this.throttle) {
+      const maxWaitMs = this.throttle.maxWaitMs ?? DEFAULT_THROTTLE_MAX_WAIT_MS;
       const maxAge = Math.min(
         this.throttle.maxThrottledAgeSeconds ?? DEFAULT_MAX_THROTTLED_AGE_SECONDS,
         this.config.staleMaxSeconds,
       );
       const age = cached ? nowSec - cached.storedAt : undefined;
       if (cached && age !== undefined && age < maxAge) {
-        if (!this.throttle.budget.tryTake()) {
-          this.notifyThrottled({ kind: "served-cache", tile: key, cacheAgeSeconds: age });
-          return { snapshot: cached.snapshot, stale: true };
-        }
-        this.notifyGranted();
+        refreshAge = age;
+        slotWaitMs = Math.min(this.throttle.budget.intervalMs, maxWaitMs);
       } else {
-        waitForSlot = true;
+        slotWaitMs = maxWaitMs;
       }
     }
 
@@ -299,13 +307,16 @@ export class TileCache {
     // Fetch the EXPANDED tile (not the raw request) so the cached snapshot is
     // valid for every bbox that maps to this key — see tileBbox() doc.
     const fetchPromise = (async () => {
-      if (waitForSlot && this.throttle) {
-        const ok = await this.throttle.budget.take(
-          this.throttle.maxWaitMs ?? DEFAULT_THROTTLE_MAX_WAIT_MS,
-        );
+      if (slotWaitMs !== undefined && this.throttle) {
+        const ok = await this.throttle.budget.take(slotWaitMs);
         if (!ok) {
           // Reported here, once per shared wait, not in each waiter's catch.
-          this.notifyThrottled({ kind: "refused", tile: key });
+          // Either way fallbackOrThrow serves the cache when there is one.
+          this.notifyThrottled(
+            refreshAge !== undefined
+              ? { kind: "served-cache", tile: key, cacheAgeSeconds: refreshAge }
+              : { kind: "refused", tile: key },
+          );
           throw new BudgetExhaustedError();
         }
         this.notifyGranted();

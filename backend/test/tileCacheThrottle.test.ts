@@ -7,7 +7,11 @@ const BAY: Bbox = { lamin: 37.6, lomin: -122.5, lamax: 37.9, lomax: -122.2 };
 const NYC: Bbox = { lamin: 40.6, lomin: -74.1, lamax: 40.8, lomax: -73.9 };
 const LON: Bbox = { lamin: 51.4, lomin: -0.5, lamax: 51.6, lomax: -0.3 };
 
-function setup(opts: { maxWaitMs?: number } = {}) {
+/**
+ * `holdClock` makes waits resolve without moving time, so callers started
+ * together really are queued at once; by default a wait advances the clock.
+ */
+function setup(opts: { maxWaitMs?: number; holdClock?: boolean } = {}) {
   let t = 1_000_000_000;
   const calls: Bbox[] = [];
   const provider: PositionProvider = {
@@ -25,7 +29,7 @@ function setup(opts: { maxWaitMs?: number } = {}) {
     ratePerSecond: 1,
     now,
     sleep: async (ms) => {
-      t += ms;
+      if (!opts.holdClock) t += ms;
     },
   });
   const cache = new TileCache(
@@ -49,6 +53,7 @@ function setup(opts: { maxWaitMs?: number } = {}) {
     events,
     budget,
     granted: () => granted,
+    now,
     advance: (ms: number) => {
       t += ms;
     },
@@ -56,17 +61,54 @@ function setup(opts: { maxWaitMs?: number } = {}) {
 }
 
 describe("TileCache with an upstream budget", () => {
-  it("serves a recent cache instead of refreshing when no slot is free", async () => {
-    const s = setup();
+  it("serves a recent cache instead of refreshing when another request is already waiting", async () => {
+    const s = setup({ holdClock: true });
     await s.cache.get(BAY); // slot 1
     s.advance(11_000); // BAY is past its TTL
-    await s.cache.get(NYC); // takes the slot that is free now
-    const result = await s.cache.get(BAY); // refresh wanted, no slot
-    expect(result.stale).toBe(true);
-    expect(s.calls).toHaveLength(2);
+    // Started together: NYC takes the slot that is free now, LON queues for
+    // the next one, so BAY's refresh would be third in line.
+    const [, , bay] = await Promise.all([s.cache.get(NYC), s.cache.get(LON), s.cache.get(BAY)]);
+    expect(bay.stale).toBe(true);
+    expect(s.calls).toHaveLength(3);
     expect(s.events).toEqual([
       expect.objectContaining({ kind: "served-cache", cacheAgeSeconds: 11 }),
     ]);
+  });
+
+  it("waits out a request that just went out instead of serving the old cache", async () => {
+    const s = setup();
+    await s.cache.get(BAY);
+    s.advance(11_000);
+    await s.cache.get(NYC); // takes the slot that is free now
+    const result = await s.cache.get(BAY); // next slot is 1 s away: waits for it
+    expect(result.stale).toBe(false);
+    expect(s.calls).toHaveLength(3);
+    expect(s.events).toHaveLength(0);
+  });
+
+  it("keeps two tiles polled half a slot apart fresh on every poll", async () => {
+    // 2026-10-26: phones in the East Bay and London polled every 10 s, less
+    // than a slot apart. The second refresh lost every time, and London got
+    // new planes only every 30 s.
+    const s = setup();
+    const ages: number[] = [];
+    const poll = async (bbox: Bbox) => {
+      const result = await s.cache.get(bbox);
+      expect(result.stale).toBe(false);
+      ages.push(Math.floor(s.now() / 1000) - result.snapshot.fetchedAt);
+    };
+    // A phone sleeps 10 s after each answer, so it polls every ~10.3 s.
+    const start = s.now();
+    const at = (ms: number) => s.advance(Math.max(0, start + ms - s.now()));
+    for (let round = 0; round < 10; round++) {
+      at(round * 10_300);
+      await poll(BAY);
+      at(round * 10_300 + 500);
+      await poll(LON); // a refresh waits the other 500 ms
+    }
+    // Never older than one TTL; before the fix LON reached 20 s and 30 s.
+    expect(Math.max(...ages)).toBeLessThanOrEqual(10);
+    expect(s.events).toHaveLength(0);
   });
 
   it("refreshes normally when a slot is free", async () => {

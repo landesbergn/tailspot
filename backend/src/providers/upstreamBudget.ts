@@ -16,10 +16,11 @@
  *     bursts (capacity 1), which is how a "1 req/s" limit is usually enforced;
  *   - waiters are served in arrival order, because each reservation takes the
  *     next free slot;
- *   - `tryTake()` fails while anyone is waiting, because a waiter has already
- *     pushed `nextFreeAt` into the future. So callers that can make do with a
- *     cached answer (a tile refresh) automatically yield to callers that
- *     cannot (a cold tile), which is the priority we want.
+ *   - a caller can cap its wait: `take(intervalMs)` waits out a request that
+ *     has just gone out but refuses once anyone else is already waiting,
+ *     because a waiter has pushed `nextFreeAt` more than one interval out. A
+ *     tile refresh, which can make do with its cache, waits that way, so it
+ *     yields to cold tiles under load without losing to a mere near miss.
  *
  * The budget covers whichever feed answers: it is checked before the
  * composite provider runs, so a request that fails over to adsb.lol spends the

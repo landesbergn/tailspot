@@ -497,8 +497,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // ── Upstream request budget ───────────────────────────────────────────────
   // At most UPSTREAM_RPS (default 0.8) feed requests per second from this
   // process, under adsb.fi's 1/s. When the budget is spent, a tile up to 30 s
-  // old is served from cache instead of refreshed; a tile with nothing
-  // servable waits up to 2 s for a slot. See providers/upstreamBudget.ts.
+  // old waits at most one slot to refresh, then is served from cache; a tile
+  // with nothing servable waits up to 2 s for a slot. See
+  // providers/upstreamBudget.ts and TileCache.get.
   //
   // If the budget stays saturated for five minutes (same state machine as the
   // feed alerters: a run ends after two quiet minutes), that is the signal to
@@ -529,10 +530,10 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
               budgetAlerter.recordFallback(event);
               return;
             }
-            // Two tiles wanting a refresh within 1.25 s of each other is
-            // routine: one serves an ~11 s cache and refreshes on its next
-            // poll. Only a refresh deferred until the cache is twice the TTL
-            // old means the budget is genuinely short.
+            // A refresh serves cache only when another request is already
+            // queued for a slot. Once, at ~11 s old, can be a brief burst; a
+            // refresh deferred until the cache is twice the TTL old means
+            // the budget is genuinely short.
             if ((event.cacheAgeSeconds ?? 0) >= SATURATED_CACHE_AGE_SECONDS) {
               budgetAlerter.recordFallback(event);
             }
