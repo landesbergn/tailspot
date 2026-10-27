@@ -112,6 +112,8 @@ export class UpstreamBudget {
    */
   takeLowPriority(maxWaitMs: number): Promise<boolean> {
     const now = this.now();
+    // Clear out anyone already out of reach first, so they don't count against us.
+    this.dropUnreachable(now);
     const turnAt = Math.max(now, this.nextFreeAt) + this.line.length * this.intervalMs;
     if (turnAt - now > maxWaitMs) {
       this.refusedCount++;
@@ -138,10 +140,14 @@ export class UpstreamBudget {
       if (!head) return;
       if (this.nextFreeAt > now) {
         this.pumpPending = true;
-        void this.sleep(this.nextFreeAt - now).then(() => {
-          this.pumpPending = false;
-          this.pump();
-        });
+        // Whatever happens to the sleep, the line must be looked at again, or
+        // everyone in it would wait forever.
+        void this.sleep(this.nextFreeAt - now)
+          .catch(() => {})
+          .then(() => {
+            this.pumpPending = false;
+            this.pump();
+          });
         return;
       }
       this.line.shift();

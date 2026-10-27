@@ -109,10 +109,11 @@ export interface TileCacheThrottle {
   /** Longest a request with nothing servable waits for a slot. Default 2000 ms. */
   maxWaitMs?: number;
   /**
-   * Oldest cached tile served instead of a refresh when no slot is free.
-   * Default 30 s. Kept well under the 60 s last-good window: the app shows
-   * planes where the snapshot says they were, and an airliner covers ~7 km
-   * in 30 s. Past this age the refresh waits for a slot like a cold tile.
+   * Oldest cached tile that may be served when a refresh's turn in line
+   * can't come within `maxWaitMs`. Default 30 s. Kept well under the 60 s
+   * last-good window: the app shows planes where the snapshot says they
+   * were, and an airliner covers ~7 km in 30 s. Past this age the refresh
+   * reserves a slot like a cold tile, ahead of the line.
    */
   maxThrottledAgeSeconds?: number;
   /** Fired each time the budget makes us serve cache or refuse a request. */
@@ -286,39 +287,37 @@ export class TileCache {
     // Two phones polling on the same 10 s rhythm less than a slot apart then
     // collided on every poll, and one of them refreshed only every 30 s
     // (2026-10-26: a "budget saturated" alert at ~0.12 fetches/s).
-    let slot:
-      | { budget: UpstreamBudget; waitMs: number; refreshAge: number }
-      | { budget: UpstreamBudget; waitMs: number; refreshAge?: undefined }
-      | undefined;
-    if (this.throttle) {
-      const waitMs = this.throttle.maxWaitMs ?? DEFAULT_THROTTLE_MAX_WAIT_MS;
+    const throttle = this.throttle;
+    let refreshing = false;
+    if (throttle && cached) {
       const maxAge = Math.min(
-        this.throttle.maxThrottledAgeSeconds ?? DEFAULT_MAX_THROTTLED_AGE_SECONDS,
+        throttle.maxThrottledAgeSeconds ?? DEFAULT_MAX_THROTTLED_AGE_SECONDS,
         this.config.staleMaxSeconds,
       );
-      const age = cached ? nowSec - cached.storedAt : undefined;
-      const budget = this.throttle.budget;
-      slot =
-        age !== undefined && age < maxAge
-          ? { budget, waitMs, refreshAge: age }
-          : { budget, waitMs };
+      refreshing = nowSec - cached.storedAt < maxAge;
     }
 
     // 4. Start a new upstream fetch; stash it so concurrent callers share it.
     // Fetch the EXPANDED tile (not the raw request) so the cached snapshot is
     // valid for every bbox that maps to this key — see tileBbox() doc.
     const fetchPromise = (async () => {
-      if (slot) {
-        const ok =
-          slot.refreshAge !== undefined
-            ? await slot.budget.takeLowPriority(slot.waitMs)
-            : await slot.budget.take(slot.waitMs);
+      if (throttle) {
+        const waitMs = throttle.maxWaitMs ?? DEFAULT_THROTTLE_MAX_WAIT_MS;
+        const ok = refreshing
+          ? await throttle.budget.takeLowPriority(waitMs)
+          : await throttle.budget.take(waitMs);
         if (!ok) {
           // Reported here, once per shared wait, not in each waiter's catch.
           // Either way fallbackOrThrow serves the cache when there is one.
+          // The age is taken now, after any wait: it's what the phone gets.
+          const served = refreshing ? this.entries.get(key) : undefined;
           this.notifyThrottled(
-            slot.refreshAge !== undefined
-              ? { kind: "served-cache", tile: key, cacheAgeSeconds: slot.refreshAge }
+            served
+              ? {
+                  kind: "served-cache",
+                  tile: key,
+                  cacheAgeSeconds: Math.floor(this.now() / 1000) - served.storedAt,
+                }
               : { kind: "refused", tile: key },
           );
           throw new BudgetExhaustedError();
