@@ -2,7 +2,7 @@
 //  CardBackStyles.swift
 //  Tailspot
 //
-//  Design experiment (2026-10-26): six ways to get from the catch card to
+//  Design experiment (2026-10-26): four ways to get from the catch card to
 //  its back (the closeup + "about this plane"), switchable on the catch
 //  detail screen in Debug builds so each can be tried by feel on a phone.
 //  Release builds always use `.flip`, the shipped behaviour; the switch is
@@ -24,15 +24,11 @@ enum CardBackStyle: String, CaseIterable, Identifiable, Sendable {
     /// and the turn follows your finger.
     case realFlip
     /// The back sits beside the card, its edge peeking in from the right;
-    /// swipe left to slide over to it.
+    /// swipe left and it pages over, snapping into place.
     case swipeLeft
-    /// The back's top peeks out under the card; swipe it up over the card.
+    /// The back sits below the card behind an "ABOUT THIS PLANE" tab;
+    /// scroll up and it snaps into place where the card was.
     case swipeUp
-    /// The card's bottom unfolds like a folded boarding pass, dropping the
-    /// back out below while the catch stays in view.
-    case unfold
-    /// Tap the card and it zooms into a full-screen page with the back.
-    case photoZoom
 
     var id: String { rawValue }
 
@@ -43,17 +39,15 @@ enum CardBackStyle: String, CaseIterable, Identifiable, Sendable {
         case .realFlip: return "Real card flip"
         case .swipeLeft: return "Swipe left"
         case .swipeUp: return "Swipe up"
-        case .unfold: return "Unfold"
-        case .photoZoom: return "Zoom in"
         }
     }
 
-    /// Whether the front shows its "ABOUT THIS PLANE" button. The swipe and
-    /// unfold styles have a visible tease of the back instead.
+    /// Whether the front shows its "ABOUT THIS PLANE" button. The swipe
+    /// styles have a visible tease of the back instead.
     var frontShowsTurnOverButton: Bool {
         switch self {
-        case .flip, .realFlip, .photoZoom: return true
-        case .swipeLeft, .swipeUp, .unfold: return false
+        case .flip, .realFlip: return true
+        case .swipeLeft, .swipeUp: return false
         }
     }
 
@@ -61,10 +55,6 @@ enum CardBackStyle: String, CaseIterable, Identifiable, Sendable {
     /// left needs a wider side gutter for the next card to peek into; the
     /// card fills the width otherwise, which left only a ~14 pt sliver.
     var cardWidthInset: CGFloat { self == .swipeLeft ? 44 : 0 }
-
-    /// Whether tapping the front's photo shows the back (instead of the
-    /// photo viewer / Planespotters page).
-    var photoTapShowsBack: Bool { self == .photoZoom }
 
     #if DEBUG
     static let defaultsKey = "tailspot.debug.cardBackStyle"
@@ -83,8 +73,8 @@ enum CardBackStyle: String, CaseIterable, Identifiable, Sendable {
 }
 
 /// The card slot on the detail screen: picks the style's container.
-/// `front` is handed a `showBack` action to wire into its own controls
-/// (turn-over button, photo tap) as `style` asks.
+/// `front` is handed a `showBack` action to wire into its turn-over button
+/// when `style` shows one.
 struct CardBackPresenter<Front: View, Back: View>: View {
     let style: CardBackStyle
     @Binding var showingBack: Bool
@@ -111,10 +101,56 @@ struct CardBackPresenter<Front: View, Back: View>: View {
             SwipePeekCard(showingBack: $showingBack) { front } back: { back }
         case .swipeUp:
             PullUpCard(showingBack: $showingBack) { front } back: { back }
-        case .unfold:
-            UnfoldCard(showingBack: $showingBack) { front } back: { back }
-        case .photoZoom:
-            PhotoZoomCard(showingBack: $showingBack) { front } back: { back }
         }
     }
+}
+
+// MARK: - Two-page pager (swipe left / swipe up)
+
+/// The two swipe styles are both a real `ScrollView` with exactly two
+/// pages, the catch card and its back, that snaps to a page when the
+/// finger lifts. This is the shared bookkeeping: which page is which,
+/// where each sits, and whether the scroll is resting on one.
+/// `nonisolated` — plain math, no UI state.
+nonisolated enum CardPagerMath {
+    enum Page: Int, Equatable, Hashable, Sendable { case front = 0, back = 1 }
+
+    /// How close (pt) the scroll offset must be to a page to count as at rest.
+    static let restTolerance: CGFloat = 1
+
+    static func page(showingBack: Bool) -> Page {
+        showingBack ? .back : .front
+    }
+
+    /// Content offset (along the scroll axis) at which `page` is in place.
+    /// `step` is the distance between the two pages.
+    static func offset(for page: Page, step: CGFloat) -> CGFloat {
+        CGFloat(page.rawValue) * step
+    }
+
+    /// The page the scroll is resting on, or nil while it's between pages
+    /// (mid-swipe, or rubber-banding past an end).
+    static func restingPage(offset: CGFloat, step: CGFloat,
+                            tolerance: CGFloat = restTolerance) -> Page? {
+        guard step > 0 else { return .front }
+        if abs(offset) <= tolerance { return .front }
+        if abs(offset - step) <= tolerance { return .back }
+        return nil
+    }
+
+    /// How far toward the back the scroll is, 0 (front) … 1 (back),
+    /// clamped so a rubber-band past either end reads as that end.
+    static func progress(offset: CGFloat, step: CGFloat) -> Double {
+        guard step > 0 else { return 0 }
+        return Double(min(1, max(0, offset / step)))
+    }
+}
+
+extension EnvironmentValues {
+    /// Whether the catch card keeps its turn-over button's room with the
+    /// button hidden. The swipe pagers lay the two cards side by side (or
+    /// one above the other), so they must be the same size, and the back is
+    /// laid out for a card with that button, as the shipped flip has.
+    /// `@Entry` declares an environment key and its default in one line.
+    @Entry var catchCardReservesTurnOverSpace: Bool = false
 }

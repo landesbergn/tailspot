@@ -111,15 +111,12 @@ struct CatchDetailView: View {
                             // Planespotters hero → its photo page (TOS: the
                             // thumbnail itself must link there; licensing review
                             // 2026-07-11 — the tappable caption below stays as
-                            // the visible credit). Placeholder → inert. The
-                            // "Zoom in" style takes the tap for the back.
-                            onPhotoTap: cardBackStyle.photoTapShowsBack ? showBack : heroTapAction,
-                            photoTapAccessibilityLabel: cardBackStyle.photoTapShowsBack
-                                ? "About this plane"
-                                : hasCatchPhoto
-                                    ? "View photo full screen"
-                                    : "View photo on Planespotters.net",
-                            heroZoom: hasCatchPhoto && !cardBackStyle.photoTapShowsBack ? heroZoom : nil,
+                            // the visible credit). Placeholder → inert.
+                            onPhotoTap: heroTapAction,
+                            photoTapAccessibilityLabel: hasCatchPhoto
+                                ? "View photo full screen"
+                                : "View photo on Planespotters.net",
+                            heroZoom: hasCatchPhoto ? heroZoom : nil,
                             onTurnOver: cardBackStyle.frontShowsTurnOverButton ? showBack : nil
                         )
                     } back: {
@@ -328,54 +325,29 @@ struct CatchDetailView: View {
 
     // MARK: - Fine print (below the card)
 
-    /// The quiet facts under the card, one block in the reveal's label
-    /// vocabulary: airframe identity (REG / ICAO / TYPE — backfillable
-    /// facts, "—" when unknown) above a rule, then the catch moment
-    /// (date · time · place). Everything the old EARNED / ROUTE / FIRST
-    /// CAUGHT / AIRFRAME boxes said now lives either on the card (points,
-    /// tier, route) or here — each fact exactly once.
+    /// The catch moment under the card (date · time · place). The REG /
+    /// ICAO / TYPE row that sat above it was dropped in the 2026-10-26
+    /// card-back experiment: the card and its back already say those.
     private var finePrint: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 0) {
-                airframeField("REG", first.registration?.trimmedNonEmpty ?? "—")
-                airframeField("ICAO", first.icao24.uppercased())
-                airframeField("TYPE", first.typecode?.trimmedNonEmpty ?? "—")
-            }
-            Rectangle().fill(Brand.Color.textPrimary.opacity(0.07)).frame(height: 1)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("CAUGHT")
-                    .font(Brand.Font.mono(size: 8, weight: .semibold, relativeTo: .caption2))
-                    .tracking(0.6)
-                    .foregroundStyle(Brand.Color.textTertiary)
-                Text("\(first.caughtAt.formatted(date: .abbreviated, time: .shortened)) · \(first.placeName ?? observerCoordText)")
-                    .font(Brand.Font.mono(size: 12, weight: .regular, relativeTo: .caption))
-                    .foregroundStyle(Brand.Color.textSecondary)
-                    .monospacedDigit()
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                    // No place name → this line shows the observer's own
-                    // ~11 m coordinates; keep them out of session replay.
-                    .locationReplayMask(first.placeName == nil)
-            }
+        VStack(alignment: .leading, spacing: 2) {
+            Text("CAUGHT")
+                .font(Brand.Font.mono(size: 8, weight: .semibold, relativeTo: .caption2))
+                .tracking(0.6)
+                .foregroundStyle(Brand.Color.textTertiary)
+            Text("\(first.caughtAt.formatted(date: .abbreviated, time: .shortened)) · \(first.placeName ?? observerCoordText)")
+                .font(Brand.Font.mono(size: 12, weight: .regular, relativeTo: .caption))
+                .foregroundStyle(Brand.Color.textSecondary)
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                // No place name → this line shows the observer's own
+                // ~11 m coordinates; keep them out of session replay.
+                .locationReplayMask(first.placeName == nil)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
         .background(Brand.Color.bgElevated, in: .rect(cornerRadius: Brand.Radius.row))
-        // One quiet block, one read: REG/ICAO/TYPE + the caught line.
         .accessibilityElement(children: .combine)
-    }
-
-    private func airframeField(_ label: String, _ value: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(label)
-                .font(Brand.Font.mono(size: 8, weight: .semibold, relativeTo: .caption2))
-                .tracking(0.6)
-                .foregroundStyle(Brand.Color.textTertiary)
-            Text(value)
-                .font(Brand.Font.mono(size: 13, weight: .bold, relativeTo: .footnote))
-                .foregroundStyle(Brand.Color.textPrimary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var observerCoordText: String {

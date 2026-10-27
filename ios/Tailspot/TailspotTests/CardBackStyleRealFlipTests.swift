@@ -236,3 +236,48 @@ struct CardBackStyleRealFlipTests {
         #expect(renderer.cgImage != nil)
     }
 }
+
+@Suite("Real card flip hand tilt")
+struct CardTiltMathTests {
+    @Test func firstSampleIsTheBaselineSoTheCardStartsFlat() {
+        let s = CardTiltMath.step(.init(), gravityX: 0.2, gravityY: -0.7)
+        #expect(s.x == 0 && s.y == 0)
+        #expect(s.baselineX == 0.2 && s.baselineY == -0.7)
+    }
+
+    @Test func tiltFollowsChangesAndIsClamped() {
+        var s = CardTiltMath.step(.init(), gravityX: 0, gravityY: -0.7)
+        // Right side down a little → right edge comes toward you (negative y).
+        s = CardTiltMath.step(s, gravityX: 0.05, gravityY: -0.7)
+        #expect(s.y < 0 && s.y > -CardTiltMath.maxDegrees)
+        // A big tilt saturates.
+        s = CardTiltMath.step(s, gravityX: 0.9, gravityY: -0.7)
+        #expect(s.y == -CardTiltMath.maxDegrees)
+    }
+
+    @Test func driftsBackToFlatWhenHeldStill() {
+        var s = CardTiltMath.step(.init(), gravityX: 0, gravityY: -0.7)
+        s = CardTiltMath.step(s, gravityX: 0.1, gravityY: -0.6)
+        let early = abs(s.y)
+        for _ in 0..<240 { s = CardTiltMath.step(s, gravityX: 0.1, gravityY: -0.6) }  // ~4 s at 60 Hz
+        #expect(abs(s.y) < early / 10)
+        #expect(abs(s.x) < 0.5)
+    }
+
+    @Test func sheenIsAlwaysOnAndBrightensAndSlidesWithTilt() {
+        let flat = RealFlipMath.sheen(tiltX: 0, tiltY: 0)
+        #expect(flat.center == 0.5)
+        #expect(flat.opacity == RealFlipMath.sheenBase)
+        let tilted = RealFlipMath.sheen(tiltX: 0, tiltY: CardTiltMath.maxDegrees)
+        #expect(tilted.center < flat.center)
+        #expect(tilted.opacity > flat.opacity)
+        #expect(RealFlipMath.sheen(tiltX: 0, tiltY: -CardTiltMath.maxDegrees).center > flat.center)
+    }
+
+    @Test func restEdgeShowsBelowAndShiftsWithTilt() {
+        let flat = RealFlipMath.restEdgeOffset(tiltX: 0, tiltY: 0)
+        #expect(flat.width == 0 && flat.height == RealFlipMath.restEdgeDepth)
+        #expect(RealFlipMath.restEdgeOffset(tiltX: 0, tiltY: 6).width < 0)
+        #expect(RealFlipMath.restEdgeOffset(tiltX: 6, tiltY: 0).height > RealFlipMath.restEdgeDepth)
+    }
+}

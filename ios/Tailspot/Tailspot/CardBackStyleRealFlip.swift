@@ -36,11 +36,24 @@
 //  The faces still switch at exactly 90° via an `Animatable` modifier, as in
 //  `FlipCard` (see the long comment at the top of CardFlip.swift).
 //
-//  Reduce Motion: no rotation, lift or glare — the faces crossfade, and a
-//  horizontal swipe still turns the card over.
+//  Second pass (Noah, 2026-10-26: "looks identical to shipped"). The turn
+//  was more physical, but at rest it was the same flat card, and the turn
+//  is over in half a second. What now sets it apart:
+//   - IT'S IN YOUR HAND: the card tilts a few degrees as you tilt the phone
+//     (CoreMotion gravity, `CardTilt` below), and a glossy sheen slides
+//     across it as it does, like a foil trading card catching the light.
+//   - IT HAS AN EDGE AT REST: a sliver of card stock shows under the bottom
+//     edge, shifting with the tilt, so it reads as a thick card lying on
+//     the table, not a picture.
+//   - A BIGGER TURN: the card rises twice as far (10%), tips toward you as
+//     it lifts, and takes a little longer to come down.
+//
+//  Reduce Motion: no rotation, lift, tilt or glare — the faces crossfade,
+//  and a horizontal swipe still turns the card over.
 //
 
 import SwiftUI
+import CoreMotion
 import os
 
 // MARK: - Pure math (unit-tested)
@@ -57,14 +70,21 @@ nonisolated enum RealFlipMath {
 
     /// Card thickness in points. Real trading cards are ~0.3 mm; this is
     /// exaggerated so the edge reads on a phone.
-    static let thickness: CGFloat = 4.5
+    static let thickness: CGFloat = 6
     /// How many slices make up the edge between the two faces.
     static let sliceCount = 7
     /// `rotation3DEffect` perspective; a touch stronger than FlipCard's 0.45
     /// so the near edge visibly swells.
     static let perspective: CGFloat = 0.5
-    /// Extra scale at full lift (edge-on): 5%.
-    static let liftScale: CGFloat = 0.05
+    /// Extra scale at full lift (edge-on): 10%.
+    static let liftScale: CGFloat = 0.10
+    /// How far the card tips toward you (about its horizontal axis) at full
+    /// lift, so the turn isn't a flat spin in one plane.
+    static let liftTipDegrees: Double = 9
+    /// The resting edge under the card: how far it shows below the bottom
+    /// edge, and how far it shifts per degree of tilt.
+    static let restEdgeDepth: CGFloat = 4
+    static let restEdgeShiftPerDegree: CGFloat = 0.45
     /// Lift while a finger holds the card, before it has turned at all — the
     /// card "picks up" as soon as the drag starts.
     static let holdLift: Double = 0.3
@@ -80,6 +100,9 @@ nonisolated enum RealFlipMath {
     static let slabEdgeOnNudge: Double = 0.8
     /// Peak opacity of the glare band (reached at 45° of tilt).
     static let glarePeak: Double = 0.38
+    /// The resting sheen: always a faint gloss, brighter as the phone tilts.
+    static let sheenBase: Double = 0.07
+    static let sheenTiltBoost: Double = 0.16
     /// How dark the face gets edge-on (black overlay opacity).
     static let shadePeak: Double = 0.45
 
@@ -233,6 +256,25 @@ nonisolated enum RealFlipMath {
         -0.12 + 0.16 * abs(sin(radians(angle)))
     }
 
+    /// The resting sheen for a hand tilt of (`tiltX`, `tiltY`) degrees: where
+    /// its diagonal band crosses the face (0 = left, 1 = right; tilting the
+    /// card's right edge away slides it left) and how bright it is.
+    static func sheen(tiltX: Double, tiltY: Double) -> (center: Double, opacity: Double) {
+        let maxTilt = CardTiltMath.maxDegrees
+        let x = min(1, max(-1, tiltY / maxTilt))
+        let y = min(1, max(-1, tiltX / maxTilt))
+        let center = 0.5 - 0.55 * x + 0.2 * y
+        let amount = min(1, (x * x + y * y).squareRoot())
+        return (center, sheenBase + sheenTiltBoost * amount)
+    }
+
+    /// The resting edge's offset under the card for a hand tilt: always
+    /// `restEdgeDepth` down, and shifted toward the side tilted away.
+    static func restEdgeOffset(tiltX: Double, tiltY: Double) -> CGSize {
+        CGSize(width: -CGFloat(tiltY) * restEdgeShiftPerDegree,
+               height: restEdgeDepth + CGFloat(max(0, tiltX)) * restEdgeShiftPerDegree)
+    }
+
     /// Reduce Motion crossfade: a face's opacity at `angle`. A smooth
     /// dissolve on (1 − cos)/2, so it works for any resting angle.
     static func crossfadeOpacity(angle: Double, isBack: Bool) -> Double {
@@ -267,6 +309,9 @@ struct RealisticFlipCard<Front: View, Back: View>: View {
     /// doesn't run on cancel, so this is how a half-turned card notices it
     /// was dropped.
     @GestureState private var gestureActive = false
+    /// The hand tilt from CoreMotion. `@Observable`, so only this view
+    /// re-renders as it changes — the faces' own bodies don't re-run.
+    @State private var tilt = CardTilt()
 
     #if DEBUG
     /// Test hook: render a frozen frame at this angle. See `_snapshotAngle(_:)`.
@@ -298,11 +343,23 @@ struct RealisticFlipCard<Front: View, Back: View>: View {
     }
 
     private var turnAnimation: Animation {
-        reduceMotion ? .easeInOut(duration: 0.25) : .spring(duration: 0.6, bounce: 0.2)
+        reduceMotion ? .easeInOut(duration: 0.25) : .spring(duration: 0.8, bounce: 0.18)
+    }
+
+    /// The hand tilt to draw (degrees); none under Reduce Motion or in a
+    /// frozen snapshot frame.
+    private var renderTilt: (x: Double, y: Double) {
+        #if DEBUG
+        if snapshotAngle != nil { return (0, 0) }
+        #endif
+        return reduceMotion ? (0, 0) : (tilt.x, tilt.y)
     }
 
     var body: some View {
-        let angle = renderAngle
+        let hand = renderTilt
+        // The hand's side-to-side tilt simply adds to the turn angle, so the
+        // edge, the shading and the glare all respond to it for free.
+        let angle = renderAngle + hand.y
         ZStack {
             if frontSize.width > 0, frontSize.height > 0, !reduceMotion {
                 Color.clear
@@ -312,6 +369,8 @@ struct RealisticFlipCard<Front: View, Back: View>: View {
 
             front
                 .onGeometryChange(for: CGSize.self) { $0.size } action: { frontSize = $0 }
+                // Before the face modifier, so the sheen turns with the face.
+                .overlay { if !reduceMotion { RealFlipSheen(tiltX: hand.x, tiltY: hand.y) } }
                 .modifier(RealFlipFace(angle: angle, isBack: false, reduceMotion: reduceMotion))
 
             // Not laid out until the front has been measured — otherwise a
@@ -319,10 +378,12 @@ struct RealisticFlipCard<Front: View, Back: View>: View {
             if frontSize.width > 0, frontSize.height > 0 {
                 back
                     .frame(width: frontSize.width, height: frontSize.height)
+                    .overlay { if !reduceMotion { RealFlipSheen(tiltX: hand.x, tiltY: hand.y) } }
                     .modifier(RealFlipFace(angle: angle, isBack: true, reduceMotion: reduceMotion))
             }
         }
-        .modifier(RealFlipLift(angle: angle, hold: renderHold, reduceMotion: reduceMotion))
+        .modifier(RealFlipLift(angle: angle, hold: renderHold, tiltX: hand.x, tiltY: hand.y,
+                               reduceMotion: reduceMotion))
         // Draw above the screen's later siblings, so the lifted card and its
         // shadow pass over them rather than under.
         .zIndex(1)
@@ -351,6 +412,8 @@ struct RealisticFlipCard<Front: View, Back: View>: View {
             }
         }
         .sensoryFeedback(.impact(weight: .light), trigger: showingBack)
+        .onAppear { if !reduceMotion { tilt.start() } }
+        .onDisappear { tilt.stop() }
     }
 
     // MARK: Drag
@@ -409,7 +472,7 @@ struct RealisticFlipCard<Front: View, Back: View>: View {
         let rest = RealFlipMath.settleAngle(start: start, projected: projected)
         let back = CardFlipMath.visibleFace(angle: rest) == .back
         dragStartAngle = nil
-        withAnimation(.spring(duration: 0.45, bounce: 0.22)) {
+        withAnimation(.spring(duration: 0.55, bounce: 0.2)) {
             angle = rest
             hold = 0
         }
@@ -545,6 +608,8 @@ private struct RealFlipSlab: ViewModifier, Animatable {
 private struct RealFlipLift: ViewModifier, Animatable {
     var angle: Double
     var hold: Double
+    let tiltX: Double
+    let tiltY: Double
     let reduceMotion: Bool
 
     /// `AnimatablePair` lets one modifier animate two numbers at once.
@@ -559,7 +624,20 @@ private struct RealFlipLift: ViewModifier, Animatable {
         } else {
             let lift = RealFlipMath.lift(angle: angle, hold: hold)
             let shadow = RealFlipMath.shadow(angle: angle, lift: lift)
+            let edge = RealFlipMath.restEdgeOffset(tiltX: tiltX, tiltY: tiltY)
             content
+                // The resting edge: a card-stock sliver peeking out under the
+                // bottom edge. It doesn't turn with the card, so it fades out
+                // as soon as the card leaves the table.
+                .background {
+                    RoundedRectangle(cornerRadius: Brand.Radius.hero)
+                        .fill(RP.flapUnsettled)
+                        .overlay(RoundedRectangle(cornerRadius: Brand.Radius.hero)
+                            .strokeBorder(RP.rule, lineWidth: 1))
+                        .offset(edge)
+                        .opacity(1 - min(1, lift * 3))
+                        .accessibilityHidden(true)
+                }
                 // Flatten the stack into one layer first, so the shadow is
                 // cast by the card's outline — without it, `.shadow` on a
                 // container shadows every subview separately.
@@ -567,6 +645,113 @@ private struct RealFlipLift: ViewModifier, Animatable {
                 .shadow(color: .black.opacity(shadow.opacity),
                         radius: shadow.radius, x: shadow.x, y: shadow.y)
                 .scaleEffect(1 + RealFlipMath.liftScale * CGFloat(lift))
+                // Tip toward you as it lifts, plus the hand's forward tilt.
+                .rotation3DEffect(.degrees(tiltX + RealFlipMath.liftTipDegrees * lift),
+                                  axis: (x: 1, y: 0, z: 0),
+                                  perspective: RealFlipMath.perspective)
         }
+    }
+}
+
+// MARK: - Sheen
+
+/// The resting gloss on each face: a soft diagonal band that slides
+/// across as the phone tilts. Independent of the turn's own glare, which
+/// only shows mid-turn.
+private struct RealFlipSheen: View {
+    let tiltX: Double
+    let tiltY: Double
+
+    var body: some View {
+        let sheen = RealFlipMath.sheen(tiltX: tiltX, tiltY: tiltY)
+        LinearGradient(colors: [.white.opacity(0), .white, .white.opacity(0)],
+                       startPoint: UnitPoint(x: sheen.center - 0.35, y: 0),
+                       endPoint: UnitPoint(x: sheen.center + 0.35, y: 1))
+            .opacity(sheen.opacity)
+            .blendMode(.plusLighter)
+            .clipShape(RoundedRectangle(cornerRadius: Brand.Radius.hero))
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+}
+
+// MARK: - Hand tilt
+
+/// Turns the phone's tilt into a small card tilt. The card follows CHANGES
+/// in how you hold the phone and drifts back to flat over about a second,
+/// so it looks level however you happen to hold it. `nonisolated` — plain
+/// math, unit-tested.
+nonisolated enum CardTiltMath {
+    /// The card never tilts further than this either way (degrees).
+    static let maxDegrees: Double = 8
+    /// Degrees of card tilt per unit of gravity change (1 g ≈ 90° of phone
+    /// tilt, so ~0.18 g, about 16° of phone tilt, reaches the maximum).
+    static let gain: Double = 45
+    /// How much of the gap to the current reading the baseline closes each
+    /// sample: at 60 Hz, 0.03 settles in about a second.
+    static let baselineRate: Double = 0.03
+
+    struct State: Equatable, Sendable {
+        var baselineX: Double? = nil
+        var baselineY: Double? = nil
+        /// Card tilt about its horizontal axis (top edge away = positive).
+        var x: Double = 0
+        /// Card tilt about its vertical axis (a positive angle brings the
+        /// card's left edge toward you, matching `RealFlipMath`).
+        var y: Double = 0
+    }
+
+    /// One gravity sample (device frame, in g) folded into the state.
+    static func step(_ state: State, gravityX gx: Double, gravityY gy: Double) -> State {
+        var next = state
+        let bx = state.baselineX ?? gx
+        let by = state.baselineY ?? gy
+        next.baselineX = bx + (gx - bx) * baselineRate
+        next.baselineY = by + (gy - by) * baselineRate
+        // Tilting the phone's right side down (gravity x grows) should bring
+        // the card's right edge toward you: a negative y angle.
+        next.y = clamp(-(gx - bx) * gain)
+        // Tilting the phone's top away (gravity y falls toward −1) should
+        // tip the card's top away too.
+        next.x = clamp(-(gy - by) * gain)
+        return next
+    }
+
+    static func clamp(_ d: Double) -> Double { min(maxDegrees, max(-maxDegrees, d)) }
+}
+
+/// The live hand tilt for the real flip: CoreMotion gravity at 60 Hz, folded
+/// through `CardTiltMath`. `@Observable` so a view reading `x`/`y` re-renders
+/// only itself when they change. Device motion needs no permission prompt.
+@Observable
+final class CardTilt {
+    private(set) var x: Double = 0
+    private(set) var y: Double = 0
+    @ObservationIgnored private var state = CardTiltMath.State()
+    @ObservationIgnored private let manager = CMMotionManager()
+
+    func start() {
+        guard manager.isDeviceMotionAvailable, !manager.isDeviceMotionActive else { return }
+        manager.deviceMotionUpdateInterval = 1.0 / 60.0
+        // Delivered on the main queue, where this (MainActor) class lives —
+        // one tiny update per frame, nothing heavy.
+        manager.startDeviceMotionUpdates(to: .main) { [weak self] motion, _ in
+            guard let self, let motion else { return }
+            let next = CardTiltMath.step(self.state, gravityX: motion.gravity.x,
+                                         gravityY: motion.gravity.y)
+            self.state = next
+            // Skip sub-0.05° jitter so a phone lying still doesn't re-render.
+            if abs(next.x - self.x) > 0.05 || abs(next.y - self.y) > 0.05 {
+                self.x = next.x
+                self.y = next.y
+            }
+        }
+    }
+
+    func stop() {
+        manager.stopDeviceMotionUpdates()
+        state = CardTiltMath.State()
+        x = 0
+        y = 0
     }
 }

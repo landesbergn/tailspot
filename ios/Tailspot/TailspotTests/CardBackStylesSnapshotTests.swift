@@ -36,15 +36,15 @@ struct CardBackStylesSnapshotTests {
         @State var showingBack: Bool
 
         var body: some View {
-            // A ScrollView like the detail screen's: unbounded height, so a
-            // style that grows the slot (Unfold) isn't squeezed to fit.
+            // A ScrollView like the detail screen's: unbounded height, so
+            // the slot is laid out as it is there.
             ScrollView {
             VStack(spacing: 14) {
                 CardBackPresenter(style: style, showingBack: $showingBack) { showBack in
                     SettledCatchCard(plane: CardBackStylesSnapshotTests.plane,
                                      isFirstOfType: false,
                                      width: CardBackStylesSnapshotTests.cardWidth - style.cardWidthInset,
-                                     onPhotoTap: style.photoTapShowsBack ? showBack : nil,
+                                     onPhotoTap: nil,
                                      onTurnOver: style.frontShowsTurnOverButton ? showBack : nil)
                 } back: {
                     CatchCardBack(model: BackFixtures.b738,
@@ -91,18 +91,15 @@ struct CardBackStylesSnapshotTests {
         try await render(style, back: false)
     }
 
-    // The zoom style's back is a full-screen cover, which a hosted window
-    // snapshot doesn't draw; it's checked on the device.
-    @Test(arguments: CardBackStyle.allCases.filter { $0 != .photoZoom })
+    @Test(arguments: CardBackStyle.allCases)
     func back(_ style: CardBackStyle) async throws {
         try await render(style, back: true)
     }
 
     @Test func styleFlagsMatchTheDesign() {
-        #expect(CardBackStyle.allCases.count == 6)
-        #expect(CardBackStyle.allCases.filter(\.photoTapShowsBack) == [.photoZoom])
+        #expect(CardBackStyle.allCases == [.flip, .realFlip, .swipeLeft, .swipeUp])
         #expect(CardBackStyle.allCases.filter { !$0.frontShowsTurnOverButton }
-                == [.swipeLeft, .swipeUp, .unfold])
+                == [.swipeLeft, .swipeUp])
     }
 }
 #endif
