@@ -1580,7 +1580,9 @@ struct CatchRevealView: View {
         // top); it restores to full height once the chips collapse, so the
         // settled card matches a plain reveal. The change rides the chip
         // pop/collapse animation, reading as the card making room then restoring.
-        let photoHeight = ((render?.chipsInLayout ?? false) ? 100.0 : 168.0) * scale
+        // 152, not the settled card's 168 (2026-10-27): the turn-over row
+        // needs that room on a 6.1" phone with a three-line name.
+        let photoHeight = ((render?.chipsInLayout ?? false) ? 100.0 : 152.0) * scale
         // The reveal's own count-up climbs to the pre-bonus total; a correct
         // in-card guess then rolls its route bonus in on the separate `bt` clock.
         let revealCount = Int((Double(revealTargetTotal) * easeOut(ss(0.82, 0.96, t))).rounded())
@@ -1734,25 +1736,29 @@ struct CatchRevealView: View {
 
                 }
                 .padding(.horizontal, hPad)
-                .padding(.bottom, 22 * scale)
-                // Turn the card over (2026-10-25). An overlay centred in the
-                // card's bottom padding, so it adds no height: the card must
-                // not grow at settle, and a 6.1" phone has no room for
-                // another row (`RevealShortScreenTests`). Faded in once
-                // Share is live, like the Share button. At rest the card is
-                // one VoiceOver element, so the same action is also offered
-                // via `accessibilityActions` in `layout`.
-                .overlay(alignment: .bottom) {
-                    CardTurnOverButton(title: "ABOUT THIS PLANE", scale: scale) {
-                        cardFlipped = true
-                    }
-                    // The 44 pt hit row's centre sits mid-padding.
-                    .offset(y: 22 - 11 * scale)
-                    .opacity(turnOverVisible ? 1 : 0)
-                    .allowsHitTesting(turnOverVisible)
-                    .accessibilityHidden(!turnOverVisible)
-                    .animation(.easeOut(duration: 0.25), value: turnOverVisible)
+                .padding(.bottom, 4 * scale)
+
+                // Turn the card over (2026-10-25). Its own row under the
+                // entry stamp (2026-10-27: an overlay in the bottom padding
+                // overlapped the streak and hung off the card's edge). The
+                // row is ALWAYS laid out and only fades in once Share is
+                // live, so the card never grows at settle; same spacing as
+                // the settled card's row in `SettledCatchCard`. At rest the
+                // card is one VoiceOver element, so the same action is also
+                // offered via `accessibilityActions` in `layout`.
+                CardTurnOverButton(title: "ABOUT THIS PLANE", scale: scale) {
+                    cardFlipped = true
                 }
+                // The 44 pt hit row overhangs its neighbours by 8 pt each
+                // way (negative padding shrinks the LAYOUT box, not the
+                // tappable one), so the row costs ~28 pt of card height.
+                .padding(.vertical, -8)
+                .padding(.horizontal, hPad)
+                .padding(.bottom, 10 * scale)
+                .opacity(turnOverVisible ? 1 : 0)
+                .allowsHitTesting(turnOverVisible)
+                .accessibilityHidden(!turnOverVisible)
+                .animation(.easeOut(duration: 0.25), value: turnOverVisible)
             }
             .frame(width: width)
             .modifier(CatchRarityFrame(rarity: livePlane.rarity, scale: scale))
