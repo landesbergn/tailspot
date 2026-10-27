@@ -78,16 +78,53 @@ describe("UpstreamBudget", () => {
     expect(budget.tryTake()).toBe(false);
   });
 
-  it("take(intervalMs) waits out a near miss but not a queued waiter", async () => {
+  it("takeIfStillFree waits out a near miss and takes the slot", async () => {
     const clock = fakeTime();
-    const budget = new UpstreamBudget({ ratePerSecond: 1, now: clock.now, sleep: async () => {} });
+    const budget = new UpstreamBudget({ ratePerSecond: 1, now: clock.now, sleep: clock.sleep });
     expect(budget.tryTake()).toBe(true);
     clock.advance(400);
     // The last request went out 400 ms ago: the next slot is 600 ms away.
-    expect(await budget.take(budget.intervalMs)).toBe(true);
-    // That caller now holds the next slot, so a second one would be two
-    // slots out and is refused without reserving anything.
-    expect(await budget.take(budget.intervalMs)).toBe(false);
+    expect(await budget.takeIfStillFree(1000)).toBe(true);
+    expect(clock.sleeps).toEqual([600]);
+    expect(budget.granted).toBe(2);
+  });
+
+  it("takeIfStillFree refuses at once when the next free slot is too far", async () => {
+    const clock = fakeTime();
+    const budget = new UpstreamBudget({ ratePerSecond: 1, now: clock.now, sleep: clock.sleep });
+    expect(budget.tryTake()).toBe(true);
+    expect(await budget.takeIfStillFree(500)).toBe(false);
+    expect(clock.sleeps).toEqual([]);
+  });
+
+  it("takeIfStillFree gives way to a caller that reserves while it waits", async () => {
+    // Sleeps that the test releases, so the two waits genuinely overlap.
+    let t = 0;
+    const sleepers: { ms: number; wake: () => void }[] = [];
+    const budget = new UpstreamBudget({
+      ratePerSecond: 1,
+      now: () => t,
+      sleep: (ms) =>
+        new Promise<void>((resolve) => {
+          const until = t + ms;
+          sleepers.push({
+            ms,
+            wake: () => {
+              t = Math.max(t, until);
+              resolve();
+            },
+          });
+        }),
+    });
+    expect(budget.tryTake()).toBe(true); // next slot at 1000
+    t = 400;
+    const refresh = budget.takeIfStillFree(1000); // waits for 1000, unreserved
+    const cold = budget.take(2000); // reserves 1000 itself
+    // The cold caller got the slot the refresh was waiting for, not the one after.
+    expect(sleepers.map((s) => s.ms)).toEqual([600, 600]);
+    for (const s of sleepers) s.wake();
+    expect(await cold).toBe(true);
+    expect(await refresh).toBe(false);
     expect(budget.granted).toBe(2);
   });
 

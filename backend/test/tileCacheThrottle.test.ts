@@ -8,10 +8,12 @@ const NYC: Bbox = { lamin: 40.6, lomin: -74.1, lamax: 40.8, lomax: -73.9 };
 const LON: Bbox = { lamin: 51.4, lomin: -0.5, lamax: 51.6, lomax: -0.3 };
 
 /**
- * `holdClock` makes waits resolve without moving time, so callers started
- * together really are queued at once; by default a wait advances the clock.
+ * By default a wait advances the clock and resolves at once. `holdClock`
+ * resolves without moving time, so callers started together really are
+ * queued at once. `manualSleep` parks every wait until `wakeAll()`, so waits
+ * genuinely overlap.
  */
-function setup(opts: { maxWaitMs?: number; holdClock?: boolean } = {}) {
+function setup(opts: { maxWaitMs?: number; holdClock?: boolean; manualSleep?: boolean } = {}) {
   let t = 1_000_000_000;
   const calls: Bbox[] = [];
   const provider: PositionProvider = {
@@ -24,12 +26,26 @@ function setup(opts: { maxWaitMs?: number; holdClock?: boolean } = {}) {
   const events: ThrottleEvent[] = [];
   let granted = 0;
   const now = () => t;
+  const parked: { ms: number; wake: () => void }[] = [];
   // Sleeping advances the shared clock, so waits are instant but real in effect.
   const budget = new UpstreamBudget({
     ratePerSecond: 1,
     now,
-    sleep: async (ms) => {
+    sleep: (ms) => {
+      if (opts.manualSleep) {
+        const until = t + ms;
+        return new Promise<void>((resolve) => {
+          parked.push({
+            ms,
+            wake: () => {
+              t = Math.max(t, until);
+              resolve();
+            },
+          });
+        });
+      }
       if (!opts.holdClock) t += ms;
+      return Promise.resolve();
     },
   });
   const cache = new TileCache(
@@ -54,6 +70,10 @@ function setup(opts: { maxWaitMs?: number; holdClock?: boolean } = {}) {
     budget,
     granted: () => granted,
     now,
+    parkedWaits: () => parked.map((p) => p.ms),
+    wakeAll: () => {
+      for (const p of parked.splice(0)) p.wake();
+    },
     advance: (ms: number) => {
       t += ms;
     },
@@ -84,6 +104,26 @@ describe("TileCache with an upstream budget", () => {
     expect(result.stale).toBe(false);
     expect(s.calls).toHaveLength(3);
     expect(s.events).toHaveLength(0);
+  });
+
+  it("lets a cold tile go ahead of a refresh that is waiting for a slot", async () => {
+    // Review of #393: had the waiting refresh reserved its slot, the cold
+    // tile behind it would wait 1.9 s, past maxWaitMs, and 503.
+    const s = setup({ manualSleep: true, maxWaitMs: 1_500 });
+    const first = s.cache.get(BAY); // cold, slot free now
+    s.wakeAll();
+    await first;
+    s.advance(11_000);
+    await s.cache.get(NYC); // takes the slot that is free now
+    s.advance(50);
+    const bay = s.cache.get(BAY); // refresh: waits 950 ms, reserves nothing
+    s.advance(50);
+    const lon = s.cache.get(LON); // cold: reserves that same slot, 900 ms away
+    expect(s.parkedWaits()).toEqual([950, 900]);
+    s.wakeAll();
+    expect((await lon).stale).toBe(false);
+    expect((await bay).stale).toBe(true); // gave way, served its cache
+    expect(s.events).toEqual([expect.objectContaining({ kind: "served-cache" })]);
   });
 
   it("keeps two tiles polled half a slot apart fresh on every poll", async () => {

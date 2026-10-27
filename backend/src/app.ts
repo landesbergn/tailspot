@@ -530,10 +530,11 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
               budgetAlerter.recordFallback(event);
               return;
             }
-            // A refresh serves cache only when another request is already
-            // queued for a slot. Once, at ~11 s old, can be a brief burst; a
-            // refresh deferred until the cache is twice the TTL old means
-            // the budget is genuinely short.
+            // A refresh serves cache only when the next free slot is more
+            // than one interval away or a cold tile claimed it first. Once,
+            // at ~11 s old, can be a brief burst; a refresh deferred until
+            // the cache is twice the TTL old means the budget is genuinely
+            // short.
             if ((event.cacheAgeSeconds ?? 0) >= SATURATED_CACHE_AGE_SECONDS) {
               budgetAlerter.recordFallback(event);
             }

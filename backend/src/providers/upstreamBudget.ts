@@ -16,11 +16,12 @@
  *     bursts (capacity 1), which is how a "1 req/s" limit is usually enforced;
  *   - waiters are served in arrival order, because each reservation takes the
  *     next free slot;
- *   - a caller can cap its wait: `take(intervalMs)` waits out a request that
- *     has just gone out but refuses once anyone else is already waiting,
- *     because a waiter has pushed `nextFreeAt` more than one interval out. A
- *     tile refresh, which can make do with its cache, waits that way, so it
- *     yields to cold tiles under load without losing to a mere near miss.
+ *   - callers with a fallback yield: `takeIfStillFree()` waits for the next
+ *     free slot without reserving it and fails if anyone reserved it first.
+ *     A tile refresh, which can make do with its cache, takes slots that way,
+ *     so a cold tile (nothing to serve) always goes ahead of it, while a
+ *     refresh that merely lands just after another request still gets the
+ *     next slot instead of giving up.
  *
  * The budget covers whichever feed answers: it is checked before the
  * composite provider runs, so a request that fails over to adsb.lol spends the
@@ -42,6 +43,9 @@ export interface UpstreamBudgetOptions {
 }
 
 export const DEFAULT_UPSTREAM_RATE_PER_SECOND = 0.8;
+
+/** How early a sleep may wake and still claim the slot it waited for. */
+const TIMER_SLACK_MS = 5;
 
 export class UpstreamBudget {
   readonly intervalMs: number;
@@ -75,6 +79,29 @@ export class UpstreamBudget {
   /** Take a slot only if one is free right now. Never waits. */
   tryTake(): boolean {
     return this.reserve(0) === 0;
+  }
+
+  /**
+   * Wait for the next free slot WITHOUT reserving it, then take it only if
+   * it is still free. Anyone who reserves with `take()` in the meantime goes
+   * first, and this resolves false. Refuses at once when the next free slot
+   * is further away than `maxWaitMs`. For callers that have a fallback (a
+   * tile refresh can serve its cache): a near miss no longer costs them the
+   * refresh, and they never push a caller without one further back.
+   */
+  async takeIfStillFree(maxWaitMs: number): Promise<boolean> {
+    const delay = Math.max(0, this.nextFreeAt - this.now());
+    if (delay > maxWaitMs) {
+      this.refusedCount++;
+      return false;
+    }
+    if (delay > 0) await this.sleep(delay);
+    // A few ms of slack for a timer that fires a hair early; a slot reserved
+    // meanwhile is a whole interval away and still refuses.
+    const slack = this.reserve(TIMER_SLACK_MS);
+    if (slack === undefined) return false;
+    if (slack > 0) await this.sleep(slack);
+    return true;
   }
 
   /**

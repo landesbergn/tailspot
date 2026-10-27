@@ -99,10 +99,10 @@ export interface UpstreamFetchEvent {
 
 /**
  * Optional cap on upstream requests (see providers/upstreamBudget.ts). With it,
- * a tile past its TTL waits at most one budget interval for a slot to refresh;
- * otherwise the cached snapshot is served a little longer (up to
- * `maxThrottledAgeSeconds`). A tile with nothing servable waits up to
- * `maxWaitMs` for a slot.
+ * a tile past its TTL waits at most one budget interval for the next free slot
+ * to refresh, giving way to any tile with nothing servable; otherwise the
+ * cached snapshot is served a little longer (up to `maxThrottledAgeSeconds`).
+ * A tile with nothing servable reserves a slot, waiting up to `maxWaitMs`.
  */
 export interface TileCacheThrottle {
   budget: UpstreamBudget;
@@ -274,14 +274,13 @@ export class TileCache {
       }
     }
 
-    // 3. Budget check (when configured). Every request takes the next slot in
-    // arrival order, inside the shared fetch below, so concurrent callers for
-    // the same tile wait once, together. How long it may wait depends on what
-    // it could serve instead:
-    //   - nothing servable (cold, or cache past maxAge): up to maxWaitMs;
-    //   - a recent-enough cache (a refresh): one slot at most, so it waits
-    //     out a request that just went out but never queues behind one that
-    //     is still waiting. Past that it serves the cache.
+    // 3. Budget check (when configured), inside the shared fetch below so
+    // concurrent callers for the same tile wait once, together:
+    //   - nothing servable (cold, or cache past maxAge): reserve the next slot
+    //     in arrival order, waiting up to maxWaitMs;
+    //   - a recent-enough cache (a refresh): wait up to one slot for the next
+    //     free one WITHOUT reserving it, and take it only if no one reserved
+    //     it meanwhile. A cold tile always goes ahead; otherwise serve cache.
     // The refresh used to take a slot only if one was free that instant.
     // Two phones polling on the same 10 s rhythm less than a slot apart then
     // collided on every poll, and one of them refreshed only every 30 s
@@ -308,7 +307,11 @@ export class TileCache {
     // valid for every bbox that maps to this key — see tileBbox() doc.
     const fetchPromise = (async () => {
       if (slotWaitMs !== undefined && this.throttle) {
-        const ok = await this.throttle.budget.take(slotWaitMs);
+        const budget = this.throttle.budget;
+        const ok =
+          refreshAge !== undefined
+            ? await budget.takeIfStillFree(slotWaitMs)
+            : await budget.take(slotWaitMs);
         if (!ok) {
           // Reported here, once per shared wait, not in each waiter's catch.
           // Either way fallbackOrThrow serves the cache when there is one.
