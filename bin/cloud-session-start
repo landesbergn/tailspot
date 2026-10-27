@@ -4,36 +4,17 @@
 # Local sessions: exits immediately (CLAUDE_CODE_REMOTE is only "true" inside
 # the cloud VM), so this costs nothing on the Mac.
 #
-# Cloud sessions: installs backend deps so `npm test` works straight away, and
-# prints one status line into Claude's context (a SessionStart hook's stdout is
-# added to context). The rules themselves live only in CLAUDE.md "Cloud
-# sessions", which the clone loads anyway; this just points at them.
+# Cloud sessions: probes the read-only observability credentials and prints
+# one status line into Claude's context (a SessionStart hook's stdout is added
+# to context), so the session knows up front which sources it can read. The
+# rules live only in CLAUDE.md "Cloud sessions" and docs/observability.md.
 #
-# Must always exit 0, and always print: a failed install is reported, not fatal.
+# Must always exit 0 and always print.
 
 [ "${CLAUDE_CODE_REMOTE:-}" = "true" ] || exit 0
 
 repo_root="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null)}"
+creds=$(OBS_TIMEOUT=15 "$repo_root/bin/obs" check 2>&1 | sed 's/: .*//' | paste -sd ',' - | sed 's/,/, /g')
 
-install_backend() {
-  cd "$repo_root/backend" 2>/dev/null || { echo "backend/ not found, skipped npm ci"; return; }
-
-  # Resumed sessions keep node_modules; reinstall only when the lockfile or the
-  # Node version changed (native deps are ABI-specific).
-  local key marker=node_modules/.tailspot-install-key
-  key="$(sha256sum package-lock.json 2>/dev/null | cut -d' ' -f1) $(node -v 2>/dev/null)"
-  if [ -d node_modules/.bin ] && [ "$(cat "$marker" 2>/dev/null)" = "$key" ]; then
-    echo "backend node_modules already current"
-  # Capped below the 300 s hook timeout so a slow registry can't swallow this
-  # status line. (Ubuntu has timeout(1); macOS doesn't, hence the fallback.)
-  elif $(command -v timeout >/dev/null && echo timeout 240) npm ci --no-audit --no-fund --loglevel=error >/tmp/tailspot-npm-ci.log 2>&1; then
-    case "$key" in " "*) ;; *) echo "$key" >"$marker" ;; esac
-    echo "backend deps installed (npm ci)"
-  else
-    echo "backend npm ci FAILED or timed out, see /tmp/tailspot-npm-ci.log"
-  fi
-}
-
-status=$(install_backend)
-echo "Cloud session (claude.ai/code, Ubuntu VM, no macOS, no credentials). Setup: $status. Follow the \"Cloud sessions\" section of CLAUDE.md: backend/web/tools/docs work only, stop at an open PR."
+echo "Cloud observability session (claude.ai/code): read-only PostHog/Sentry/Fly via bin/obs, no macOS, no deploys. Credentials: ${creds:-check failed to run}. Follow CLAUDE.md \"Cloud sessions\" and docs/observability.md."
 exit 0

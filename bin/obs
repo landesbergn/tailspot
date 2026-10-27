@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+# Read-only observability helpers: PostHog, Sentry, Fly over plain REST.
+#
+# In a cloud session (claude.ai/code) no credential is ever in the VM: each
+# request goes out WITHOUT an Authorization header and the environment's
+# network secrets attach the read-only key in the egress proxy. Locally, set
+# POSTHOG_PERSONAL_API_KEY / SENTRY_AUTH_TOKEN / FLY_API_TOKEN to use it from
+# the Mac; unset means "let the proxy add it".
+#
+# The keys' scopes are what make this read-only (see docs/observability.md);
+# the script also only ever issues GETs, plus the PostHog query POST.
+#
+#   bin/obs check                      probe all three credentials
+#   bin/obs posthog-sql "<HogQL>"      run a HogQL query (project 466448)
+#   bin/obs posthog <path>             GET /api/projects/466448/<path>
+#   bin/obs sentry <path>              GET https://sentry.io/api/0/<path>
+#   bin/obs fly-machines <app>         machine id/state/region/image/updated
+#   bin/obs fly-logs <app> [token]     recent log lines (pass next_token to page)
+#   bin/obs fly <path>                 GET https://api.machines.dev/v1/<path>
+#
+# Fly apps: tailspot-api, tailspot-www, tailspot-www-preview, tailspot-db.
+
+set -euo pipefail
+
+POSTHOG="https://us.posthog.com/api/projects/466448"
+SENTRY="https://sentry.io/api/0"
+SENTRY_ORG="noah-lc"
+FLY_API="https://api.fly.io/api/v1"
+FLY_MACHINES="https://api.machines.dev/v1"
+
+# set_auth <env-var> <scheme>: fills AUTH with a curl -H pair when the local
+# variable is set, else leaves it empty for the proxy to fill in.
+set_auth() {
+  AUTH=()
+  local value="${!1:-}"
+  [ -z "$value" ] && return 0
+  case "$value" in "$2 "*) ;; *) value="$2 $value" ;; esac
+  AUTH=(-H "Authorization: $value")
+}
+
+# req <env-var> <scheme> <curl args...>. The ${AUTH[@]+...} form keeps an
+# empty array safe under set -u on macOS's bash 3.2.
+req() {
+  set_auth "$1" "$2"; shift 2
+  curl -sS --fail-with-body -m "${OBS_TIMEOUT:-60}" ${AUTH[@]+"${AUTH[@]}"} "$@"
+}
+
+posthog_get()  { req POSTHOG_PERSONAL_API_KEY Bearer "$POSTHOG/$1"; }
+posthog_sql()  {
+  req POSTHOG_PERSONAL_API_KEY Bearer -H "Content-Type: application/json" \
+    -d "$(jq -nc --arg q "$1" '{query: {kind: "HogQLQuery", query: $q}}')" "$POSTHOG/query/"
+}
+sentry_get()   { req SENTRY_AUTH_TOKEN Bearer "$SENTRY/$1"; }
+# Fly's logs endpoint only accepts the "FlyV1 <token>" scheme (Bearer gets a
+# 401); the Machines API takes either. `fly tokens create readonly` already
+# prints the token in FlyV1 form.
+fly_api_get()  { req FLY_API_TOKEN FlyV1 "$FLY_API/$1"; }
+fly_mach_get() { req FLY_API_TOKEN FlyV1 "$FLY_MACHINES/$1"; }
+
+probe() {  # probe <label> <command...>
+  local out
+  if out=$("${@:2}" 2>&1); then echo "$1 ok"
+  else echo "$1 FAILED: $(printf '%s' "$out" | tr '\n' ' ' | cut -c1-140)"; fi
+}
+
+cmd="${1:-}"; [ $# -gt 0 ] && shift
+case "$cmd" in
+  check)
+    probe posthog      posthog_sql "select 1"
+    probe sentry       sentry_get "organizations/$SENTRY_ORG/projects/"
+    probe fly-machines fly_mach_get "apps/tailspot-api/machines"
+    probe fly-logs     fly_api_get "apps/tailspot-api/logs"
+    ;;
+  posthog-sql)  posthog_sql "${1:?HogQL query}" | jq '{columns, results}' ;;
+  posthog)      posthog_get "${1:?path}" ;;
+  sentry)       sentry_get "${1:?path}" ;;
+  fly)          fly_mach_get "${1:?path}" ;;
+  fly-machines)
+    fly_mach_get "apps/${1:?app}/machines" |
+      jq -c '.[] | {id, state, region, updated_at, image: .config.image}'
+    ;;
+  fly-logs)
+    fly_api_get "apps/${1:?app}/logs${2:+?next_token=$2}" |
+      jq -r '(.data[].attributes | "\(.timestamp) \(.region) \(.level) \(.message)"), "next_token: \(.meta.next_token)"'
+    ;;
+  *) sed -n '2,21p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+esac
