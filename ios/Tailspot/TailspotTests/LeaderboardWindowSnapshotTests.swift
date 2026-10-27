@@ -255,7 +255,7 @@ struct LeaderboardWindowSnapshotTests {
               "standing_week_leading")
 
         // Handled (server-confirmed), nothing caught this week →
-        // "You're not on the board yet" / "1 point to get on the board".
+        // "You're not on the board yet" / "1 catch to get on the board".
         defaults.set("notlisted", forKey: SpotterHandle.storageKey)
         defaults.set("notlisted", forKey: SpotterHandle.confirmedKey)
         shoot(board([.week: week(MyStanding(rank: 0, points: 0))],

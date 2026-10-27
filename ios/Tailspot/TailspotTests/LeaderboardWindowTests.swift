@@ -500,18 +500,18 @@ struct RaceGapTests {
         #expect(gap.prose == "2,345 points behind @s1")
     }
 
-    /// No handle and nothing caught this week: one point earns a row.
+    /// Nothing caught this week, room on the board: one catch earns a row.
     @Test func handled_zeroPoints_makeTheBoard() throws {
         let gap = try #require(RaceGap.compute(
             response: week(board(), me: MyStanding(rank: 0, points: 0)),
             window: .week, myHandle: "notlisted", handleConfirmed: true))
         #expect(gap.target == .makeBoard(full: false))
         #expect(gap.points == 1)
-        #expect(gap.prose == "1 point to get on the board")
+        #expect(gap.prose == "1 catch to get on the board")
     }
 
     /// No handle, nothing caught: hidden. The backend lists only handled
-    /// devices, so "1 PT TO MAKE THE BOARD" would be a false promise — one
+    /// devices, so "1 catch to get on the board" would be a false promise — one
     /// catch later the line would vanish and still no row would appear.
     /// The "claim a handle" hint is the only call to action.
     @Test func noHandle_zeroPoints_hidden() {
@@ -605,12 +605,12 @@ struct RaceGapTests {
 
     /// The server says more spotters qualify than the 50-row limit, even
     /// though this response is short: the board is full, so a 0-pt spotter
-    /// must beat the last row, not "1 PT TO MAKE THE BOARD".
+    /// must beat the last row, not "1 catch to get on the board".
     @Test func shortResponse_serverCountSaysFull_noOnePointPromise() {
         let response = LeaderboardResponse(
             entries: board(), me: MyStanding(rank: 0, points: 0), window: "week",
             resetsAt: "2026-10-26T00:00:00.000Z", champions: nil, totalCatchers: 64)
-        // Never "1 point to get on the board"; with only 12 of the 50 rows
+        // Never "1 catch to get on the board"; with only 12 of the 50 rows
         // there's no measurable gap either, so the goal hides.
         #expect(RaceGap.compute(response: response, window: .week,
                                 myHandle: "notlisted", handleConfirmed: true) == nil)
@@ -630,14 +630,16 @@ struct RaceGapTests {
         #expect(gap.points == 111)
     }
 
-    /// Room on the board per the server count: one point earns a row.
-    @Test func serverCountSaysRoom_onePoint() throws {
+    /// Room on the board per the server count: one catch earns a row.
+    @Test func serverCountSaysRoom_oneCatch() throws {
         let response = LeaderboardResponse(
             entries: board(), me: MyStanding(rank: 0, points: 0), window: "week",
             resetsAt: "2026-10-26T00:00:00.000Z", champions: nil, totalCatchers: 12)
         let gap = try #require(RaceGap.compute(
             response: response, window: .week, myHandle: "notlisted", handleConfirmed: true))
+        #expect(gap.target == .makeBoard(full: false))
         #expect(gap.points == 1)
+        #expect(gap.prose == "1 catch to get on the board")
     }
 
     /// Stranded handle (local handle the server never confirmed — the
@@ -769,21 +771,25 @@ struct StandingLineTests {
         let l = try line(board(), me: MyStanding(rank: 11, points: 95), handle: "s11")
         #expect(l.rank == 11)
         #expect(l.ordinal == "11th")
-        #expect(l.heading == "You're 11th this week")
-        #expect(l.headingSuffix == " this week")
+        #expect(l.points == 95)
+        #expect(l.heading == "You're 11th with 95 pts")
         #expect(l.detail == "50 points behind @s10")
         #expect(l.raceGap?.target == .pass(handle: "s10", rank: 10))
         #expect(sub(l.detail, reset: "resets in 2d 9h")
                 == "50 points behind @s10 · resets in 2d 9h")
         #expect(StandingLine.spoken(l, spokenReset: "resets in 2 days, 9 hours")
-                == "You're 11th this week. 50 points behind s10. Resets in 2 days, 9 hours.")
+                == "You're 11th this week with 95 points. 50 points behind s10. Resets in 2 days, 9 hours.")
     }
 
+    /// The switcher names the window, so the visible heading leaves it
+    /// out; VoiceOver keeps it.
     @Test func windowWording() throws {
         let month = try line(board(), me: MyStanding(rank: 11, points: 95), handle: "s11", window: .month)
-        #expect(month.heading == "You're 11th this month")
+        #expect(month.heading == "You're 11th with 95 pts")
+        #expect(month.spokenHeading == "You're 11th this month with 95 points")
         let all = try line(board(), me: MyStanding(rank: 11, points: 95), handle: "s11", window: .all)
-        #expect(all.heading == "You're 11th all time")
+        #expect(all.heading == "You're 11th with 95 pts")
+        #expect(all.spokenHeading == "You're 11th all time with 95 points")
         // All time has no reset: the subtitle is just the gap.
         #expect(sub(all.detail, reset: nil) == "50 points behind @s10")
     }
@@ -792,7 +798,7 @@ struct StandingLineTests {
     /// row 11). The heading prints the ROW's rank so it matches the list.
     @Test func meRankInflated_headingShowsRowRank() throws {
         let l = try line(board(), me: MyStanding(rank: 14, points: 95), handle: "s11")
-        #expect(l.heading == "You're 11th this week")
+        #expect(l.heading == "You're 11th with 95 pts")
     }
 
     /// The server's printed row ranks win over list positions.
@@ -803,13 +809,15 @@ struct StandingLineTests {
             LeaderboardEntry(rank: 18, handle: "noah", points: 100, catches: 1),
         ]
         let l = try line(entries, me: MyStanding(rank: 21, points: 100), handle: "noah")
-        #expect(l.heading == "You're 18th this week")
+        #expect(l.heading == "You're 18th with 100 pts")
         #expect(l.detail == "10 points behind @randy98")
     }
 
-    /// The row's points win over a stale `me.points`.
+    /// The row's points win over a stale `me.points`, in the heading and
+    /// the gap alike.
     @Test func onBoard_usesRowPoints() throws {
         let l = try line(board(), me: MyStanding(rank: 12, points: 75), handle: "s12")
+        #expect(l.heading == "You're 12th with 45 pts")
         #expect(l.detail == "50 points behind @s11")
     }
 
@@ -817,19 +825,19 @@ struct StandingLineTests {
     /// tiebreak), and the copy says so rather than "0 points behind".
     @Test func tieWithRowAbove_onePointToPass() throws {
         let l = try line(board([300, 200, 200, 100]), me: MyStanding(rank: 3, points: 200), handle: "s3")
-        #expect(l.heading == "You're 3rd this week")
+        #expect(l.heading == "You're 3rd with 200 pts")
         #expect(l.detail == "1 point to pass @s2")
     }
 
     /// #1: a positive line about the row below.
     @Test func first_leadsRowBelow() throws {
         let l = try line(board(), me: MyStanding(rank: 1, points: 3705), handle: "s1")
-        #expect(l.heading == "You're 1st this week")
+        #expect(l.heading == "You're 1st with 3,705 pts")
         #expect(l.goal == .leading(handle: "s2", points: 2345))
         #expect(l.detail == "2,345 points ahead of @s2")
         #expect(l.raceGap == nil)   // a lead isn't reported as a gap
         #expect(StandingLine.spoken(l, spokenReset: nil)
-                == "You're 1st this week. 2,345 points ahead of s2.")
+                == "You're 1st this week with 3,705 points. 2,345 points ahead of s2.")
     }
 
     @Test func first_leadOfOne_singular() throws {
@@ -846,9 +854,16 @@ struct StandingLineTests {
     /// Alone on the board: heading only; the subtitle is the reset alone.
     @Test func first_aloneOnBoard_noGoal() throws {
         let l = try line(board([50]), me: MyStanding(rank: 1, points: 50), handle: "s1")
-        #expect(l.heading == "You're 1st this week")
+        #expect(l.heading == "You're 1st with 50 pts")
         #expect(l.detail == nil)
         #expect(sub(l.detail, reset: "resets in 9h") == "Resets in 9h")
+    }
+
+    /// One point reads "1 pt", not "1 pts".
+    @Test func onePoint_singular() throws {
+        let l = try line(board([300, 1]), me: MyStanding(rank: 2, points: 1), handle: "s2")
+        #expect(l.heading == "You're 2nd with 1 pt")
+        #expect(l.spokenHeading == "You're 2nd this week with 1 point")
     }
 
     /// Off a full board: never a place number (`me.rank` is never printed).
@@ -858,17 +873,18 @@ struct StandingLineTests {
         #expect(!l.isOnBoard)
         #expect(l.ordinal == nil)
         #expect(l.heading == "You're not on the board yet")
+        #expect(l.points == 0)   // me.points (95) is never printed off the board
         #expect(l.detail == "16 points to make the top 50")
         #expect(!l.heading.contains("63"))
     }
 
     /// Nothing caught this week, room on the board.
-    @Test func offBoard_roomLeft_onePoint() throws {
+    @Test func offBoard_roomLeft_oneCatch() throws {
         let l = try line(board(), me: MyStanding(rank: 0, points: 0), handle: "notlisted")
         #expect(l.heading == "You're not on the board yet")
-        #expect(l.detail == "1 point to get on the board")
+        #expect(l.detail == "1 catch to get on the board")
         #expect(StandingLine.spoken(l, spokenReset: "resets in 2 days, 9 hours")
-                == "You're not on the board yet. 1 point to get on the board. Resets in 2 days, 9 hours.")
+                == "You're not on the board yet. 1 catch to get on the board. Resets in 2 days, 9 hours.")
     }
 
     /// Handle-less: off the board, with the claim-a-handle hint as the
@@ -918,12 +934,17 @@ struct StandingLineTests {
     }
 
     /// Old backend (no `window` key): the rank shows from the row with no
-    /// window phrase (its board isn't any one window's) and no goal.
+    /// window phrase (its board isn't any one window's), no points, and no
+    /// goal.
     @Test func oldBackend_noWindowPhraseNoGoal() throws {
         let old = LeaderboardResponse(entries: board(), me: MyStanding(rank: 14, points: 95))
         let l = try #require(StandingLine.compute(response: old, window: .week,
                                                   myHandle: "s11", handleConfirmed: true))
+        // No points either: the all-time board sits under the WEEK tab,
+        // so its points would read as this week's.
+        #expect(!l.showsPoints)
         #expect(l.heading == "You're 11th")
+        #expect(l.spokenHeading == "You're 11th")
         #expect(l.goal == nil)
     }
 
