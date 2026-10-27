@@ -50,7 +50,7 @@ struct CardBackStylesSnapshotTests {
                 } back: {
                     CatchCardBack(model: BackFixtures.b738,
                                   width: CardBackStylesSnapshotTests.cardWidth,
-                                  onOpenURL: { _ in }, onTurnBack: { showingBack = false })
+                                  onOpenURL: { _ in }, onTurnBack: style.backShowsTurnBackButton ? { showingBack = false } : nil)
                 }
             }
             .padding(.horizontal, 20)

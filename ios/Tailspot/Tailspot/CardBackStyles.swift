@@ -51,6 +51,10 @@ enum CardBackStyle: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
+    /// Whether the back shows its "BACK TO CATCH" button. Swipe up has the
+    /// tab above the back for that instead.
+    var backShowsTurnBackButton: Bool { self != .swipeUp }
+
 
     #if DEBUG
     static let defaultsKey = "tailspot.debug.cardBackStyle"

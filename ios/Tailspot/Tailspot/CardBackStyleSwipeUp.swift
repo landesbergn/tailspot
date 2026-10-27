@@ -74,6 +74,14 @@ nonisolated enum PullUpMath {
     }
 }
 
+/// What the swipe-up scroll watcher reports each time either value changes.
+nonisolated struct PullUpScrollState: Equatable, Sendable {
+    /// 0 (card) … 1 (back), in 5% steps.
+    var progress: Double
+    /// The page the scroll is resting on; nil mid-scroll.
+    var resting: CardPagerMath.Page?
+}
+
 // MARK: - PullUpCard
 
 struct PullUpCard<Front: View, Back: View>: View {
@@ -140,18 +148,25 @@ struct PullUpCard<Front: View, Back: View>: View {
         .scrollIndicators(.hidden)
         .scrollTargetBehavior(.viewAligned(limitBehavior: .alwaysByOne))
         .scrollPosition($position)
-        .onScrollGeometryChange(for: Double.self) { geo in
-            let p = CardPagerMath.progress(offset: geo.contentOffset.y + geo.contentInsets.top,
-                                           step: step)
-            return (p * 20).rounded() / 20
-        } action: { _, p in
-            progress = p
+        // ONE scroll watcher reporting both values: a second
+        // `onScrollGeometryChange` on the same scroll view never fired on
+        // the device (2026-10-26), so the page never settled — the tab kept
+        // saying ABOUT THIS PLANE and the Wikipedia fetch, which waits for
+        // the first turn-over, never started.
+        .onScrollGeometryChange(for: PullUpScrollState.self) { geo in
+            let offset = geo.contentOffset.y + geo.contentInsets.top
+            let p = CardPagerMath.progress(offset: offset, step: step)
+            return PullUpScrollState(progress: (p * 20).rounded() / 20,
+                                     resting: CardPagerMath.restingPage(offset: offset, step: step))
+        } action: { _, state in
+            progress = state.progress
+            settle(on: state.resting)
         }
-        .onScrollGeometryChange(for: CardPagerMath.Page?.self) { geo in
-            CardPagerMath.restingPage(offset: geo.contentOffset.y + geo.contentInsets.top,
-                                      step: step)
-        } action: { _, resting in
-            settle(on: resting)
+        // Backstop: whenever the scroll stops moving, settle on the nearer
+        // page, so a landing a hair off the snap point still counts.
+        .onScrollPhaseChange { _, phase in
+            guard phase == .idle else { return }
+            settle(on: progress >= 0.5 ? .back : .front)
         }
         // Fade the peek out toward the slot's bottom edge, so the back reads
         // as continuing below rather than cut off.

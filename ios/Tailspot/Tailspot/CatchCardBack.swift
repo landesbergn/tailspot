@@ -285,14 +285,16 @@ struct CatchCardBack: View {
     let model: CardBackModel
     let width: CGFloat
     let onOpenURL: (URL) -> Void
-    let onTurnBack: () -> Void
+    /// nil hides the BACK TO CATCH button (the swipe-up style has its own
+    /// tab for that).
+    let onTurnBack: (() -> Void)?
     /// DEBUG/test hook: shown in place of the remote closeup so hosted
     /// snapshots (which can't wait on AsyncImage) still show a photo.
     let snapshotImage: UIImage?
     @State private var showingSummary = false
 
     init(model: CardBackModel, width: CGFloat,
-         onOpenURL: @escaping (URL) -> Void, onTurnBack: @escaping () -> Void,
+         onOpenURL: @escaping (URL) -> Void, onTurnBack: (() -> Void)?,
          snapshotImage: UIImage? = nil) {
         self.model = model
         self.width = width
@@ -355,10 +357,12 @@ struct CatchCardBack: View {
 
             Spacer(minLength: 0)
 
-            CardTurnOverButton(title: "BACK TO CATCH", scale: scale, action: onTurnBack)
-                .padding(.horizontal, hPad)
-                .padding(.top, 4 * scale)
-                .padding(.bottom, 8 * scale)
+            if let onTurnBack {
+                CardTurnOverButton(title: "BACK TO CATCH", scale: scale, action: onTurnBack)
+                    .padding(.horizontal, hPad)
+                    .padding(.top, 4 * scale)
+                    .padding(.bottom, 8 * scale)
+            }
         }
         .frame(width: width)
         // Fill whatever height FlipCard gives (the front's), so the frame's

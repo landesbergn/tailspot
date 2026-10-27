@@ -123,7 +123,8 @@ struct CatchDetailView: View {
                     } back: {
                         CatchCardBack(model: backModel, width: cardWidth,
                                       onOpenURL: { openURL($0) },
-                                      onTurnBack: { isFlipped = false })
+                                      onTurnBack: cardBackStyle.backShowsTurnBackButton
+                                          ? { isFlipped = false } : nil)
                     }
                     // A fresh container per style, so switching never
                     // inherits another style's mid-gesture state.

@@ -5,7 +5,7 @@
 //  Card-back style "Swipe left" (design experiment, 2026-10-26; see
 //  CardBackStyles.swift). The back is the NEXT card in a two-card carousel,
 //  the same size as the catch card: at rest its left edge peeks in from the
-//  right, dimmed, with a vertical "ABOUT THIS PLANE" tab on it. Swipe left
+//  right, dimmed, with a chevron over it. Swipe left
 //  (or tap the peek) and it pages over and snaps into place; swipe right
 //  (or BACK TO CATCH) to go back.
 //
@@ -149,13 +149,13 @@ struct SwipePeekCard<Front: View, Back: View>: View {
         // neighbour sits just outside, in the gutter.
         .frame(width: frontSize.width > 0 ? frontSize.width : nil)
         .overlay(alignment: .trailing) {
-            peekTab(title: "About this plane", edge: .trailing, shown: restingPage == .front) {
+            peekTab(edge: .trailing, shown: restingPage == .front) {
                 showingBack = true
             }
             .offset(x: gutter)
         }
         .overlay(alignment: .leading) {
-            peekTab(title: "Back to catch", edge: .leading, shown: restingPage == .back) {
+            peekTab(edge: .leading, shown: restingPage == .back) {
                 showingBack = false
             }
             .offset(x: -gutter)
@@ -205,28 +205,16 @@ struct SwipePeekCard<Front: View, Back: View>: View {
         }
     }
 
-    /// The tap target over the peeking card, in the gutter: a chevron and a
-    /// vertical mono-caps label ("ABOUT THIS PLANE" reading upward on the
-    /// right, "BACK TO CATCH" reading downward on the left). Hidden from
-    /// VoiceOver — the cards' accessibility actions do the same job.
-    private func peekTab(title: String, edge: HorizontalEdge, shown: Bool,
+    /// The tap target over the peeking card, in the gutter: a chevron, the
+    /// full height of the card. Hidden from VoiceOver — the cards'
+    /// accessibility actions do the same job.
+    private func peekTab(edge: HorizontalEdge, shown: Bool,
                          action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            VStack(spacing: 10) {
-                Image(systemName: edge == .trailing ? "chevron.compact.left" : "chevron.compact.right")
-                    .font(.system(size: 13, weight: .semibold))
-                // Rotation is purely visual — layout still sees the text
-                // lying flat — so the fixed frame reserves the rotated
-                // footprint: gutter-narrow, tall enough for the label.
-                Text(title.uppercased())
-                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                    .tracking(1.5)
-                    .lineLimit(1)
-                    .fixedSize()
-                    .rotationEffect(.degrees(edge == .trailing ? -90 : 90))
-                    .frame(width: 12, height: 130)
-            }
-            .foregroundStyle(RP.muted)
+            // Just a chevron: the vertical label was noise (Noah, 2026-10-26).
+            Image(systemName: edge == .trailing ? "chevron.compact.left" : "chevron.compact.right")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(RP.muted)
             .frame(width: gutter)
             .frame(maxHeight: .infinity)
             .contentShape(Rectangle())
