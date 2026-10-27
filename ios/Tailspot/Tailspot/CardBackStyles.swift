@@ -52,9 +52,10 @@ enum CardBackStyle: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
-    /// Whether the back shows its "BACK TO CATCH" button. Swipe up has the
-    /// tab above the back for that instead.
-    var backShowsTurnBackButton: Bool { self != .swipeUp }
+    /// Whether the back shows its "BACK TO CATCH" button: only the flips.
+    /// The swipe styles go back the way they came (swipe right, or the tab
+    /// above the back).
+    var backShowsTurnBackButton: Bool { frontShowsTurnOverButton }
 
 
     #if DEBUG

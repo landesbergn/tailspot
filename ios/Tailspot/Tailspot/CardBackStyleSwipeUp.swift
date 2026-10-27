@@ -4,8 +4,7 @@
 //
 //  Card-back style "Swipe up" (design experiment, 2026-10-26; see
 //  CardBackStyles.swift). The back sits BELOW the catch card, never on top
-//  of it: under the card is a "^ ABOUT THIS PLANE" tab and the top of the
-//  back peeking out, faded. Scroll up and the card slides off the top of
+//  of it: under the card is a "^ ABOUT THIS PLANE" tab. Scroll up and the card slides off the top of
 //  its slot while the back slides in, snapping into place; at the top the
 //  tab has turned into "v BACK TO CATCH". Scroll down (or tap the tab) to
 //  go back.
@@ -15,9 +14,14 @@
 //  with a click into place"): it's now a real scroll view, not a drag that
 //  slides one card over the other.
 //
+//  Third pass (Noah, 2026-10-27: "make the spacing cleaner so the card fits
+//  in the frame"; on the reveal the tab overlapped "tap to continue"): no
+//  peek of the back and no grabber, just a compact tab, so the slot is only
+//  the card plus 36 pt.
+//
 //  Explain-as-we-go — how it works:
 //   - The card slot is a vertical `ScrollView` with a fixed-height window:
-//     the card's height, plus the tab, plus the peek. Inside, the content is
+//     the card's height plus the tab. Inside, the content is
 //     simply the card, then the tab, then the back, stacked top to bottom.
 //     The window clips, so whatever has scrolled out of it isn't drawn.
 //   - Two snap points, set with `.scrollTargetLayout()` +
@@ -43,13 +47,13 @@ import os
 /// `nonisolated` — plain math, no UI state.
 nonisolated enum PullUpMath {
     /// The tab between the card and the back.
-    static let tabHeight: CGFloat = 52
-    /// How much of the back's top shows under the tab at rest.
-    static let peekHeight: CGFloat = 30
+    static let tabHeight: CGFloat = 36
 
-    /// The slot's fixed height: the card, the tab, and the peek.
+    /// The slot's fixed height: the card and the tab. At rest on the back,
+    /// the same window shows the tab and the back (the back is the card's
+    /// size), so nothing peeks or gets cut off either way.
     static func windowHeight(frontHeight: CGFloat) -> CGFloat {
-        frontHeight + tabHeight + peekHeight
+        frontHeight + tabHeight
     }
 
     /// The scroll distance from the card's snap point to the back's: the
@@ -139,14 +143,14 @@ struct PullUpCard<Front: View, Back: View>: View {
                     if measured {
                         back
                             .frame(width: frontSize.width, height: frontSize.height)
-                            // A tap on the faded peek shouldn't hit the
-                            // back's buttons; drags still scroll.
+                            // Mid-scroll taps shouldn't hit the back's
+                            // buttons; drags still scroll.
                             .allowsHitTesting(restingPage == .back)
                             .accessibilityElement(children: .contain)
                             .accessibilityHidden(page != .back)
                     }
                 }
-                // No tab or peek until the host enables the turn-over.
+                // No tab until the host enables the turn-over.
                 .opacity(enabled ? 1 : 0)
                 .allowsHitTesting(enabled)
                 .animation(.easeOut(duration: 0.25), value: enabled)
@@ -177,16 +181,6 @@ struct PullUpCard<Front: View, Back: View>: View {
             guard phase == .idle else { return }
             settle(on: progress >= 0.5 ? .back : .front)
         }
-        // Fade the peek out toward the slot's bottom edge, so the back reads
-        // as continuing below rather than cut off.
-        .mask {
-            VStack(spacing: 0) {
-                Rectangle()
-                LinearGradient(colors: [.black, .black.opacity(0)],
-                               startPoint: .top, endPoint: .bottom)
-                    .frame(height: PullUpMath.peekHeight)
-            }
-        }
         .frame(width: measured ? frontSize.width : nil,
                height: measured ? PullUpMath.windowHeight(frontHeight: frontSize.height) : nil)
         .onChange(of: showingBack) { _, wantsBack in
@@ -204,18 +198,13 @@ struct PullUpCard<Front: View, Back: View>: View {
         .sensoryFeedback(.impact(weight: .light), trigger: page)
     }
 
-    /// The tab between the card and the back: a grabber, then a chevron and
-    /// a label that turn over from "ABOUT THIS PLANE" (pointing up) to
+    /// The tab between the card and the back: a chevron and a label that turn over from "ABOUT THIS PLANE" (pointing up) to
     /// "BACK TO CATCH" (pointing down) as the scroll goes. Tap to go to the
     /// other side.
     private var tab: some View {
         let scale = frontSize.width / 300
         let p = progress
-        return VStack(spacing: 8) {
-            Capsule()
-                .fill(RP.faint)
-                .frame(width: 36, height: 5)
-            HStack(spacing: 7 * scale) {
+        return HStack(spacing: 7 * scale) {
                 Image(systemName: "chevron.up")
                     .font(.system(size: 11 * scale, weight: .semibold))
                     .rotationEffect(.degrees(reduceMotion
@@ -228,10 +217,9 @@ struct PullUpCard<Front: View, Back: View>: View {
                     tabLabel("BACK TO CATCH", scale: scale)
                         .opacity(reduceMotion ? (page == .back ? 1 : 0)
                                               : PullUpMath.backToCatchOpacity(progress: p))
-                }
             }
-            .foregroundStyle(RP.muted)
         }
+        .foregroundStyle(RP.muted)
         .frame(width: frontSize.width > 0 ? frontSize.width : nil, height: PullUpMath.tabHeight)
         .contentShape(Rectangle())
         .onTapGesture { showingBack = page == .front }

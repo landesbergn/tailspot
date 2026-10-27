@@ -586,40 +586,47 @@ struct CatchCardBack: View {
             // The card only has room for a teaser (the back is sized to the
             // front), so the whole block opens a sheet with the article's
             // full intro paragraph.
-            Button { showingSummary = true } label: {
-                VStack(alignment: .leading, spacing: 6 * scale) {
-                    // Unedited Wikipedia text. Lowest layout priority: when
-                    // the back is shorter than its content, this is what
-                    // truncates first.
-                    Text(summary.extract)
-                        .font(.system(size: 12.5 * scale))
-                        .foregroundStyle(RP.ink.opacity(0.88))
-                        .lineSpacing(1.5 * scale)
-                        .lineLimit(5)
-                        .truncationMode(.tail)
-                        .multilineTextAlignment(.leading)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .layoutPriority(-1)
-                    HStack(spacing: 6 * scale) {
-                        // The licence credit never truncates.
-                        Text("From Wikipedia · CC BY-SA 4.0")
-                            .font(.system(size: 9.5 * scale, weight: .regular, design: .monospaced))
-                            .foregroundStyle(RP.faint)
-                            .fixedSize()
-                        Spacer(minLength: 0)
-                        Text("MORE ›")
-                            .font(.system(size: 9.5 * scale, weight: .semibold, design: .monospaced))
-                            .tracking(1)
-                            .foregroundStyle(RP.muted)
-                            .fixedSize()
-                    }
+            //
+            // A tap gesture, not a Button: a Button inside the swipe styles'
+            // scroll views could still fire when a swipe started on it. A
+            // `TapGesture` fails as soon as the finger moves, so only a clean
+            // tap opens the sheet. The accessibility traits and action below
+            // restore what the Button gave VoiceOver.
+            VStack(alignment: .leading, spacing: 6 * scale) {
+                // Unedited Wikipedia text. Lowest layout priority: when
+                // the back is shorter than its content, this is what
+                // truncates first.
+                Text(summary.extract)
+                    .font(.system(size: 12.5 * scale))
+                    .foregroundStyle(RP.ink.opacity(0.88))
+                    .lineSpacing(1.5 * scale)
+                    .lineLimit(5)
+                    .truncationMode(.tail)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .layoutPriority(-1)
+                HStack(spacing: 6 * scale) {
+                    // The licence credit never truncates.
+                    Text("From Wikipedia · CC BY-SA 4.0")
+                        .font(.system(size: 9.5 * scale, weight: .regular, design: .monospaced))
+                        .foregroundStyle(RP.faint)
+                        .fixedSize()
+                    Spacer(minLength: 0)
+                    Text("MORE ›")
+                        .font(.system(size: 9.5 * scale, weight: .semibold, design: .monospaced))
+                        .tracking(1)
+                        .foregroundStyle(RP.muted)
+                        .fixedSize()
                 }
-                .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .contentShape(Rectangle())
+            .onTapGesture { showingSummary = true }
             .layoutPriority(-1)
+            .accessibilityElement(children: .ignore)
             .accessibilityLabel(summary.extract)
             .accessibilityHint("Opens the Wikipedia summary")
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction { showingSummary = true }
             .sheet(isPresented: $showingSummary) {
                 WikipediaSummarySheet(title: model.modelName, summary: summary,
                                       onOpenURL: onOpenURL)

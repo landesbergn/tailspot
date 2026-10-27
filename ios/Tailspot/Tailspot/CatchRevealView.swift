@@ -1563,6 +1563,26 @@ struct CatchRevealView: View {
         .background(RP.bg)
     }
 
+    /// The settled reveal with a card-back style's slot around the card, as
+    /// the device builds it. Unlike `_snapshotScreen` this keeps the real
+    /// scroll views (the swipe styles ARE scroll views), so it has to be
+    /// drawn from a hosted window, not ImageRenderer. DEBUG-only.
+    @MainActor func _snapshotScreen(
+        width: CGFloat, size: CGSize, backStyle: CardBackStyle
+    ) -> some View {
+        revealColumn(height: size.height, card: {
+            CardBackPresenter(style: backStyle, showingBack: .constant(false)) { _ in
+                card(t: 1.0, bt: 0, width: width, render: nil, shareVisible: true,
+                     turnOverVisible: backStyle.frontShowsTurnOverButton)
+            } back: {
+                CatchCardBack(model: backModel, width: width, onOpenURL: { _ in },
+                              onTurnBack: backStyle.backShowsTurnBackButton ? {} : nil)
+            }
+        }, cta: { ctaRow() })
+        .frame(width: size.width, height: size.height)
+        .background(RP.bg)
+    }
+
     /// A static bonus-round beat for the visual-pass harness: the immutable
     /// render + the count-up clock value to freeze the TOTAL at.
     struct GuessSnapshotState {

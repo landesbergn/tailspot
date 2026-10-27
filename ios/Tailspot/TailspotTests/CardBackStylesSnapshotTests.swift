@@ -101,3 +101,56 @@ struct CardBackStylesSnapshotTests {
     }
 }
 #endif
+
+#if DEBUG
+/// The catch reveal with each card-back style around the card, at real
+/// safe-area sizes, so the slot's fit above "tap to continue" is checked
+/// (the swipe-up tab used to run under it, 2026-10-27).
+@MainActor
+@Suite("Card back styles on the reveal (visual pass)", .serialized)
+struct CardBackStylesRevealSnapshotTests {
+
+    private static let snapDir = URL(fileURLWithPath: "/private/tmp/tailspot_snaps", isDirectory: true)
+
+    private static let plane = CardPlane(
+        callsign: "UAL1532", model: "Boeing 737-800", carrier: "United Airlines",
+        rarity: .common, type: .narrow,
+        altText: "11,250 ft", speedText: "342 mph", distText: "3.1 mi",
+        originIcao: "SFO", destIcao: "DEN",
+        originName: "San Francisco", destName: "Denver",
+        isFirstOfType: false, icao24: "a4f2c1")
+
+    /// iPhone 16 and iPhone SE (3rd gen) safe areas.
+    private static let screens: [(String, CGSize)] = [
+        ("6.1", CGSize(width: 393, height: 759)),
+        ("se", CGSize(width: 375, height: 647)),
+    ]
+
+    @Test(arguments: [CardBackStyle.flip, .swipeLeft, .swipeUp])
+    func reveal(_ style: CardBackStyle) async throws {
+        try? FileManager.default.createDirectory(at: Self.snapDir, withIntermediateDirectories: true)
+        for (name, size) in Self.screens {
+            let bounds = CGRect(origin: .zero, size: size)
+            var reveal = CatchRevealView(plane: Self.plane, entryNumber: 62,
+                                         onDismiss: {}, onViewInHangar: {})
+            reveal.streakDays = 4
+            let host = UIHostingController(rootView:
+                reveal._snapshotScreen(width: min(size.width - 28, 420), size: size, backStyle: style)
+                    .environment(\.replayMaskingDisabled, true))
+            let window = UIWindow(frame: bounds)
+            window.rootViewController = host
+            window.overrideUserInterfaceStyle = .dark
+            window.makeKeyAndVisible()
+            try await Task.sleep(for: .milliseconds(900))
+            host.view.layoutIfNeeded()
+            let png = UIGraphicsImageRenderer(bounds: bounds).pngData { _ in
+                host.view.drawHierarchy(in: bounds, afterScreenUpdates: true)
+            }
+            try png.write(to: Self.snapDir.appendingPathComponent(
+                "reveal_style_\(style.rawValue)_\(name).png"))
+            window.isHidden = true
+            #expect(!png.isEmpty)
+        }
+    }
+}
+#endif
