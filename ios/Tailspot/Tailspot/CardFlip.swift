@@ -6,7 +6,13 @@
 //  catch card as it is today on the front, the closeup + type info
 //  (`CatchCardBack`) on the back — and turns between them with a real 3D
 //  flip around the vertical axis. `CardTurnOverButton` is the mono-caps
-//  control at the bottom of each face ("ABOUT THIS PLANE" / "BACK TO CATCH").
+//  control ("ABOUT THIS PLANE" / "BACK TO CATCH").
+//
+//  The control sits UNDER the card, not on it (2026-10-28, Noah: "maybe the
+//  flip button should be outside of the card?"): it's something you do to
+//  the card, not something printed on it, and inside it crowded TOTAL and
+//  the streak. FlipCard draws one control for both faces; its label says
+//  where the next turn goes.
 //
 //  Turn direction (2026-10-27, Noah: "fix the flip direction so it depends
 //  which way you swipe or where you tap"): a swipe turns the card the way
@@ -37,13 +43,13 @@
 //     conforms to `Animatable`: SwiftUI then calls its `body` on EVERY frame
 //     of the animation with the in-between angle (via `animatableData`),
 //     and the modifier decides per frame which face is visible.
-//   - The turn-over control inside a face doesn't know about the flip, so
+//   - The turn-over control doesn't know which way to turn, so
 //     the flip hands it a "which way" callback through the environment
 //     (`cardTurnDirection`); the control reports the side it was tapped on,
 //     then runs its action as before.
-//   - Reduce Motion: the turn itself ignores it (Noah, 2026-10-26: the turn
-//     IS the interaction, and a crossfade read as "nothing happened"). The
-//     peek is motion nobody asked for, so it respects it and doesn't run.
+//   - Reduce Motion: ignored by the turn (Noah, 2026-10-26: the turn IS the
+//     interaction, and a crossfade read as "nothing happened") and by the
+//     peek (2026-10-28: "the motion is minimal enough").
 //
 
 import SwiftUI
@@ -169,6 +175,15 @@ enum CardFlipTeaseStore {
         get { UserDefaults.standard.integer(forKey: shownKey) }
         set { UserDefaults.standard.set(newValue, forKey: shownKey) }
     }
+
+    #if DEBUG
+    /// The wrench panel's "Reset card peek": back to a new user's state, so
+    /// the next cards peek again.
+    static func debugReset() {
+        UserDefaults.standard.removeObject(forKey: turnedKey)
+        UserDefaults.standard.removeObject(forKey: shownKey)
+    }
+    #endif
 }
 
 /// What a FlipCard's faces ask before acting on a tap: is this finger
@@ -228,16 +243,15 @@ extension EnvironmentValues {
 
 struct FlipCard<Front: View, Back: View>: View {
     @Binding var isFlipped: Bool
-    /// Swipe-to-flip and the peek only when true (the reveal enables them
-    /// once the catch has settled). The turn-over buttons live inside the
-    /// faces and are the caller's to enable.
+    /// Swipe-to-flip, the turn-over control and the peek only when true (the
+    /// reveal enables them once the catch has settled). The control is
+    /// always laid out, only hidden, so the column never grows at settle.
     let enabled: Bool
     /// Whether this card may peek over on its own (`CardFlipTease`).
     let teases: Bool
     private let front: Front
     private let back: Back
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// The front's measured size. The back is laid out at exactly this size
     /// so the card doesn't change shape when it turns over.
     @State private var frontSize: CGSize = .zero
@@ -279,18 +293,31 @@ struct FlipCard<Front: View, Back: View>: View {
 
     var body: some View {
         let shownAngle = self.shownAngle
-        ZStack {
-            front
-                .onGeometryChange(for: CGSize.self) { $0.size } action: { frontSize = $0 }
-                .modifier(FlipFace(angle: shownAngle, isBack: false))
+        VStack(spacing: 0) {
+            ZStack {
+                front
+                    .onGeometryChange(for: CGSize.self) { $0.size } action: { frontSize = $0 }
+                    .modifier(FlipFace(angle: shownAngle, isBack: false))
 
-            // Not laid out until the front has been measured — otherwise a
-            // back that fills its proposal would size the ZStack to it.
-            if frontSize.width > 0, frontSize.height > 0 {
-                back
-                    .frame(width: frontSize.width, height: frontSize.height)
-                    .modifier(FlipFace(angle: shownAngle, isBack: true))
+                // Not laid out until the front has been measured — otherwise a
+                // back that fills its proposal would size the ZStack to it.
+                if frontSize.width > 0, frontSize.height > 0 {
+                    back
+                        .frame(width: frontSize.width, height: frontSize.height)
+                        .modifier(FlipFace(angle: shownAngle, isBack: true))
+                }
             }
+
+            // Under the card, not on either face. Scaled like the card (its
+            // design width is 300 pt); `isFlipped` is where the card is going,
+            // so the label changes the moment it's tapped.
+            CardTurnRow(flipped: isFlipped, scale: frontSize.width / 300) {
+                isFlipped.toggle()
+            }
+            .opacity(enabled ? 1 : 0)
+            .allowsHitTesting(enabled)
+            .accessibilityHidden(!enabled)
+            .animation(.easeOut(duration: 0.25), value: enabled)
         }
         .environment(\.cardTurnDirection) { pendingDirection = $0 }
         .environment(\.cardSwipeGuard, swipeGuard)
@@ -341,7 +368,7 @@ struct FlipCard<Front: View, Back: View>: View {
     /// Re-runs when `enabled` changes (`.task(id:)`), and is cancelled with
     /// the view.
     private func peekIfDue() async {
-        guard teases, enabled, !reduceMotion,
+        guard teases, enabled,
               CardFlipTease.shouldTease(hasTurnedACard: CardFlipTeaseStore.hasTurnedACard,
                                         timesShown: CardFlipTeaseStore.timesShown)
         else { return }
@@ -423,6 +450,32 @@ private struct FlipFace: ViewModifier, Animatable {
 }
 
 // MARK: - Turn-over button
+
+/// The control under a FlipCard: "ABOUT THIS PLANE" on the front, "BACK TO
+/// CATCH" on the back. Its own view so the reveal's static snapshot (which
+/// renders the card without a FlipCard) draws the same row.
+struct CardTurnRow: View {
+    let flipped: Bool
+    let scale: CGFloat
+    let action: () -> Void
+
+    var body: some View {
+        CardTurnOverButton(title: Self.title(flipped: flipped),
+                           scale: max(scale, 0.5), action: action)
+            // The label swap fades rather than snapping mid-turn.
+            .animation(.easeOut(duration: 0.2), value: flipped)
+            // The 44 pt hit row overhangs the air above and below it by
+            // 8 pt each way (negative padding shrinks the LAYOUT box, not
+            // the tappable one), so it costs the column ~28 pt + the gap.
+            .padding(.vertical, -8)
+            .padding(.top, 4 * scale)
+    }
+
+    /// Where the next turn goes: the back's contents, or home to the front.
+    nonisolated static func title(flipped: Bool) -> String {
+        flipped ? "BACK TO CATCH" : "ABOUT THIS PLANE"
+    }
+}
 
 /// The full-width text control at the bottom of a card face — mono caps in
 /// the card's label vocabulary, with a rotate glyph. VoiceOver reads it

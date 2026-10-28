@@ -287,8 +287,6 @@ struct CatchCardBack: View {
     let model: CardBackModel
     let width: CGFloat
     let onOpenURL: (URL) -> Void
-    /// nil hides the BACK TO CATCH button.
-    let onTurnBack: (() -> Void)?
     /// DEBUG/test hook: shown in place of the remote closeup so hosted
     /// snapshots (which can't wait on AsyncImage) still show a photo.
     let snapshotImage: UIImage?
@@ -303,12 +301,11 @@ struct CatchCardBack: View {
     }
 
     init(model: CardBackModel, width: CGFloat,
-         onOpenURL: @escaping (URL) -> Void, onTurnBack: (() -> Void)?,
+         onOpenURL: @escaping (URL) -> Void,
          snapshotImage: UIImage? = nil) {
         self.model = model
         self.width = width
         self.onOpenURL = onOpenURL
-        self.onTurnBack = onTurnBack
         self.snapshotImage = snapshotImage
     }
 
@@ -363,18 +360,11 @@ struct CatchCardBack: View {
             .padding(.horizontal, hPad)
 
             Spacer(minLength: 0)
-
-            if let onTurnBack {
-                CardTurnOverButton(title: "BACK TO CATCH", scale: scale, action: onTurnBack)
-                    .padding(.horizontal, hPad)
-                    .padding(.top, 4 * scale)
-                    .padding(.bottom, 8 * scale)
-            }
         }
         .frame(width: width)
         // Fill whatever height FlipCard gives (the front's), so the frame's
-        // background and border cover the whole face; the Spacer above keeps
-        // BACK TO CATCH at the bottom.
+        // background and border cover the whole face. BACK TO CATCH lives
+        // under the card (`FlipCard`), not on it.
         .frame(maxHeight: .infinity, alignment: .top)
         .modifier(CatchRarityFrame(rarity: model.rarity, scale: scale))
     }

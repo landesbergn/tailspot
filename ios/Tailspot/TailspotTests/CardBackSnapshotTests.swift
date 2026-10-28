@@ -251,7 +251,7 @@ struct CardBackSnapshotTests {
 
     private func back(_ model: CardBackModel, photo: UIImage?) -> some View {
         CatchCardBack(model: model, width: Self.cardWidth,
-                      onOpenURL: { _ in }, onTurnBack: {}, snapshotImage: photo)
+                      onOpenURL: { _ in }, snapshotImage: photo)
             .fixedSize(horizontal: false, vertical: true)
             .padding(.top, 60)
     }
@@ -284,11 +284,10 @@ struct CardBackSnapshotTests {
             originName: "San Francisco", destName: "Denver",
             isFirstOfType: true, icao24: "a4f2c1")
         let card = FlipCard(isFlipped: .constant(false)) {
-            SettledCatchCard(plane: plane, isFirstOfType: true, width: Self.cardWidth,
-                             onTurnOver: {})
+            SettledCatchCard(plane: plane, isFirstOfType: true, width: Self.cardWidth)
         } back: {
             CatchCardBack(model: BackFixtures.b738, width: Self.cardWidth,
-                          onOpenURL: { _ in }, onTurnBack: {}, snapshotImage: Self.testPhoto)
+                          onOpenURL: { _ in }, snapshotImage: Self.testPhoto)
         }
         ._snapshotAngle(degrees)
         let name = String(format: "closeup_flip_%03d.png", Int(degrees))

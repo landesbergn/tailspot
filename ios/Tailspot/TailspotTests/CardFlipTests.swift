@@ -144,6 +144,30 @@ struct CardFlipTests {
         #expect(CardTurnOverButton.accessibilityLabel(for: "") == "")
     }
 
+    /// The one control under the card names where the next turn goes.
+    @Test func turnRowLabelFollowsTheFace() {
+        #expect(CardTurnRow.title(flipped: false) == "ABOUT THIS PLANE")
+        #expect(CardTurnRow.title(flipped: true) == "BACK TO CATCH")
+    }
+
+    /// The wrench panel's reset puts a tester back to a new user's state:
+    /// the next card peeks again.
+    @MainActor @Test func resettingThePeekMakesCardsPeekAgain() {
+        let savedTurned = CardFlipTeaseStore.hasTurnedACard
+        let savedShown = CardFlipTeaseStore.timesShown
+        defer {
+            CardFlipTeaseStore.hasTurnedACard = savedTurned
+            CardFlipTeaseStore.timesShown = savedShown
+        }
+        CardFlipTeaseStore.hasTurnedACard = true
+        CardFlipTeaseStore.timesShown = CardFlipTease.maxShows
+        CardFlipTeaseStore.debugReset()
+        #expect(!CardFlipTeaseStore.hasTurnedACard)
+        #expect(CardFlipTeaseStore.timesShown == 0)
+        #expect(CardFlipTease.shouldTease(hasTurnedACard: CardFlipTeaseStore.hasTurnedACard,
+                                          timesShown: CardFlipTeaseStore.timesShown))
+    }
+
     @Test func aTapDuringOrJustAfterASwipeIsPartOfIt() {
         let end = Date(timeIntervalSinceReferenceDate: 1000)
         #expect(CardFlipMath.tapIsPartOfSwipe(dragging: true, swipeEndedAt: nil, now: end))

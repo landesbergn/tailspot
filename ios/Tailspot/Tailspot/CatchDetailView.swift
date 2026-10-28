@@ -111,13 +111,11 @@ struct CatchDetailView: View {
                                 ? "View photo full screen"
                                 : "View photo on Planespotters.net",
                             heroZoom: hasCatchPhoto ? heroZoom : nil,
-                            onTurnOver: { isFlipped = true },
                             caughtAt: first.caughtAt
                         )
                     } back: {
                         CatchCardBack(model: backModel, width: cardWidth,
-                                      onOpenURL: { openURL($0) },
-                                      onTurnBack: { isFlipped = false })
+                                      onOpenURL: { openURL($0) })
                     }
                     .frame(maxWidth: .infinity)
                     if let photo = planespottersPhoto, !hasCatchPhoto {

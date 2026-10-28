@@ -1171,8 +1171,7 @@ struct CatchRevealView: View {
             // down to `back:` is the FRONT, exactly as before.
             FlipCard(isFlipped: $cardFlipped,
                      enabled: RevealCardTaps.turnOverAvailable(shareAvailable: shareAvailable)) {
-                card(t: t, bt: bt, width: width, render: render, shareVisible: shareAvailable,
-                     turnOverVisible: RevealCardTaps.turnOverAvailable(shareAvailable: shareAvailable))
+                card(t: t, bt: bt, width: width, render: render, shareVisible: shareAvailable)
                     // Once the card takes hits (below), a tap on its body that no
                     // control claims (Share, photo zoom, chips) would otherwise
                     // be swallowed, so it does what the catcher behind would:
@@ -1205,19 +1204,16 @@ struct CatchRevealView: View {
                         hasZoomablePhoto: zoomablePhotoURL != nil, shareAvailable: shareAvailable))
                     // At rest the card is ONE VoiceOver element (`.ignore` above),
                     // which hides the Share button inside it, so Share is offered
-                    // as a named action on that element while it's live.
+                    // as a named action on that element while it's live. (About
+                    // this plane is FlipCard's own control under the card.)
                     .accessibilityActions {
                         if shareAvailable {
                             Button("Share this catch", action: openShare)
                         }
-                        if RevealCardTaps.turnOverAvailable(shareAvailable: shareAvailable) {
-                            Button("About this plane") { cardFlipped = true }
-                        }
                     }
             } back: {
                 CatchCardBack(model: backModel, width: width,
-                              onOpenURL: { openURL($0) },
-                              onTurnBack: { cardFlipped = false })
+                              onOpenURL: { openURL($0) })
                     // Swallow body taps: without this a tap on the back's
                     // empty space would fall through to the dismiss catcher
                     // behind and end the reveal. Its buttons still win.
@@ -1554,9 +1550,14 @@ struct CatchRevealView: View {
         width: CGFloat, size: CGSize, guessState: GuessSnapshotState? = nil
     ) -> some View {
         revealColumn(height: size.height, scrolls: false, card: {
-            card(t: 1.0, bt: guessState?.bt ?? 0, width: width, render: guessState?.render,
-                 shareVisible: guessState?.render.chipsInLayout != true,
-                 turnOverVisible: guessState?.render.chipsInLayout != true)
+            // FlipCard's turn row under the card, as on device (hidden, but
+            // laid out, while the chips are up).
+            VStack(spacing: 0) {
+                card(t: 1.0, bt: guessState?.bt ?? 0, width: width, render: guessState?.render,
+                     shareVisible: guessState?.render.chipsInLayout != true)
+                CardTurnRow(flipped: false, scale: width / 300) {}
+                    .opacity(guessState?.render.chipsInLayout == true ? 0 : 1)
+            }
         }, cta: {
             // Settled-state chrome, mirrored from `layout` (which gates it
             // on the live `settled` flag this static render never flips).
@@ -1581,7 +1582,7 @@ struct CatchRevealView: View {
     // count-up clock `bt`, and the immutable bonus-round `render` (nil = plain
     // reveal). Keeping it pure of `@State` lets any beat render as a static frame.
     private func card(t: Double, bt: Double, width: CGFloat, render: GuessRender?,
-                      shareVisible: Bool, turnOverVisible: Bool = false) -> some View {
+                      shareVisible: Bool) -> some View {
         let accent = livePlane.rarity.tint
         // The prototype's absolute sizes were tuned for a 300pt-wide card.
         // Scale every metric off the real card width so it reads full-size
@@ -1596,7 +1597,8 @@ struct CatchRevealView: View {
         // settled card matches a plain reveal. The change rides the chip
         // pop/collapse animation, reading as the card making room then restoring.
         // 152, not the settled card's 168 (2026-10-27): the turn-over row
-        // needs that room on a 6.1" phone with a three-line name.
+        // under the card needs that room on a 6.1" phone with a three-line
+        // name (`RevealShortScreenTests`).
         let photoHeight = ((render?.chipsInLayout ?? false) ? 100.0 : 152.0) * scale
         // The reveal's own count-up climbs to the pre-bonus total; a correct
         // in-card guess then rolls its route bonus in on the separate `bt` clock.
@@ -1731,37 +1733,11 @@ struct CatchRevealView: View {
                         Rectangle().fill(RP.rule).frame(height: 1)
                         ledgerRow("TOTAL", "+\(total)", accent, ss(0.84, 0.92, t), scale: scale, big: true)
                     }
-                }
-                .padding(.horizontal, hPad)
-                .padding(.bottom, 8 * scale)
 
-                // Turn the card over (2026-10-25). Its own row between the
-                // ledger and the entry stamp (2026-10-27: an overlay in the
-                // bottom padding overlapped the streak and hung off the
-                // card's edge; Noah then put it above the stamp). The
-                // row is ALWAYS laid out and only fades in once Share is
-                // live, so the card never grows at settle; same spacing as
-                // the settled card's row in `SettledCatchCard`. At rest the
-                // card is one VoiceOver element, so the same action is also
-                // offered via `accessibilityActions` in `layout`.
-                CardTurnOverButton(title: "ABOUT THIS PLANE", scale: scale) {
-                    cardFlipped = true
-                }
-                // The 44 pt hit row overhangs its neighbours by 8 pt each
-                // way (negative padding shrinks the LAYOUT box, not the
-                // tappable one), so the row costs ~28 pt of card height.
-                .padding(.vertical, -8)
-                .padding(.horizontal, hPad)
-                .padding(.bottom, 4 * scale)
-                .opacity(turnOverVisible ? 1 : 0)
-                .allowsHitTesting(turnOverVisible)
-                .accessibilityHidden(!turnOverVisible)
-                .animation(.easeOut(duration: 0.25), value: turnOverVisible)
-
-                // Entry stamp, the card's sign-off: streak left, entry number
-                // right. Hidden while the chips occupy the card, so the round
-                // has room; it returns once they collapse.
-                Group {
+                    // Entry stamp — streak left, entry number right — hidden
+                    // while the chips occupy the card, so the round has room;
+                    // it returns once they collapse. (About this plane sits
+                    // under the card since 2026-10-28; see `FlipCard`.)
                     if !(render?.chipsInLayout ?? false) {
                         HStack {
                             if let days = liveStreakDays {
@@ -1773,9 +1749,12 @@ struct CatchRevealView: View {
                                 .tracking(1.5).foregroundColor(RP.faint)
                         }
                         .opacity(ss(0.9, 1.0, t))
+                        .padding(.top, 2 * scale)
                     }
                 }
                 .padding(.horizontal, hPad)
+                // 16, not 22 (2026-10-28): the turn row under the card
+                // needs the room on a 6.1" phone.
                 .padding(.bottom, 16 * scale)
             }
             .frame(width: width)
