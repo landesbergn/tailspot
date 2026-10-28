@@ -45,13 +45,15 @@ struct SettledCatchCard: View {
     /// hosts the matching HeroZoomOverlay). nil (share renders, screens
     /// without the overlay) keeps the hero a plain framed photo.
     var heroZoom: HeroZoomModel? = nil
-    /// Turn the card over (CatchDetailView's FlipCard, 2026-10-25). Non-nil
-    /// renders the "ABOUT THIS PLANE" control at the foot of the card; nil
-    /// (share renders and every other caller) leaves the card unchanged.
-    var onTurnOver: (() -> Void)? = nil
+    /// When the catch happened, shown as a timestamp under the callsign
+    /// (CatchDetailView, 2026-10-26 — it replaced the CAUGHT block that
+    /// floated under the card). nil (the share card) leaves it out.
+    var caughtAt: Date? = nil
 
     private var base: Int { plane.rarity.basePoints }
     private var bonus: Int { isFirstOfType ? Int((Double(base) * 0.5).rounded()) : 0 }
+
+    @Environment(\.cardSwipeGuard) private var swipeGuard
 
     var body: some View {
         let accent = plane.rarity.tint
@@ -87,7 +89,12 @@ struct SettledCatchCard: View {
                     // itself performs the caller's tap action — the
                     // Planespotters photo page (TOS: "the thumbnail linked
                     // back to the original page") or the catch-photo viewer.
-                    Button(action: onPhotoTap) { hero }
+                    // A swipe that started on the photo turns the card
+                    // instead (see `CardSwipeGuard`).
+                    Button {
+                        guard swipeGuard?.swallowsTap != true else { return }
+                        onPhotoTap()
+                    } label: { hero }
                         .buttonStyle(.plain)
                         .accessibilityLabel(photoTapAccessibilityLabel)
                 } else {
@@ -113,8 +120,20 @@ struct SettledCatchCard: View {
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(Text(plane.model ?? "Unknown aircraft"))
 
-                identityRow(callsign: plane.callsign, carrier: plane.carrier,
-                            rarity: plane.rarity, scale: scale)
+                VStack(alignment: .leading, spacing: 5 * scale) {
+                    identityRow(callsign: plane.callsign, carrier: plane.carrier,
+                                rarity: plane.rarity, scale: scale)
+                    if let caughtAt {
+                        Text(caughtAt.formatted(date: .abbreviated, time: .shortened).uppercased())
+                            .font(.system(size: 10.5 * scale, weight: .medium, design: .monospaced))
+                            .tracking(1)
+                            .foregroundStyle(RP.faint)
+                            .monospacedDigit()
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                            .accessibilityLabel("Caught \(caughtAt.formatted(date: .long, time: .shortened))")
+                    }
+                }
 
                 Rectangle().fill(RP.rule).frame(height: 1)
 
@@ -131,18 +150,11 @@ struct SettledCatchCard: View {
                 }
             }
             .padding(.horizontal, hPad)
-            .padding(.bottom, onTurnOver == nil ? 22 * scale : 6 * scale)
+            .padding(.bottom, 22 * scale)
             // Everything below the hero reads as one card (name, tier,
             // stats, route, ledger). The hero stays OUTSIDE the combine so
             // its Planespotters link remains an actionable element.
             .accessibilityElement(children: .combine)
-
-            // Outside the combine too: a real Button VoiceOver can reach.
-            if let onTurnOver {
-                CardTurnOverButton(title: "ABOUT THIS PLANE", scale: scale, action: onTurnOver)
-                    .padding(.horizontal, hPad)
-                    .padding(.bottom, 8 * scale)
-            }
         }
         .frame(width: width)
         .modifier(CatchRarityFrame(rarity: plane.rarity, scale: scale))

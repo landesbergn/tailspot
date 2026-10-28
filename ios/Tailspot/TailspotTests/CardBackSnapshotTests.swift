@@ -19,7 +19,7 @@ import UIKit
 
 // MARK: - Fixed example data
 
-nonisolated private enum BackFixtures {
+nonisolated enum BackFixtures {
     static let firstCaught = Date(timeIntervalSince1970: 1_772_625_600) // 2026-03-04 12:00 UTC
 
     static let b738Info = TypeInfo(
@@ -112,13 +112,13 @@ struct CardBackFormatTests {
 
     @Test func specCellsOmitUnknownFactsAndKeepYearsUngrouped() {
         let all = CardBackFormat.specCells(BackFixtures.b738Info, unit: .meters, locale: us)
-        #expect(all.map(\.label) == ["FIRST FLIGHT", "BUILT", "WINGSPAN", "LENGTH"])
+        #expect(all.map(\.label) == ["FIRST FLEW", "BUILT", "WINGSPAN", "LENGTH"])
         #expect(all[0].value == "1997")
         #expect(all[1].value == "4,991")
         #expect(all[2] == CardBackCell(label: "WINGSPAN", value: "35.8", unit: "m"))
 
         let ga = CardBackFormat.specCells(BackFixtures.c172.typeInfo, unit: .feet, locale: us)
-        #expect(ga.map(\.label) == ["FIRST FLIGHT", "WINGSPAN", "LENGTH"])
+        #expect(ga.map(\.label) == ["FIRST FLEW", "WINGSPAN", "LENGTH"])
 
         #expect(CardBackFormat.specCells(nil, unit: .feet, locale: us).isEmpty)
         let empty = TypeInfo(entryId: "", wikipediaTitle: nil, wikidataId: nil, firstFlightYear: nil,
@@ -251,7 +251,7 @@ struct CardBackSnapshotTests {
 
     private func back(_ model: CardBackModel, photo: UIImage?) -> some View {
         CatchCardBack(model: model, width: Self.cardWidth,
-                      onOpenURL: { _ in }, onTurnBack: {}, snapshotImage: photo)
+                      onOpenURL: { _ in }, snapshotImage: photo)
             .fixedSize(horizontal: false, vertical: true)
             .padding(.top, 60)
     }
@@ -274,7 +274,7 @@ struct CardBackSnapshotTests {
         #expect(!png.isEmpty)
     }
 
-    @Test(arguments: [0.0, 45, 90, 135, 180])
+    @Test(arguments: [0.0, 45, 90, 135, 180, -45, -135])
     func flipFrame(_ degrees: Double) async throws {
         let plane = CardPlane(
             callsign: "UAL1532", model: "Boeing 737-800", carrier: "United Airlines",
@@ -284,11 +284,10 @@ struct CardBackSnapshotTests {
             originName: "San Francisco", destName: "Denver",
             isFirstOfType: true, icao24: "a4f2c1")
         let card = FlipCard(isFlipped: .constant(false)) {
-            SettledCatchCard(plane: plane, isFirstOfType: true, width: Self.cardWidth,
-                             onTurnOver: {})
+            SettledCatchCard(plane: plane, isFirstOfType: true, width: Self.cardWidth)
         } back: {
             CatchCardBack(model: BackFixtures.b738, width: Self.cardWidth,
-                          onOpenURL: { _ in }, onTurnBack: {}, snapshotImage: Self.testPhoto)
+                          onOpenURL: { _ in }, snapshotImage: Self.testPhoto)
         }
         ._snapshotAngle(degrees)
         let name = String(format: "closeup_flip_%03d.png", Int(degrees))

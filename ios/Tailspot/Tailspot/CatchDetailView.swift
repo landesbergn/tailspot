@@ -111,15 +111,13 @@ struct CatchDetailView: View {
                                 ? "View photo full screen"
                                 : "View photo on Planespotters.net",
                             heroZoom: hasCatchPhoto ? heroZoom : nil,
-                            onTurnOver: { isFlipped = true }
+                            caughtAt: first.caughtAt
                         )
                     } back: {
                         CatchCardBack(model: backModel, width: cardWidth,
-                                      onOpenURL: { openURL($0) },
-                                      onTurnBack: { isFlipped = false })
+                                      onOpenURL: { openURL($0) })
                     }
                     .frame(maxWidth: .infinity)
-                    finePrint
                     if let photo = planespottersPhoto, !hasCatchPhoto {
                         attribution(photo)
                     }
@@ -312,66 +310,6 @@ struct CatchDetailView: View {
     private var wasFirstOfType: Bool {
         guard let tc = first.typecode else { return false }
         return !allCatches.contains { $0.typecode == tc && $0.caughtAt < first.caughtAt }
-    }
-
-    // MARK: - Fine print (below the card)
-
-    /// The quiet facts under the card, one block in the reveal's label
-    /// vocabulary: airframe identity (REG / ICAO / TYPE — backfillable
-    /// facts, "—" when unknown) above a rule, then the catch moment
-    /// (date · time · place). Everything the old EARNED / ROUTE / FIRST
-    /// CAUGHT / AIRFRAME boxes said now lives either on the card (points,
-    /// tier, route) or here — each fact exactly once.
-    private var finePrint: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 0) {
-                airframeField("REG", first.registration?.trimmedNonEmpty ?? "—")
-                airframeField("ICAO", first.icao24.uppercased())
-                airframeField("TYPE", first.typecode?.trimmedNonEmpty ?? "—")
-            }
-            Rectangle().fill(Brand.Color.textPrimary.opacity(0.07)).frame(height: 1)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("CAUGHT")
-                    .font(Brand.Font.mono(size: 8, weight: .semibold, relativeTo: .caption2))
-                    .tracking(0.6)
-                    .foregroundStyle(Brand.Color.textTertiary)
-                Text("\(first.caughtAt.formatted(date: .abbreviated, time: .shortened)) · \(first.placeName ?? observerCoordText)")
-                    .font(Brand.Font.mono(size: 12, weight: .regular, relativeTo: .caption))
-                    .foregroundStyle(Brand.Color.textSecondary)
-                    .monospacedDigit()
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                    // No place name → this line shows the observer's own
-                    // ~11 m coordinates; keep them out of session replay.
-                    .locationReplayMask(first.placeName == nil)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .background(Brand.Color.bgElevated, in: .rect(cornerRadius: Brand.Radius.row))
-        // One quiet block, one read: REG/ICAO/TYPE + the caught line.
-        .accessibilityElement(children: .combine)
-    }
-
-    private func airframeField(_ label: String, _ value: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(label)
-                .font(Brand.Font.mono(size: 8, weight: .semibold, relativeTo: .caption2))
-                .tracking(0.6)
-                .foregroundStyle(Brand.Color.textTertiary)
-            Text(value)
-                .font(Brand.Font.mono(size: 13, weight: .bold, relativeTo: .footnote))
-                .foregroundStyle(Brand.Color.textPrimary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private var observerCoordText: String {
-        let lat = first.observerLat
-        let lon = first.observerLon
-        let latH = lat >= 0 ? "N" : "S"
-        let lonH = lon >= 0 ? "E" : "W"
-        return String(format: "%.4f° %@, %.4f° %@", abs(lat), latH, abs(lon), lonH)
     }
 
     // MARK: - Floating chrome pills

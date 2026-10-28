@@ -10,9 +10,11 @@
 //      sky. The photo itself links to its source page (Planespotters TOS;
 //      Commons asks for a link to the file page).
 //   2. The model name.
-//   3. YOU AND THIS TYPE — computed from the Hangar (`TypeHistory`).
-//   4. SPECS — bundled Wikidata facts (`TypeInfo`). Missing facts are
-//      omitted, never guessed; a section with nothing in it disappears.
+//   3. You and this type, no header (Noah, 2026-10-26: the rules between
+//      sections are enough) — computed from the Hangar (`TypeHistory`).
+//   4. Specs, no header, on one row — bundled Wikidata facts (`TypeInfo`).
+//      Missing facts are omitted, never guessed; a section with nothing in
+//      it disappears.
 //   5. The Wikipedia summary, unedited, with its CC BY-SA credit and a
 //      "Read more" link.
 //   6. BACK TO CATCH.
@@ -210,7 +212,7 @@ nonisolated enum CardBackFormat {
         var cells: [CardBackCell] = []
         if let y = info.firstFlightYear, y > 0 {
             // A year is not a quantity: no grouping ("1967", not "1,967").
-            cells.append(CardBackCell(label: "FIRST FLIGHT", value: String(y)))
+            cells.append(CardBackCell(label: "FIRST FLEW", value: String(y)))
         }
         if let n = info.numberBuilt, n > 0 {
             cells.append(CardBackCell(label: "BUILT", value: numberBuilt(n, locale: locale)))
@@ -285,19 +287,25 @@ struct CatchCardBack: View {
     let model: CardBackModel
     let width: CGFloat
     let onOpenURL: (URL) -> Void
-    let onTurnBack: () -> Void
     /// DEBUG/test hook: shown in place of the remote closeup so hosted
     /// snapshots (which can't wait on AsyncImage) still show a photo.
     let snapshotImage: UIImage?
     @State private var showingSummary = false
+    @Environment(\.cardSwipeGuard) private var swipeGuard
+
+    /// The photo and credit links: a swipe that started on them turns the
+    /// card instead of opening Planespotters (see `CardSwipeGuard`).
+    private func openUnlessSwiping(_ url: URL) {
+        guard swipeGuard?.swallowsTap != true else { return }
+        onOpenURL(url)
+    }
 
     init(model: CardBackModel, width: CGFloat,
-         onOpenURL: @escaping (URL) -> Void, onTurnBack: @escaping () -> Void,
+         onOpenURL: @escaping (URL) -> Void,
          snapshotImage: UIImage? = nil) {
         self.model = model
         self.width = width
         self.onOpenURL = onOpenURL
-        self.onTurnBack = onTurnBack
         self.snapshotImage = snapshotImage
     }
 
@@ -326,7 +334,6 @@ struct CatchCardBack: View {
 
                 if hasHistory {
                     Rectangle().fill(RP.rule).frame(height: 1)
-                    sectionLabel("YOU AND THIS TYPE", scale: scale)
                     VStack(spacing: 6 * scale) {
                         if let first { ledgerLine("FIRST CAUGHT", first, scale: scale) }
                         // The catch log: who was flying the ones you caught.
@@ -342,7 +349,6 @@ struct CatchCardBack: View {
 
                 if !specs.isEmpty {
                     Rectangle().fill(RP.rule).frame(height: 1)
-                    sectionLabel("SPECS", scale: scale)
                     specGrid(specs, scale: scale)
                 }
 
@@ -354,16 +360,11 @@ struct CatchCardBack: View {
             .padding(.horizontal, hPad)
 
             Spacer(minLength: 0)
-
-            CardTurnOverButton(title: "BACK TO CATCH", scale: scale, action: onTurnBack)
-                .padding(.horizontal, hPad)
-                .padding(.top, 4 * scale)
-                .padding(.bottom, 8 * scale)
         }
         .frame(width: width)
         // Fill whatever height FlipCard gives (the front's), so the frame's
-        // background and border cover the whole face; the Spacer above keeps
-        // BACK TO CATCH at the bottom.
+        // background and border cover the whole face. BACK TO CATCH lives
+        // under the card (`FlipCard`), not on it.
         .frame(maxHeight: .infinity, alignment: .top)
         .modifier(CatchRarityFrame(rarity: model.rarity, scale: scale))
     }
@@ -389,7 +390,7 @@ struct CatchCardBack: View {
         VStack(spacing: 6 * scale) {
             if let link {
                 // TOS: the thumbnail itself links to its source page.
-                Button { onOpenURL(link) } label: { photo }
+                Button { openUnlessSwiping(link) } label: { photo }
                     .buttonStyle(.plain)
                     .accessibilityLabel(CardBackFormat.photoAccessibilityLabel(for: model.closeup) ?? "View photo")
             } else {
@@ -397,7 +398,7 @@ struct CatchCardBack: View {
             }
 
             if let credit = CardBackFormat.creditParts(for: model.closeup), let link {
-                Button { onOpenURL(link) } label: {
+                Button { openUnlessSwiping(link) } label: {
                     // Author and source as two Texts: only the author
                     // truncates (at its tail); the licence + source keep
                     // their full width (`fixedSize`), so attribution never
@@ -504,14 +505,6 @@ struct CatchCardBack: View {
 
     // MARK: Sections
 
-    private func sectionLabel(_ text: String, scale: CGFloat) -> some View {
-        Text(text)
-            .font(.system(size: 9.5 * scale, weight: .semibold, design: .monospaced))
-            .tracking(1.5)
-            .foregroundStyle(RP.faint)
-            .accessibilityAddTraits(.isHeader)
-    }
-
     /// Label left, value right — the front ledger's shape, quieter.
     private func ledgerLine(_ label: String, _ value: String, scale: CGFloat,
                             lines: Int = 1) -> some View {
@@ -549,20 +542,18 @@ struct CatchCardBack: View {
     }
 
     /// Two-column grid of the known specs, in the front's statCell style.
+    /// All the specs on one row (Noah, 2026-10-26). Each cell keeps its
+    /// natural width and the leftover space is shared out between them —
+    /// equal columns squeezed "FIRST FLEW" smaller than its neighbours.
+    /// Four cells (with BUILT) fit the detail card's width with ~8 pt
+    /// between the middle two; three leave plenty of room.
     private func specGrid(_ cells: [CardBackCell], scale: CGFloat) -> some View {
-        let rows = stride(from: 0, to: cells.count, by: 2).map { Array(cells[$0..<min($0 + 2, cells.count)]) }
-        return VStack(alignment: .leading, spacing: 8 * scale) {
-            ForEach(rows.indices, id: \.self) { r in
-                HStack(spacing: 14 * scale) {
-                    ForEach(rows[r], id: \.label) { cell in
-                        specCell(cell, scale: scale)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    if rows[r].count == 1 {
-                        Color.clear.frame(maxWidth: .infinity, maxHeight: 1)
-                    }
-                }
+        HStack(alignment: .top, spacing: 0) {
+            ForEach(Array(cells.enumerated()), id: \.element.label) { i, cell in
+                if i > 0 { Spacer(minLength: 8 * scale) }
+                specCell(cell, scale: scale).fixedSize()
             }
+            if cells.count == 1 { Spacer(minLength: 0) }
         }
     }
 
@@ -592,40 +583,47 @@ struct CatchCardBack: View {
             // The card only has room for a teaser (the back is sized to the
             // front), so the whole block opens a sheet with the article's
             // full intro paragraph.
-            Button { showingSummary = true } label: {
-                VStack(alignment: .leading, spacing: 6 * scale) {
-                    // Unedited Wikipedia text. Lowest layout priority: when
-                    // the back is shorter than its content, this is what
-                    // truncates first.
-                    Text(summary.extract)
-                        .font(.system(size: 12.5 * scale))
-                        .foregroundStyle(RP.ink.opacity(0.88))
-                        .lineSpacing(1.5 * scale)
-                        .lineLimit(5)
-                        .truncationMode(.tail)
-                        .multilineTextAlignment(.leading)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .layoutPriority(-1)
-                    HStack(spacing: 6 * scale) {
-                        // The licence credit never truncates.
-                        Text("From Wikipedia · CC BY-SA 4.0")
-                            .font(.system(size: 9.5 * scale, weight: .regular, design: .monospaced))
-                            .foregroundStyle(RP.faint)
-                            .fixedSize()
-                        Spacer(minLength: 0)
-                        Text("MORE ›")
-                            .font(.system(size: 9.5 * scale, weight: .semibold, design: .monospaced))
-                            .tracking(1)
-                            .foregroundStyle(RP.muted)
-                            .fixedSize()
-                    }
+            //
+            // `onCardTap`, not a Button: a swipe that starts on the teaser
+            // turns the card without opening the sheet (a plain tap gesture
+            // or Button still fires if the finger lifts inside it). The
+            // accessibility traits and action below restore what a Button
+            // gives VoiceOver.
+            VStack(alignment: .leading, spacing: 6 * scale) {
+                // Unedited Wikipedia text. Lowest layout priority: when
+                // the back is shorter than its content, this is what
+                // truncates first.
+                Text(summary.extract)
+                    .font(.system(size: 12.5 * scale))
+                    .foregroundStyle(RP.ink.opacity(0.88))
+                    .lineSpacing(1.5 * scale)
+                    .lineLimit(5)
+                    .truncationMode(.tail)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .layoutPriority(-1)
+                HStack(spacing: 6 * scale) {
+                    // The licence credit never truncates.
+                    Text("From Wikipedia · CC BY-SA 4.0")
+                        .font(.system(size: 9.5 * scale, weight: .regular, design: .monospaced))
+                        .foregroundStyle(RP.faint)
+                        .fixedSize()
+                    Spacer(minLength: 0)
+                    Text("MORE ›")
+                        .font(.system(size: 9.5 * scale, weight: .semibold, design: .monospaced))
+                        .tracking(1)
+                        .foregroundStyle(RP.muted)
+                        .fixedSize()
                 }
-                .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .contentShape(Rectangle())
+            .onCardTap { showingSummary = true }
             .layoutPriority(-1)
+            .accessibilityElement(children: .ignore)
             .accessibilityLabel(summary.extract)
             .accessibilityHint("Opens the Wikipedia summary")
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction { showingSummary = true }
             .sheet(isPresented: $showingSummary) {
                 WikipediaSummarySheet(title: model.modelName, summary: summary,
                                       onOpenURL: onOpenURL)

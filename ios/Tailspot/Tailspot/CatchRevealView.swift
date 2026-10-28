@@ -723,6 +723,21 @@ struct CatchRevealView: View {
     /// The streak stamp's day count, whether threaded at presentation or
     /// delivered late through the shell's loader.
     private var liveStreakDays: Int? { loader?.streakDays ?? streakDays }
+    /// The early shell is up and the pipeline hasn't delivered yet.
+    private var stillLoading: Bool { loader.map { !$0.pipelineFinished } ?? false }
+
+    /// Everything the pipeline delivers after the card is already on screen
+    /// (route, photo, first-of-type, streak, and with them Share and the
+    /// turn-over). Watched as one value so they land as ONE animated change
+    /// instead of popping in, which read as glitchy on the device.
+    private struct LateLanding: Equatable {
+        var plane: CardPlane
+        var streakDays: Int?
+        var finished: Bool
+    }
+    private var lateLanding: LateLanding {
+        LateLanding(plane: livePlane, streakDays: liveStreakDays, finished: !stillLoading)
+    }
 
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
 
@@ -1156,14 +1171,15 @@ struct CatchRevealView: View {
             // down to `back:` is the FRONT, exactly as before.
             FlipCard(isFlipped: $cardFlipped,
                      enabled: RevealCardTaps.turnOverAvailable(shareAvailable: shareAvailable)) {
-                card(t: t, bt: bt, width: width, render: render, shareVisible: shareAvailable,
-                     turnOverVisible: RevealCardTaps.turnOverAvailable(shareAvailable: shareAvailable))
+                card(t: t, bt: bt, width: width, render: render, shareVisible: shareAvailable)
                     // Once the card takes hits (below), a tap on its body that no
                     // control claims (Share, photo zoom, chips) would otherwise
                     // be swallowed, so it does what the catcher behind would:
                     // continue. Child controls win over this parent gesture.
                     .contentShape(Rectangle())
-                    .onTapGesture {
+                    // `onCardTap`: a swipe that turns the card mustn't also
+                    // end the reveal.
+                    .onCardTap {
                         if RevealCardTaps.bodyTapDismisses(chipsShown: chipsPhase == .shown,
                                                            flipped: cardFlipped) {
                             advanceOrDismiss()
@@ -1188,25 +1204,26 @@ struct CatchRevealView: View {
                         hasZoomablePhoto: zoomablePhotoURL != nil, shareAvailable: shareAvailable))
                     // At rest the card is ONE VoiceOver element (`.ignore` above),
                     // which hides the Share button inside it, so Share is offered
-                    // as a named action on that element while it's live.
+                    // as a named action on that element while it's live. (About
+                    // this plane is FlipCard's own control under the card.)
                     .accessibilityActions {
                         if shareAvailable {
                             Button("Share this catch", action: openShare)
                         }
-                        if RevealCardTaps.turnOverAvailable(shareAvailable: shareAvailable) {
-                            Button("About this plane") { cardFlipped = true }
-                        }
                     }
             } back: {
                 CatchCardBack(model: backModel, width: width,
-                              onOpenURL: { openURL($0) },
-                              onTurnBack: { cardFlipped = false })
+                              onOpenURL: { openURL($0) })
                     // Swallow body taps: without this a tap on the back's
                     // empty space would fall through to the dismiss catcher
                     // behind and end the reveal. Its buttons still win.
                     .contentShape(Rectangle())
                     .onTapGesture {}
             }
+            // The late pipeline data lands as one smooth change (see
+            // `lateLanding`). Scoped by value, so the ceremony's own
+            // frame-by-frame updates aren't animated.
+            .animation(.smooth(duration: 0.45), value: lateLanding)
         }, cta: {
             // The streak lives INSIDE the card (the entry-stamp row) since
             // 2026-08-26 — as a free line here it crowded the card's outline
@@ -1230,6 +1247,9 @@ struct CatchRevealView: View {
     /// height, so a card that fits centers exactly as it did in the fixed
     /// column and only a taller card scrolls.
     @State private var cardViewportHeight: CGFloat?
+    /// Whether the card is taller than that viewport (it scrolls). Only
+    /// then does the scroll view clip; see `.scrollClipDisabled` below.
+    @State private var cardOverflowsViewport = false
 
     /// The reveal's column: a scrollable card region with the CTA pinned below.
     /// The dismiss/skip catcher lives in the scroll content's BACKGROUND, so
@@ -1283,6 +1303,16 @@ struct CatchRevealView: View {
                         // No rubber-banding when the card fits — the tall-phone
                         // reveal must feel exactly as fixed as before the scroll view.
                         .scrollBounceBehavior(.basedOnSize)
+                        // Mid-turn, perspective makes the card's near edge
+                        // taller than the card, and the scroll view sliced it
+                        // off flat (Noah's recording, 2026-10-27). When the
+                        // card fits there is nothing scrolled away to leak,
+                        // so let it draw past the edges; a card that scrolls
+                        // (SE) keeps the clip.
+                        .onScrollGeometryChange(for: Bool.self) { geo in
+                            geo.contentSize.height > geo.containerSize.height + 0.5
+                        } action: { _, overflows in cardOverflowsViewport = overflows }
+                        .scrollClipDisabled(!cardOverflowsViewport)
                 } else {
                     // ImageRenderer mirror (it draws UIScrollView content
                     // blank): the same content, cut to a CONCRETE viewport
@@ -1520,9 +1550,14 @@ struct CatchRevealView: View {
         width: CGFloat, size: CGSize, guessState: GuessSnapshotState? = nil
     ) -> some View {
         revealColumn(height: size.height, scrolls: false, card: {
-            card(t: 1.0, bt: guessState?.bt ?? 0, width: width, render: guessState?.render,
-                 shareVisible: guessState?.render.chipsInLayout != true,
-                 turnOverVisible: guessState?.render.chipsInLayout != true)
+            // FlipCard's turn row under the card, as on device (hidden, but
+            // laid out, while the chips are up).
+            VStack(spacing: 0) {
+                card(t: 1.0, bt: guessState?.bt ?? 0, width: width, render: guessState?.render,
+                     shareVisible: guessState?.render.chipsInLayout != true)
+                CardTurnRow(flipped: false, scale: width / 300) {}
+                    .opacity(guessState?.render.chipsInLayout == true ? 0 : 1)
+            }
         }, cta: {
             // Settled-state chrome, mirrored from `layout` (which gates it
             // on the live `settled` flag this static render never flips).
@@ -1547,7 +1582,7 @@ struct CatchRevealView: View {
     // count-up clock `bt`, and the immutable bonus-round `render` (nil = plain
     // reveal). Keeping it pure of `@State` lets any beat render as a static frame.
     private func card(t: Double, bt: Double, width: CGFloat, render: GuessRender?,
-                      shareVisible: Bool, turnOverVisible: Bool = false) -> some View {
+                      shareVisible: Bool) -> some View {
         let accent = livePlane.rarity.tint
         // The prototype's absolute sizes were tuned for a 300pt-wide card.
         // Scale every metric off the real card width so it reads full-size
@@ -1561,7 +1596,10 @@ struct CatchRevealView: View {
         // top); it restores to full height once the chips collapse, so the
         // settled card matches a plain reveal. The change rides the chip
         // pop/collapse animation, reading as the card making room then restoring.
-        let photoHeight = ((render?.chipsInLayout ?? false) ? 100.0 : 168.0) * scale
+        // 152, not the settled card's 168 (2026-10-27): the turn-over row
+        // under the card needs that room on a 6.1" phone with a three-line
+        // name (`RevealShortScreenTests`).
+        let photoHeight = ((render?.chipsInLayout ?? false) ? 100.0 : 152.0) * scale
         // The reveal's own count-up climbs to the pre-bonus total; a correct
         // in-card guess then rolls its route bonus in on the separate `bt` clock.
         let revealCount = Int((Double(revealTargetTotal) * easeOut(ss(0.82, 0.96, t))).rounded())
@@ -1626,7 +1664,7 @@ struct CatchRevealView: View {
                     // guard mirrors the card's hit-testing gate — before the
                     // settle (hit-testing off) a photo tap skips the animation
                     // like any other tap.
-                    .onTapGesture {
+                    .onCardTap {
                         guard settled, let url = zoomablePhotoURL else { return }
                         heroZoom.openByTap(url: url, focus: livePlane.photoFocus)
                     }
@@ -1698,7 +1736,8 @@ struct CatchRevealView: View {
 
                     // Entry stamp — streak left, entry number right — hidden
                     // while the chips occupy the card, so the round has room;
-                    // it returns once they collapse.
+                    // it returns once they collapse. (About this plane sits
+                    // under the card since 2026-10-28; see `FlipCard`.)
                     if !(render?.chipsInLayout ?? false) {
                         HStack {
                             if let days = liveStreakDays {
@@ -1712,28 +1751,11 @@ struct CatchRevealView: View {
                         .opacity(ss(0.9, 1.0, t))
                         .padding(.top, 2 * scale)
                     }
-
                 }
                 .padding(.horizontal, hPad)
-                .padding(.bottom, 22 * scale)
-                // Turn the card over (2026-10-25). An overlay centred in the
-                // card's bottom padding, so it adds no height: the card must
-                // not grow at settle, and a 6.1" phone has no room for
-                // another row (`RevealShortScreenTests`). Faded in once
-                // Share is live, like the Share button. At rest the card is
-                // one VoiceOver element, so the same action is also offered
-                // via `accessibilityActions` in `layout`.
-                .overlay(alignment: .bottom) {
-                    CardTurnOverButton(title: "ABOUT THIS PLANE", scale: scale) {
-                        cardFlipped = true
-                    }
-                    // The 44 pt hit row's centre sits mid-padding.
-                    .offset(y: 22 - 11 * scale)
-                    .opacity(turnOverVisible ? 1 : 0)
-                    .allowsHitTesting(turnOverVisible)
-                    .accessibilityHidden(!turnOverVisible)
-                    .animation(.easeOut(duration: 0.25), value: turnOverVisible)
-                }
+                // 16, not 22 (2026-10-28): the turn row under the card
+                // needs the room on a 6.1" phone.
+                .padding(.bottom, 16 * scale)
             }
             .frame(width: width)
             .modifier(CatchRarityFrame(rarity: livePlane.rarity, scale: scale))
@@ -1775,6 +1797,13 @@ struct CatchRevealView: View {
                     }
                 } else {
                     realRouteOrDist(hasRoute: hasRoute, scale: scale, accent: accent)
+                        // While the catch is still saving, the shell has no
+                        // route yet (it lands with the finished snapshot), so
+                        // DIST holds the taller ROUTE row's height: the card
+                        // doesn't grow when the route arrives (Noah's device
+                        // recording, 2026-10-26). 58 × scale = the ROUTE
+                        // cell's label + codes + city line.
+                        .frame(minHeight: stillLoading ? 58 * scale : nil, alignment: .topLeading)
                 }
             }
             .opacity(ss(0.66, 0.82, t))

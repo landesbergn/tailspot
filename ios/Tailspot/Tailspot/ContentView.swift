@@ -731,10 +731,17 @@ struct ContentView: View {
                         // their features shipping. The STREAK row stayed:
                         // main grew its 🔔 Ask re-offer tester after the
                         // declutter (#366).
-                        HStack(spacing: 8) {
-                            Button("✦ Fake a catch") { simulateCatch() }
-                            Button("★ Reset rating prompt") { ReviewPrompter.shared.debugClearStamp() }
+                        // Two rows: three buttons don't fit one on a 6.1".
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack(spacing: 8) {
+                                Button("✦ Fake a catch") { simulateCatch() }
+                                Button("★ Reset rating prompt") { ReviewPrompter.shared.debugClearStamp() }
+                            }
+                            // The card's new-user peek (CardFlipTease) runs
+                            // again on the next cards.
+                            Button("↻ Reset card peek") { CardFlipTeaseStore.debugReset() }
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .font(Brand.Font.mono(size: 11, weight: .bold))
                         .buttonStyle(.bordered)
                         .tint(Brand.Color.cyan)
