@@ -17,6 +17,20 @@ Git history + PLAN.md §9 remain the authoritative record.
 - Merged 56 main commits. Streak debug tooling kept from main; first-label
   tap telemetry wired into both modes' tap paths.
 
+## 2026-10-25 — Catch card backs (PR #388)
+
+- Every catch card turns over (3D flip, button or swipe) to a back with the
+  Planespotters photo of the airframe (else a Commons type photo), "you and
+  this type" from the Hangar, bundled Wikidata specs, and a live Wikipedia
+  summary. Hangar detail and the reveal (reveal fetches nothing until the
+  first turn-over). New `catch_card_turned` event. Detail in PLAN §9.
+- Type photos 286 → 301 of 302: the generator also tries an article's other
+  photos (Cessna 152 now uses its own article, photo and specs).
+- Device-pass changes: "NO PHOTO AVAILABLE" panel instead of the sky
+  placeholder; YOU AND THIS TYPE is first caught plus a catch log by operator
+  (catch count and family progress dropped); the Wikipedia teaser opens a
+  sheet with the whole intro paragraph.
+
 ## 2026-10-24 — Security audit (branch `worktree-security-audit-2026-10`)
 
 - Four parallel reviews (backend auth, backend catches/challenges, web + CI,

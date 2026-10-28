@@ -5,7 +5,8 @@
 > well; this draft makes three updates for GA: (1) §2/§6 now reflect **Hangar
 > restore** (catch records live server-side and are restorable; photos are not),
 > (2) §5 adds Planespotters photos to the third-party content note, (3) §4 adds
-> the bonus-round guess to the fair-play list. Port into
+> the bonus-round guess to the fair-play list, (4) §5 adds Wikipedia text and
+> Wikimedia Commons photos (card backs, 2026-10-25). Port into
 > `web/public/terms.html` on approval and bump the effective date.
 
 ---
@@ -88,6 +89,13 @@ Landesberg. Third-party content shown in the app remains its owners':
   copyright of the credited photographer; the credit line under each photo
   links to the original. They are displayed under Planespotters' terms, not
   licensed to you for reuse.
+- **Aircraft type information** on the back of a catch card comes from
+  Wikipedia (summaries, CC BY-SA 4.0, shown unedited with a link to the
+  article) and Wikidata (facts such as first flight and number built, CC0).
+  **Type photos** come from Wikimedia Commons and are the work of the credited
+  author under the licence named in the credit line, which links to the
+  original file page. Summaries and photos load from Wikimedia's servers;
+  the facts ship with the app. None of it is written or verified by Tailspot.
 
 You own the photos you take. The app generates catch records from public flight
 data — you don't own the underlying flight data, but the record of your catch

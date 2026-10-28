@@ -14,6 +14,12 @@
 //  Planespotters thumbnail by icao24 on appear and rebuild the CardPlane
 //  with that URL; if that also misses, the card paints its placeholder.
 //
+//  The card turns over (2026-10-25): `FlipCard` holds the settled card on
+//  the front and `CatchCardBack` (closeup photo + type info) on the back.
+//  Planespotters is fetched on appear for EVERY catch now, because the
+//  back's closeup wants the exact airframe even when the front shows the
+//  user's own photo. The Wikipedia summary waits for the first turn-over.
+//
 //  Dates pulled from `row.firstCatch` (earliest), not `row.mostRecent`,
 //  so CAUGHT reads as a fact about the tail, not the latest tap.
 //
@@ -48,6 +54,27 @@ struct CatchDetailView: View {
     /// distinction for the attribution chip — hence `didFetchPhoto`.
     @State private var planespottersPhoto: PlanePhoto? = nil
     @State private var didFetchPhoto = false
+    /// True once the Planespotters lookup has ANSWERED (hit or miss) — the
+    /// back's closeup shows `.loading` until then.
+    @State private var planespottersResolved = false
+
+    // MARK: Card back (2026-10-25)
+
+    /// Which face of the card is up. FlipCard also toggles it on a swipe,
+    /// so side effects hang off `onChange(of: isFlipped)`, not the buttons.
+    @State private var isFlipped = false
+    /// A turn to the back made before the Planespotters lookup answered;
+    /// reported once the closeup resolves (`CardTurnAnalytics.sendsImmediately`).
+    @State private var pendingTurnReport = false
+    /// Bundled type facts + "you and this type", computed once on appear
+    /// (after the backfill, which can fill a missing typecode) rather than
+    /// in `body` — TypeHistory walks the whole Hangar.
+    @State private var typeInfo: TypeInfo? = nil
+    @State private var typeHistory: TypeHistory? = nil
+    /// The live Wikipedia summary, fetched on the first turn-over.
+    @State private var summary: WikipediaSummary? = nil
+    @State private var summaryLoading = false
+    @State private var didRequestSummary = false
 
     /// Whole-Hangar query, only consulted by `wasFirstOfType` (the ledger's
     /// FIRST OF TYPE line needs to know whether any catch of this typecode
@@ -68,21 +95,29 @@ struct CatchDetailView: View {
                 VStack(spacing: 14) {
                     // Direction B (2026-07-05): the reveal card at rest IS
                     // the detail screen — one card design across the app.
-                    SettledCatchCard(
-                        plane: detailPlane,
-                        isFirstOfType: wasFirstOfType,
-                        width: min(geo.size.width - 36, 420),
-                        // User catch photo → the full-res zoom viewer.
-                        // Planespotters hero → its photo page (TOS: the
-                        // thumbnail itself must link there; licensing review
-                        // 2026-07-11 — the tappable caption below stays as
-                        // the visible credit). Placeholder → inert.
-                        onPhotoTap: heroTapAction,
-                        photoTapAccessibilityLabel: hasCatchPhoto
-                            ? "View photo full screen"
-                            : "View photo on Planespotters.net",
-                        heroZoom: hasCatchPhoto ? heroZoom : nil
-                    )
+                    let cardWidth = min(geo.size.width - 36, 420)
+                    FlipCard(isFlipped: $isFlipped) {
+                        SettledCatchCard(
+                            plane: detailPlane,
+                            isFirstOfType: wasFirstOfType,
+                            width: cardWidth,
+                            // User catch photo → the full-res zoom viewer.
+                            // Planespotters hero → its photo page (TOS: the
+                            // thumbnail itself must link there; licensing review
+                            // 2026-07-11 — the tappable caption below stays as
+                            // the visible credit). Placeholder → inert.
+                            onPhotoTap: heroTapAction,
+                            photoTapAccessibilityLabel: hasCatchPhoto
+                                ? "View photo full screen"
+                                : "View photo on Planespotters.net",
+                            heroZoom: hasCatchPhoto ? heroZoom : nil,
+                            onTurnOver: { isFlipped = true }
+                        )
+                    } back: {
+                        CatchCardBack(model: backModel, width: cardWidth,
+                                      onOpenURL: { openURL($0) },
+                                      onTurnBack: { isFlipped = false })
+                    }
                     .frame(maxWidth: .infinity)
                     finePrint
                     if let photo = planespottersPhoto, !hasCatchPhoto {
@@ -133,18 +168,81 @@ struct CatchDetailView: View {
         // disable the interactive pop gesture in addition to hiding
         // the (already hidden) back button.
         .task {
+            // Type facts before AND after the backfill: the first pass
+            // fills the back straight away, the second catches a typecode
+            // the backfill just recovered.
+            computeTypeFacts()
+            // Only when the backfill filled a field the type facts read.
+            let factsKey = { [first.typecode, first.manufacturer, first.model, first.operatorName] }
+            let before = factsKey()
             await backfillIfNeeded()
-            // Skip the net call when the user has a catch photo —
-            // the card already paints that JPEG and attribution is
-            // suppressed.
-            guard !didFetchPhoto, !hasCatchPhoto else {
-                didFetchPhoto = true
-                return
-            }
+            if factsKey() != before { computeTypeFacts() }
+            if isFlipped { fetchSummaryIfNeeded() }
+            // Fetched for every catch: the front hero only uses it when
+            // there's no catch photo (`detailPlane`), but the back's
+            // closeup always wants the exact airframe.
+            guard !didFetchPhoto else { return }
             didFetchPhoto = true
             let fetched = await PlanespottersClient.shared.photo(for: first.icao24)
             withAnimation(.easeInOut(duration: 0.25)) {
                 planespottersPhoto = fetched
+                planespottersResolved = true
+            }
+        }
+        .onChange(of: isFlipped) { _, flipped in
+            if pendingTurnReport { sendTurnReport(flipped: true) }
+            if CardTurnAnalytics.sendsImmediately(flipped: flipped, closeup: backModel.closeup) {
+                sendTurnReport(flipped: flipped)
+            } else {
+                pendingTurnReport = true
+            }
+            if flipped { fetchSummaryIfNeeded() }
+        }
+        .onChange(of: backModel.closeup) { _, closeup in
+            if pendingTurnReport, closeup != .loading { sendTurnReport(flipped: true) }
+        }
+    }
+
+    // MARK: - Card back
+
+    /// What the back renders. Cheap: everything heavy is cached in @State.
+    private var backModel: CardBackModel {
+        CardBackModel(
+            modelName: detailPlane.model ?? "Unknown aircraft",
+            registration: first.registration,
+            rarity: rarity,
+            closeup: .resolve(planespotters: planespottersPhoto,
+                              lookupDone: planespottersResolved,
+                              typePhoto: typeInfo?.photo),
+            typeInfo: typeInfo,
+            history: typeHistory,
+            summary: summary,
+            summaryLoading: summaryLoading
+        )
+    }
+
+    private func sendTurnReport(flipped: Bool) {
+        pendingTurnReport = false
+        CardTurnAnalytics.capture(source: .detail, flipped: flipped,
+                                  closeup: backModel.closeup,
+                                  hasTypeInfo: typeInfo != nil)
+    }
+
+    private func computeTypeFacts() {
+        typeInfo = TypeInfoStore.info(for: first)
+        typeHistory = TypeHistory.compute(for: first, in: allCatches)
+    }
+
+    /// One Wikipedia request per screen visit, on the first turn-over.
+    private func fetchSummaryIfNeeded() {
+        guard !didRequestSummary, let title = typeInfo?.wikipediaTitle else { return }
+        didRequestSummary = true
+        summaryLoading = true
+        Task {
+            let fetched = await WikipediaSummaryClient.shared.summary(forTitle: title)
+            withAnimation(.easeInOut(duration: 0.25)) {
+                summary = fetched
+                summaryLoading = false
             }
         }
     }
