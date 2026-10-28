@@ -1251,6 +1251,9 @@ struct CatchRevealView: View {
     /// height, so a card that fits centers exactly as it did in the fixed
     /// column and only a taller card scrolls.
     @State private var cardViewportHeight: CGFloat?
+    /// Whether the card is taller than that viewport (it scrolls). Only
+    /// then does the scroll view clip; see `.scrollClipDisabled` below.
+    @State private var cardOverflowsViewport = false
 
     /// The reveal's column: a scrollable card region with the CTA pinned below.
     /// The dismiss/skip catcher lives in the scroll content's BACKGROUND, so
@@ -1304,6 +1307,16 @@ struct CatchRevealView: View {
                         // No rubber-banding when the card fits — the tall-phone
                         // reveal must feel exactly as fixed as before the scroll view.
                         .scrollBounceBehavior(.basedOnSize)
+                        // Mid-turn, perspective makes the card's near edge
+                        // taller than the card, and the scroll view sliced it
+                        // off flat (Noah's recording, 2026-10-27). When the
+                        // card fits there is nothing scrolled away to leak,
+                        // so let it draw past the edges; a card that scrolls
+                        // (SE) keeps the clip.
+                        .onScrollGeometryChange(for: Bool.self) { geo in
+                            geo.contentSize.height > geo.containerSize.height + 0.5
+                        } action: { _, overflows in cardOverflowsViewport = overflows }
+                        .scrollClipDisabled(!cardOverflowsViewport)
                 } else {
                     // ImageRenderer mirror (it draws UIScrollView content
                     // blank): the same content, cut to a CONCRETE viewport
