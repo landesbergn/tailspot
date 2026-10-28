@@ -152,6 +152,13 @@ nonisolated enum CardFlipTease {
     /// How far the card tilts: past halfway to edge-on, enough for the
     /// sheen to catch, never far enough to show the back.
     static let peakDegrees: Double = 50
+    /// Which way the card tilts: the right edge lifts toward you and over
+    /// to the left (2026-10-28, Noah), the start of a swipe-left turn.
+    static let direction: CardFlipMath.TurnDirection = .left
+    /// The peek's tilt in degrees: `peakDegrees` the way `direction` turns.
+    static var peakAngle: Double {
+        direction == .right ? peakDegrees : -peakDegrees
+    }
     /// The wait after the card is ready (the reveal settles; the detail
     /// screen opens) before it peeks, so it reads as the card's own move.
     static let delay: Duration = .milliseconds(900)
@@ -380,10 +387,8 @@ struct FlipCard<Front: View, Back: View>: View {
               CardFlipMath.visibleFace(angle: angle) == .front else { return }
         CardFlipTeaseStore.timesShown += 1
         teaseCount += 1
-        // Tilt the way an untouched card would turn, then back with a bounce.
-        let peak = CardFlipMath.defaultDirection(from: angle) == .right
-            ? CardFlipTease.peakDegrees : -CardFlipTease.peakDegrees
-        withAnimation(.easeOut(duration: 0.32)) { teaseAngle = peak }
+        // Tilt the right edge toward you and over, then back with a bounce.
+        withAnimation(.easeOut(duration: 0.32)) { teaseAngle = CardFlipTease.peakAngle }
         try? await Task.sleep(for: .milliseconds(380))
         withAnimation(.spring(duration: 0.7, bounce: 0.45)) { teaseAngle = 0 }
     }

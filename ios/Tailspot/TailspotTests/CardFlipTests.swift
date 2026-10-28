@@ -130,6 +130,14 @@ struct CardFlipTests {
 
     /// The peek tilts far enough for the sheen to catch, never far enough
     /// to show the back.
+    /// The peek pulls the right edge over to the left, like the start of a
+    /// swipe left (a negative angle sends the left edge away).
+    @Test func peekPullsTheRightEdgeLeft() {
+        #expect(CardFlipTease.direction == .left)
+        #expect(CardFlipTease.peakAngle == -CardFlipTease.peakDegrees)
+        #expect(CardFlipMath.visibleFace(angle: CardFlipTease.peakAngle) == .front)
+    }
+
     @Test func peekNeverShowsTheBack() {
         #expect(CardFlipMath.visibleFace(angle: CardFlipTease.peakDegrees) == .front)
         #expect(CardFlipMath.visibleFace(angle: -CardFlipTease.peakDegrees) == .front)
