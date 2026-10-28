@@ -318,7 +318,10 @@ struct FlipCard<Front: View, Back: View>: View {
             // Under the card, not on either face. Scaled like the card (its
             // design width is 300 pt); `isFlipped` is where the card is going,
             // so the label changes the moment it's tapped.
-            CardTurnRow(flipped: isFlipped, scale: frontSize.width / 300) {
+            // Scale 1 until the front is measured, so the first frame
+            // doesn't draw a tiny control that then jumps to size.
+            CardTurnRow(flipped: isFlipped,
+                        scale: frontSize.width > 0 ? frontSize.width / 300 : 1) {
                 isFlipped.toggle()
             }
             .opacity(enabled ? 1 : 0)
@@ -341,6 +344,11 @@ struct FlipCard<Front: View, Back: View>: View {
             .updating($dragActive) { _, active, _ in active = true }
             .onChanged { _ in swipeGuard.dragChanged() }
             .onEnded { value in
+                // Also here, not only in `onChange(of: dragActive)`: if
+                // SwiftUI folds the gesture state's true→false into one
+                // update, that onChange never fires and the guard would
+                // swallow every later tap on the card.
+                swipeGuard.dragEnded()
                 guard let direction = CardFlipMath.swipeDirection(translation: value.translation)
                 else { return }
                 pendingDirection = direction
@@ -466,7 +474,7 @@ struct CardTurnRow: View {
 
     var body: some View {
         CardTurnOverButton(title: Self.title(flipped: flipped),
-                           scale: max(scale, 0.5), action: action)
+                           scale: scale, action: action)
             // The label swap fades rather than snapping mid-turn.
             .animation(.easeOut(duration: 0.2), value: flipped)
             // The 44 pt hit row overhangs the air above and below it by
