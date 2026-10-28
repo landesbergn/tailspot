@@ -5,11 +5,13 @@
 //  Pins the card flip's pure decisions (CardFlipMath): the face switch at
 //  exactly 90°, which way a swipe or tap turns the card, swipe
 //  classification against vertical scrolling, the sheen, the peek's
-//  policy, and the turn-over button's VoiceOver label.
+//  policy, the turn-over button's VoiceOver label, and when a tap inside
+//  the card counts as the tail of a swipe.
 //
 
 import Testing
 import CoreGraphics
+import Foundation
 @testable import Tailspot
 
 @Suite("Card flip math")
@@ -140,5 +142,24 @@ struct CardFlipTests {
         #expect(CardTurnOverButton.accessibilityLabel(for: "ABOUT THIS PLANE") == "About this plane")
         #expect(CardTurnOverButton.accessibilityLabel(for: "BACK TO CATCH") == "Back to catch")
         #expect(CardTurnOverButton.accessibilityLabel(for: "") == "")
+    }
+
+    @Test func aTapDuringOrJustAfterASwipeIsPartOfIt() {
+        let end = Date(timeIntervalSinceReferenceDate: 1000)
+        #expect(CardFlipMath.tapIsPartOfSwipe(dragging: true, swipeEndedAt: nil, now: end))
+        #expect(CardFlipMath.tapIsPartOfSwipe(dragging: false, swipeEndedAt: end,
+                                              now: end.addingTimeInterval(0.1)))
+        #expect(!CardFlipMath.tapIsPartOfSwipe(dragging: false, swipeEndedAt: end,
+                                               now: end.addingTimeInterval(CardFlipMath.swipeTapGrace + 0.01)))
+        #expect(!CardFlipMath.tapIsPartOfSwipe(dragging: false, swipeEndedAt: nil, now: end))
+    }
+
+    @MainActor @Test func guardSwallowsTapsOnlyAroundADrag() {
+        let guard_ = CardSwipeGuard()
+        #expect(!guard_.swallowsTap)
+        guard_.dragChanged()
+        #expect(guard_.swallowsTap)
+        guard_.dragEnded()
+        #expect(guard_.swallowsTap, "the tap that lifts with the swipe is still swallowed")
     }
 }

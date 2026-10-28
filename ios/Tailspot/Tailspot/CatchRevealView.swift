@@ -1178,7 +1178,9 @@ struct CatchRevealView: View {
                     // be swallowed, so it does what the catcher behind would:
                     // continue. Child controls win over this parent gesture.
                     .contentShape(Rectangle())
-                    .onTapGesture {
+                    // `onCardTap`: a swipe that turns the card mustn't also
+                    // end the reveal.
+                    .onCardTap {
                         if RevealCardTaps.bodyTapDismisses(chipsShown: chipsPhase == .shown,
                                                            flipped: cardFlipped) {
                             advanceOrDismiss()
@@ -1647,7 +1649,7 @@ struct CatchRevealView: View {
                     // guard mirrors the card's hit-testing gate — before the
                     // settle (hit-testing off) a photo tap skips the animation
                     // like any other tap.
-                    .onTapGesture {
+                    .onCardTap {
                         guard settled, let url = zoomablePhotoURL else { return }
                         heroZoom.openByTap(url: url, focus: livePlane.photoFocus)
                     }

@@ -287,13 +287,20 @@ struct CatchCardBack: View {
     let model: CardBackModel
     let width: CGFloat
     let onOpenURL: (URL) -> Void
-    /// nil hides the BACK TO CATCH button (the swipe-up style has its own
-    /// tab for that).
+    /// nil hides the BACK TO CATCH button.
     let onTurnBack: (() -> Void)?
     /// DEBUG/test hook: shown in place of the remote closeup so hosted
     /// snapshots (which can't wait on AsyncImage) still show a photo.
     let snapshotImage: UIImage?
     @State private var showingSummary = false
+    @Environment(\.cardSwipeGuard) private var swipeGuard
+
+    /// The photo and credit links: a swipe that started on them turns the
+    /// card instead of opening Planespotters (see `CardSwipeGuard`).
+    private func openUnlessSwiping(_ url: URL) {
+        guard swipeGuard?.swallowsTap != true else { return }
+        onOpenURL(url)
+    }
 
     init(model: CardBackModel, width: CGFloat,
          onOpenURL: @escaping (URL) -> Void, onTurnBack: (() -> Void)?,
@@ -393,7 +400,7 @@ struct CatchCardBack: View {
         VStack(spacing: 6 * scale) {
             if let link {
                 // TOS: the thumbnail itself links to its source page.
-                Button { onOpenURL(link) } label: { photo }
+                Button { openUnlessSwiping(link) } label: { photo }
                     .buttonStyle(.plain)
                     .accessibilityLabel(CardBackFormat.photoAccessibilityLabel(for: model.closeup) ?? "View photo")
             } else {
@@ -401,7 +408,7 @@ struct CatchCardBack: View {
             }
 
             if let credit = CardBackFormat.creditParts(for: model.closeup), let link {
-                Button { onOpenURL(link) } label: {
+                Button { openUnlessSwiping(link) } label: {
                     // Author and source as two Texts: only the author
                     // truncates (at its tail); the licence + source keep
                     // their full width (`fixedSize`), so attribution never
@@ -587,11 +594,11 @@ struct CatchCardBack: View {
             // front), so the whole block opens a sheet with the article's
             // full intro paragraph.
             //
-            // A tap gesture, not a Button: a Button inside the swipe styles'
-            // scroll views could still fire when a swipe started on it. A
-            // `TapGesture` fails as soon as the finger moves, so only a clean
-            // tap opens the sheet. The accessibility traits and action below
-            // restore what the Button gave VoiceOver.
+            // `onCardTap`, not a Button: a swipe that starts on the teaser
+            // turns the card without opening the sheet (a plain tap gesture
+            // or Button still fires if the finger lifts inside it). The
+            // accessibility traits and action below restore what a Button
+            // gives VoiceOver.
             VStack(alignment: .leading, spacing: 6 * scale) {
                 // Unedited Wikipedia text. Lowest layout priority: when
                 // the back is shorter than its content, this is what
@@ -620,7 +627,7 @@ struct CatchCardBack: View {
                 }
             }
             .contentShape(Rectangle())
-            .onTapGesture { showingSummary = true }
+            .onCardTap { showingSummary = true }
             .layoutPriority(-1)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(summary.extract)

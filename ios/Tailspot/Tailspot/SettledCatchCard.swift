@@ -57,6 +57,8 @@ struct SettledCatchCard: View {
     private var base: Int { plane.rarity.basePoints }
     private var bonus: Int { isFirstOfType ? Int((Double(base) * 0.5).rounded()) : 0 }
 
+    @Environment(\.cardSwipeGuard) private var swipeGuard
+
     var body: some View {
         let accent = plane.rarity.tint
         let scale = width / 300
@@ -91,7 +93,12 @@ struct SettledCatchCard: View {
                     // itself performs the caller's tap action — the
                     // Planespotters photo page (TOS: "the thumbnail linked
                     // back to the original page") or the catch-photo viewer.
-                    Button(action: onPhotoTap) { hero }
+                    // A swipe that started on the photo turns the card
+                    // instead (see `CardSwipeGuard`).
+                    Button {
+                        guard swipeGuard?.swallowsTap != true else { return }
+                        onPhotoTap()
+                    } label: { hero }
                         .buttonStyle(.plain)
                         .accessibilityLabel(photoTapAccessibilityLabel)
                 } else {

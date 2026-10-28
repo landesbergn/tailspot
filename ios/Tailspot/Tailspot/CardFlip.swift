@@ -58,6 +58,20 @@ nonisolated enum CardFlipMath {
     /// angle grows), `.left` the left edge (it shrinks).
     enum TurnDirection: Equatable, Sendable { case left, right }
 
+    /// How long after a swipe ends a tap on the card still counts as part
+    /// of it: the drag's end and the tap's touch-up land in the same
+    /// gesture pass, in no promised order.
+    static let swipeTapGrace: TimeInterval = 0.3
+
+    /// Whether a tap on something inside the card is really the end of a
+    /// swipe (or a scroll) and should do nothing (2026-10-27): true while a
+    /// drag is under way, and for `swipeTapGrace` after it ends.
+    static func tapIsPartOfSwipe(dragging: Bool, swipeEndedAt: Date?, now: Date) -> Bool {
+        if dragging { return true }
+        guard let swipeEndedAt else { return false }
+        return now.timeIntervalSince(swipeEndedAt) < swipeTapGrace
+    }
+
     /// A horizontal drag must travel at least this far to flip the card.
     static let swipeThreshold: CGFloat = 40
     /// `rotation3DEffect` perspective — enough depth to read as 3D without
@@ -157,12 +171,57 @@ enum CardFlipTeaseStore {
     }
 }
 
+/// What a FlipCard's faces ask before acting on a tap: is this finger
+/// really swiping? SwiftUI lets a tap gesture or a Button inside the card
+/// fire even when the touch moved, as long as it lifts inside the control,
+/// so a swipe that starts on the photo or the Wikipedia teaser would open
+/// it as well as turning the card. A plain class, not observed: the faces
+/// read it at tap time and nothing needs to redraw when it changes.
+final class CardSwipeGuard {
+    private var dragging = false
+    private var endedAt: Date?
+
+    func dragChanged() { dragging = true }
+    func dragEnded() {
+        dragging = false
+        endedAt = .now
+    }
+
+    var swallowsTap: Bool {
+        CardFlipMath.tapIsPartOfSwipe(dragging: dragging, swipeEndedAt: endedAt, now: .now)
+    }
+}
+
+/// `.onCardTap { }`: `onTapGesture` that ignores a touch that was part of
+/// a swipe on the enclosing FlipCard. A modifier rather than a helper on
+/// the screen, because only views INSIDE the FlipCard see its guard in
+/// their environment.
+private struct CardTap: ViewModifier {
+    @Environment(\.cardSwipeGuard) private var swipeGuard
+    let action: () -> Void
+
+    func body(content: Content) -> some View {
+        content.onTapGesture {
+            guard swipeGuard?.swallowsTap != true else { return }
+            action()
+        }
+    }
+}
+
+extension View {
+    func onCardTap(perform action: @escaping () -> Void) -> some View {
+        modifier(CardTap(action: action))
+    }
+}
+
 extension EnvironmentValues {
     /// Set by `FlipCard` on its faces: a turn-over control calls it with the
     /// side it was tapped on just before its action turns the card. nil
     /// outside a FlipCard. `@Entry` declares an environment key and its
     /// default in one line.
     @Entry var cardTurnDirection: ((CardFlipMath.TurnDirection) -> Void)? = nil
+    /// Set by `FlipCard` on its faces; nil outside one. See `CardSwipeGuard`.
+    @Entry var cardSwipeGuard: CardSwipeGuard? = nil
 }
 
 // MARK: - FlipCard
@@ -191,6 +250,9 @@ struct FlipCard<Front: View, Back: View>: View {
     /// it; nil = `CardFlipMath.defaultDirection`.
     @State private var pendingDirection: CardFlipMath.TurnDirection?
     @State private var teaseCount = 0
+    /// `@State` keeps the one guard alive across redraws.
+    @State private var swipeGuard = CardSwipeGuard()
+    @GestureState private var dragActive = false
 
     #if DEBUG
     /// Test hook: render a frozen mid-flip frame (degrees) instead of the
@@ -231,15 +293,20 @@ struct FlipCard<Front: View, Back: View>: View {
             }
         }
         .environment(\.cardTurnDirection) { pendingDirection = $0 }
+        .environment(\.cardSwipeGuard, swipeGuard)
         // `value: angle` scopes the spring to turns; the peek animates its
         // own `teaseAngle` with `withAnimation`.
         .animation(.spring(duration: 0.55, bounce: 0.18), value: angle)
         // A horizontal swipe also turns the card, the way the finger went.
         // `simultaneousGesture` lets the enclosing ScrollView keep its
-        // vertical drag, and buttons inside the faces keep their taps (a tap
-        // never travels 20 pt).
+        // vertical drag, and taps inside the faces keep working (a tap never
+        // travels 20 pt). Any drag past that, sideways or a scroll, tells
+        // the guard, so a control the finger started on doesn't also fire.
         .simultaneousGesture(
-            DragGesture(minimumDistance: 20).onEnded { value in
+            DragGesture(minimumDistance: 20)
+            .updating($dragActive) { _, active, _ in active = true }
+            .onChanged { _ in swipeGuard.dragChanged() }
+            .onEnded { value in
                 guard let direction = CardFlipMath.swipeDirection(translation: value.translation)
                 else { return }
                 pendingDirection = direction
@@ -247,6 +314,12 @@ struct FlipCard<Front: View, Back: View>: View {
             },
             isEnabled: enabled
         )
+        // `@GestureState` snaps back to false when the drag ends OR is
+        // cancelled (a scroll view taking the touch), where `onEnded` would
+        // never run and the guard would swallow every later tap.
+        .onChange(of: dragActive) { _, active in
+            if !active { swipeGuard.dragEnded() }
+        }
         .onChange(of: isFlipped) { _, flipped in turn(toBack: flipped) }
         .task(id: enabled) { await peekIfDue() }
         .sensoryFeedback(.impact(weight: .light), trigger: isFlipped)
@@ -368,6 +441,7 @@ struct CardTurnOverButton: View {
 
     /// Inside a FlipCard: report which half was tapped (see `body`).
     @Environment(\.cardTurnDirection) private var noteTurnDirection
+    @Environment(\.cardSwipeGuard) private var swipeGuard
     @State private var width: CGFloat = 0
 
     var body: some View {
@@ -388,6 +462,7 @@ struct CardTurnOverButton: View {
         // way the tapped side would (2026-10-27): the side is reported to
         // the enclosing FlipCard first, then the action turns the card.
         .onTapGesture { location in
+            guard swipeGuard?.swallowsTap != true else { return }
             noteTurnDirection?(CardFlipMath.tapDirection(x: location.x, width: width))
             action()
         }
