@@ -1731,31 +1731,14 @@ struct CatchRevealView: View {
                         Rectangle().fill(RP.rule).frame(height: 1)
                         ledgerRow("TOTAL", "+\(total)", accent, ss(0.84, 0.92, t), scale: scale, big: true)
                     }
-
-                    // Entry stamp — streak left, entry number right — hidden
-                    // while the chips occupy the card, so the round has room;
-                    // it returns once they collapse.
-                    if !(render?.chipsInLayout ?? false) {
-                        HStack {
-                            if let days = liveStreakDays {
-                                streakStamp(days: days, scale: scale)
-                            }
-                            Spacer()
-                            Text("ENTRY #\(entryNumber)")
-                                .font(.system(size: 9 * scale, weight: .semibold, design: .monospaced))
-                                .tracking(1.5).foregroundColor(RP.faint)
-                        }
-                        .opacity(ss(0.9, 1.0, t))
-                        .padding(.top, 2 * scale)
-                    }
-
                 }
                 .padding(.horizontal, hPad)
-                .padding(.bottom, 4 * scale)
+                .padding(.bottom, 8 * scale)
 
-                // Turn the card over (2026-10-25). Its own row under the
-                // entry stamp (2026-10-27: an overlay in the bottom padding
-                // overlapped the streak and hung off the card's edge). The
+                // Turn the card over (2026-10-25). Its own row between the
+                // ledger and the entry stamp (2026-10-27: an overlay in the
+                // bottom padding overlapped the streak and hung off the
+                // card's edge; Noah then put it above the stamp). The
                 // row is ALWAYS laid out and only fades in once Share is
                 // live, so the card never grows at settle; same spacing as
                 // the settled card's row in `SettledCatchCard`. At rest the
@@ -1769,11 +1752,31 @@ struct CatchRevealView: View {
                 // tappable one), so the row costs ~28 pt of card height.
                 .padding(.vertical, -8)
                 .padding(.horizontal, hPad)
-                .padding(.bottom, 10 * scale)
+                .padding(.bottom, 4 * scale)
                 .opacity(turnOverVisible ? 1 : 0)
                 .allowsHitTesting(turnOverVisible)
                 .accessibilityHidden(!turnOverVisible)
                 .animation(.easeOut(duration: 0.25), value: turnOverVisible)
+
+                // Entry stamp, the card's sign-off: streak left, entry number
+                // right. Hidden while the chips occupy the card, so the round
+                // has room; it returns once they collapse.
+                Group {
+                    if !(render?.chipsInLayout ?? false) {
+                        HStack {
+                            if let days = liveStreakDays {
+                                streakStamp(days: days, scale: scale)
+                            }
+                            Spacer()
+                            Text("ENTRY #\(entryNumber)")
+                                .font(.system(size: 9 * scale, weight: .semibold, design: .monospaced))
+                                .tracking(1.5).foregroundColor(RP.faint)
+                        }
+                        .opacity(ss(0.9, 1.0, t))
+                    }
+                }
+                .padding(.horizontal, hPad)
+                .padding(.bottom, 16 * scale)
             }
             .frame(width: width)
             .modifier(CatchRarityFrame(rarity: livePlane.rarity, scale: scale))

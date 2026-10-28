@@ -59,10 +59,23 @@ struct RootView: View {
         ProcessInfo.processInfo.arguments.contains("-uiTestHangar")
     }
 
+    /// DEBUG-only screen-recording hook: `-demoCatchReveal` opens straight
+    /// on a catch reveal with a sample plane, so the card (and its flip) can
+    /// be recorded in the simulator, which has no camera to catch with.
+    private var demoCatchReveal: Bool {
+        #if DEBUG
+        ProcessInfo.processInfo.arguments.contains("-demoCatchReveal")
+        #else
+        false
+        #endif
+    }
+
     var body: some View {
         Group {
             if uiTestHangar {
                 HangarView()
+            } else if demoCatchReveal {
+                demoReveal
             } else if completed {
                 ContentView()
             } else {
@@ -732,3 +745,27 @@ struct OnboardingFlow: View {
 #Preview {
     OnboardingFlow(onFinish: {})
 }
+
+
+#if DEBUG
+private extension RootView {
+    /// The `-demoCatchReveal` card: a long-haul widebody with a route, a
+    /// streak and an entry number, like a typical catch.
+    var demoReveal: some View {
+        var reveal = CatchRevealView(
+            plane: CardPlane(callsign: "BAW6B", model: "Boeing 777-300ER",
+                             carrier: "British Airways", rarity: .common, type: .wide,
+                             altText: "10,350 ft", speedText: "345 mph",
+                             originIcao: "SFO", destIcao: "LHR",
+                             originName: "San Francisco", destName: "London",
+                             icao24: "400ac2"),
+            entryNumber: 523, onDismiss: {}, onViewInHangar: {})
+        reveal.streakDays = 7
+        return reveal
+    }
+}
+#else
+private extension RootView {
+    var demoReveal: some View { EmptyView() }
+}
+#endif
