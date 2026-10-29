@@ -189,6 +189,16 @@ nonisolated enum Analytics {
     static var apiKey: String? { apiKeyFromBundle() }
 
     private static func apiKeyFromBundle() -> String? {
-        Bundle.main.object(forInfoDictionaryKey: "PostHogAPIKey") as? String
+        // Simulator runs are always keyless. Every fresh simulator install
+        // mints a new anonymous PostHog person (device model "arm64", geo-IP of
+        // the dev Mac), which inflated install/new-user counts. Both the SDK
+        // setup and the event sink read the key here, so this one check turns
+        // both off. `#if targetEnvironment(simulator)` is a compile-time
+        // branch: device builds don't contain this code at all.
+        #if targetEnvironment(simulator)
+        return nil
+        #else
+        return Bundle.main.object(forInfoDictionaryKey: "PostHogAPIKey") as? String
+        #endif
     }
 }
