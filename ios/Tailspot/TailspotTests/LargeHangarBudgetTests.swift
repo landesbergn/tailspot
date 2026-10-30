@@ -458,6 +458,22 @@ struct LargeHangarBudgetTests {
                 "HangarGrouping.group took \(t) s at 10k rows, over a ~10x-headroom ceiling of \(Budget.grouping10k) s: an order-of-magnitude slip, not runner noise")
     }
 
+    /// One keystroke on the Catches search field: filtering against the
+    /// memoized haystacks, which is all a keystroke does. Building the
+    /// haystacks is logged too; it runs once per Hangar change, inside the
+    /// HangarRecentView memo, not per keystroke.
+    @Test func catchesSearchKeystrokeWithinBudgetAt10k() {
+        let rows = HangarGrouping.group(Self.hangar10k, by: .recent).first?.rows ?? []
+        let build = fastest { Self.sink &+= HangarGrouping.searchHaystacks(for: rows).count }
+        let haystacks = HangarGrouping.searchHaystacks(for: rows)
+        let t = fastest {
+            Self.sink &+= HangarGrouping.search(rows, haystacks: haystacks, query: "boeing 737").count
+        }
+        print("[LargeHangarBudget] search haystacks @10k: \(Int(build * 1000)) ms; keystroke: \(Int(t * 1000)) ms")
+        #expect(t < Budget.searchKeystroke10k,
+                "A Catches search keystroke took \(t) s at 10k catches, over a ~10x-headroom ceiling of \(Budget.searchKeystroke10k) s: an order-of-magnitude slip, not runner noise")
+    }
+
     @Test func distinctMatchKeysWithinBudgetAt10k() {
         let rows = Self.hangar10k
         let t = fastest { Self.sink &+= CardSets.distinctMatchKeys(for: rows).count }
@@ -525,6 +541,7 @@ struct LargeHangarBudgetTests {
         static let inputs10k = 10.0
         static let grouping10k = 2.0
         static let matchKeys10k = 1.0
+        static let searchKeystroke10k = 0.5
         static let upgradeLaunch10k = 20.0
     }
 }

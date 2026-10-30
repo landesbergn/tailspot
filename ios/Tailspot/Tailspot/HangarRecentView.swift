@@ -29,12 +29,18 @@ struct HangarRecentView: View {
     /// eval (isEmpty + ForEach), on every segment switch. See
     /// HangarDerivedCache. The pair is derived in one pass so the sparkle
     /// set can never drift from the rows it describes.
-    @State private var cache = DerivedCacheBox<([HangarRow], Set<String>)>()
+    /// The search haystacks ride the same memo, so typing a query filters
+    /// precomputed strings instead of rebuilding every row's text.
+    @State private var cache = DerivedCacheBox<([HangarRow], Set<String>, [String])>()
 
-    private var derived: ([HangarRow], Set<String>) {
+    private var derived: ([HangarRow], Set<String>, [String]) {
         cache.value(for: CatchFingerprint.of(catches)) {
             let rows = HangarGrouping.group(catches, by: .recent).first?.rows ?? []
-            return (rows, HangarGrouping.firstOfTypeRowIDs(rows: rows, allCatches: catches))
+            return (
+                rows,
+                HangarGrouping.firstOfTypeRowIDs(rows: rows, allCatches: catches),
+                HangarGrouping.searchHaystacks(for: rows)
+            )
         }
     }
 
@@ -45,12 +51,14 @@ struct HangarRecentView: View {
         // properties read inside that closure, so every row coming on screen
         // hashed the whole Hangar: the Recent-list scroll stutter (2026-10),
         // worst on the biggest Hangars. Locals are captured by value instead.
-        let (allRows, firstOfTypeIDs) = derived
+        let (allRows, firstOfTypeIDs, haystacks) = derived
         // The field only exists past five cards. Gate the FILTER on the same
         // check, so deleting down to five can't leave an invisible query
         // hiding cards.
-        let showsSearch = allRows.count > HangarGrouping.searchMinRowsExclusive
-        let rows = showsSearch ? HangarGrouping.search(allRows, query: query) : allRows
+        let showsSearch = allRows.count >= HangarGrouping.searchMinRows
+        let rows = showsSearch
+            ? HangarGrouping.search(allRows, haystacks: haystacks, query: query)
+            : allRows
         return VStack(spacing: 0) {
             if showsSearch {
                 searchField
@@ -132,6 +140,7 @@ struct HangarRecentView: View {
             .font(Brand.Font.body)
             .foregroundStyle(Brand.Color.textPrimary)
             .tint(Brand.Color.cyan)
+            .accessibilityLabel("Search catches")
             .autocorrectionDisabled()
             .textInputAutocapitalization(.never)
             .submitLabel(.search)

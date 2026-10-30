@@ -67,8 +67,8 @@ enum HangarGrouping {
     case airline
     /// Single flat list of every dedup'd row, sorted by recency.
     /// Dedupe still applies (catches sharing an icao24 collapse into
-    /// one ×N row); only the section grouping is suppressed. Matches
-    /// the design canvas's "Recent" segmented option.
+    /// one ×N row); only the section grouping is suppressed. Backs the
+    /// Hangar's Catches segment (the design canvas's "Recent" option).
     case recent
 
     /// Title shown when a catch has no usable key for the selected
@@ -119,47 +119,58 @@ enum HangarGrouping {
             }
     }
 
-    /// The Catches list shows its search field only once it holds MORE
-    /// than this many cards; below that, scanning beats typing.
-    static let searchMinRowsExclusive = 5
+    /// The Catches list shows its search field once it holds at least this
+    /// many cards; below that, scanning beats typing.
+    static let searchMinRows = 6
 
     /// Filters rows to those whose card text matches `query`, keeping
-    /// order. Matches what the card shows (callsign, registration, hex id,
-    /// airline, make/model, typecode, place, route codes) so a search
-    /// never hides a card for text the user can't see on it — or misses
-    /// one they can. Case- and diacritic-insensitive; every
-    /// whitespace-separated term must match somewhere ("delta 737").
-    /// A blank query returns the rows unchanged.
-    static func search(_ rows: [HangarRow], query: String) -> [HangarRow] {
+    /// order. Searches the card's identity and flight text (callsign,
+    /// registration, hex id, airline, make/model, typecode, place, route
+    /// codes) for the row's most recent catch, the one the card shows.
+    /// Case- and diacritic-insensitive; every whitespace-separated term
+    /// must match somewhere ("delta 737"). A blank query returns the rows
+    /// unchanged.
+    ///
+    /// `haystacks` must be `searchHaystacks(for: rows)`; callers memoize it
+    /// so a keystroke doesn't rebuild every row's text (big Hangars hold
+    /// thousands of rows).
+    static func search(_ rows: [HangarRow], haystacks: [String], query: String) -> [HangarRow] {
         let terms = query
             .split(whereSeparator: \.isWhitespace)
-            .map { $0.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil) }
+            .map { fold(String($0)) }
         guard !terms.isEmpty else { return rows }
-        return rows.filter { row in
-            let haystack = searchText(for: row)
-            return terms.allSatisfy { haystack.contains($0) }
+        return zip(rows, haystacks).compactMap { row, haystack in
+            terms.allSatisfy { haystack.contains($0) } ? row : nil
         }
     }
 
-    /// One folded string of everything searchable on a row's card.
-    private static func searchText(for row: HangarRow) -> String {
-        let c = row.mostRecent
-        let fields: [String?] = [
-            c.callsign,
-            c.registration,
-            row.icao24,
-            Airlines.operatorLabel(operatorName: c.operatorName, callsign: c.callsign),
-            AircraftNaming.canonical(
-                typecode: c.typecode, manufacturer: c.manufacturer, model: c.model
-            ).displayName,
-            c.typecode,
-            c.placeName,
-            c.originIata, c.originIcao, c.destIata, c.destIcao,
-        ]
-        return fields
-            .compactMap { $0 }
-            .joined(separator: " ")
-            .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
+    /// Convenience for callers without a memo (tests).
+    static func search(_ rows: [HangarRow], query: String) -> [HangarRow] {
+        search(rows, haystacks: searchHaystacks(for: rows), query: query)
+    }
+
+    /// One folded string per row of everything `search` matches against.
+    static func searchHaystacks(for rows: [HangarRow]) -> [String] {
+        rows.map { row in
+            let c = row.mostRecent
+            let fields: [String?] = [
+                c.callsign,
+                c.registration,
+                row.icao24,
+                Airlines.operatorLabel(operatorName: c.operatorName, callsign: c.callsign),
+                AircraftNaming.canonical(
+                    typecode: c.typecode, manufacturer: c.manufacturer, model: c.model
+                ).displayName,
+                c.typecode,
+                c.placeName,
+                c.originIata, c.originIcao, c.destIata, c.destIcao,
+            ]
+            return fold(fields.compactMap { $0 }.joined(separator: " "))
+        }
+    }
+
+    private static func fold(_ s: String) -> String {
+        s.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
     }
 
     /// Collapse catches sharing an icao24 into HangarRow entries.
