@@ -459,17 +459,17 @@ struct LargeHangarBudgetTests {
     }
 
     /// One keystroke on the Catches search field: filtering against the
-    /// memoized haystacks, which is all a keystroke does. Building the
-    /// haystacks is logged too; it runs once per Hangar change, inside the
+    /// memoized index, which is all a keystroke does. Building the index is
+    /// logged too; it runs once per Hangar change, inside the
     /// HangarRecentView memo, not per keystroke.
     @Test func catchesSearchKeystrokeWithinBudgetAt10k() {
         let rows = HangarGrouping.group(Self.hangar10k, by: .recent).first?.rows ?? []
-        let build = fastest { Self.sink &+= HangarGrouping.searchHaystacks(for: rows).count }
-        let haystacks = HangarGrouping.searchHaystacks(for: rows)
+        let build = fastest { Self.sink &+= HangarGrouping.searchIndex(for: rows).count }
+        let index = HangarGrouping.searchIndex(for: rows)
         let t = fastest {
-            Self.sink &+= HangarGrouping.search(rows, haystacks: haystacks, query: "boeing 737").count
+            Self.sink &+= HangarGrouping.search(rows, index: index, query: "epic boeing 737").count
         }
-        print("[LargeHangarBudget] search haystacks @10k: \(Int(build * 1000)) ms; keystroke: \(Int(t * 1000)) ms")
+        print("[LargeHangarBudget] search index @10k: \(Int(build * 1000)) ms; keystroke: \(Int(t * 1000)) ms")
         #expect(t < Budget.searchKeystroke10k,
                 "A Catches search keystroke took \(t) s at 10k catches, over a ~10x-headroom ceiling of \(Budget.searchKeystroke10k) s: an order-of-magnitude slip, not runner noise")
     }

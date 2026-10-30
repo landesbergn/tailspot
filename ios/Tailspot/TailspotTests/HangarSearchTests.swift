@@ -98,6 +98,50 @@ struct HangarSearchTests {
         #expect(callsigns("delta oakland").isEmpty)
     }
 
+    /// C-17 is EPIC, 747-400 is RARE, the airliners and the Cessna are COMMON.
+    private var tierFixture: [HangarRow] {
+        let now = Date()
+        return rows([
+            makeCatch(icao: "t1", callsign: "RCH872", typecode: "C17", caughtAt: now),
+            makeCatch(icao: "t2", callsign: "GEC8160", typecode: "B744",
+                      caughtAt: now.addingTimeInterval(-60)),
+            makeCatch(icao: "t3", callsign: "SWA4244", typecode: "B738",
+                      caughtAt: now.addingTimeInterval(-120)),
+            makeCatch(icao: "t4", callsign: "N4521C", typecode: "C172",
+                      caughtAt: now.addingTimeInterval(-180)),
+        ])
+    }
+
+    private func tierCallsigns(_ query: String) -> [String] {
+        HangarGrouping.search(tierFixture, query: query).compactMap { $0.mostRecent.callsign }
+    }
+
+    @Test func tierNameMatchesThatTier() {
+        #expect(tierCallsigns("epic") == ["RCH872"])
+        #expect(tierCallsigns("RARE") == ["GEC8160"])
+        #expect(tierCallsigns("common") == ["SWA4244", "N4521C"])
+        #expect(tierCallsigns("legendary").isEmpty)
+    }
+
+    @Test func tierCombinesWithText() {
+        #expect(tierCallsigns("common boeing") == ["SWA4244"])
+        #expect(tierCallsigns("rare cessna").isEmpty)
+    }
+
+    @Test func commonDoesNotMatchUncommon() {
+        // A109 (Agusta helicopter) is UNCOMMON. A tier term is an exact tier
+        // match, never a substring of another tier's name.
+        let r = rows([makeCatch(icao: "u1", callsign: "X1", typecode: "A109")])
+        #expect(r.first?.rarity == .uncommon)
+        #expect(HangarGrouping.search(r, query: "common").isEmpty)
+        #expect(HangarGrouping.search(r, query: "uncommon").count == 1)
+    }
+
+    @Test func partialTierWordIsPlainText() {
+        // "epi" isn't a tier name, so it's an ordinary substring search.
+        #expect(tierCallsigns("epi").isEmpty)
+    }
+
     @Test func ignoresDiacritics() {
         let r = rows([makeCatch(icao: "b1", callsign: "AFR83", placeName: "Montréal")])
         #expect(HangarGrouping.search(r, query: "montreal").count == 1)

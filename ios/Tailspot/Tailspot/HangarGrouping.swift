@@ -123,34 +123,48 @@ enum HangarGrouping {
     /// many cards; below that, scanning beats typing.
     static let searchMinRows = 6
 
-    /// Filters rows to those whose card text matches `query`, keeping
-    /// order. Searches the card's identity and flight text (callsign,
-    /// registration, hex id, airline, make/model, typecode, place, route
-    /// codes) for the row's most recent catch, the one the card shows.
-    /// Case- and diacritic-insensitive; every whitespace-separated term
-    /// must match somewhere ("delta 737"). A blank query returns the rows
-    /// unchanged.
+    /// What `search` matches one row against: its folded card text and
+    /// its rarity tier. Built once per Hangar change (callers memoize it),
+    /// never per keystroke.
+    struct SearchEntry {
+        let text: String
+        let rarity: Rarity
+    }
+
+    /// Filters rows to those matching `query`, keeping order. Each
+    /// whitespace-separated term must match. A term that is exactly a
+    /// tier name ("rare", "epic") matches rows of that tier and nothing
+    /// else, so "common" doesn't also pull in UNCOMMON. Any other term is
+    /// a substring match on the card's identity and flight text
+    /// (callsign, registration, hex id, airline, make/model, typecode,
+    /// place, route codes) for the row's most recent catch, the one the
+    /// card shows. Case- and diacritic-insensitive; terms combine
+    /// ("epic boeing"). A blank query returns the rows unchanged.
     ///
-    /// `haystacks` must be `searchHaystacks(for: rows)`; callers memoize it
-    /// so a keystroke doesn't rebuild every row's text (big Hangars hold
-    /// thousands of rows).
-    static func search(_ rows: [HangarRow], haystacks: [String], query: String) -> [HangarRow] {
+    /// `index` must be `searchIndex(for: rows)`.
+    static func search(_ rows: [HangarRow], index: [SearchEntry], query: String) -> [HangarRow] {
         let terms = query
             .split(whereSeparator: \.isWhitespace)
             .map { fold(String($0)) }
         guard !terms.isEmpty else { return rows }
-        return zip(rows, haystacks).compactMap { row, haystack in
-            terms.allSatisfy { haystack.contains($0) } ? row : nil
+        let matchers: [(SearchEntry) -> Bool] = terms.map { term in
+            if let tier = Rarity(rawValue: term) {
+                return { $0.rarity == tier }
+            }
+            return { $0.text.contains(term) }
+        }
+        return zip(rows, index).compactMap { row, entry in
+            matchers.allSatisfy { $0(entry) } ? row : nil
         }
     }
 
     /// Convenience for callers without a memo (tests).
     static func search(_ rows: [HangarRow], query: String) -> [HangarRow] {
-        search(rows, haystacks: searchHaystacks(for: rows), query: query)
+        search(rows, index: searchIndex(for: rows), query: query)
     }
 
-    /// One folded string per row of everything `search` matches against.
-    static func searchHaystacks(for rows: [HangarRow]) -> [String] {
+    /// One entry per row, in row order, for `search`.
+    static func searchIndex(for rows: [HangarRow]) -> [SearchEntry] {
         rows.map { row in
             let c = row.mostRecent
             let fields: [String?] = [
@@ -165,7 +179,10 @@ enum HangarGrouping {
                 c.placeName,
                 c.originIata, c.originIcao, c.destIata, c.destIcao,
             ]
-            return fold(fields.compactMap { $0 }.joined(separator: " "))
+            return SearchEntry(
+                text: fold(fields.compactMap { $0 }.joined(separator: " ")),
+                rarity: row.rarity
+            )
         }
     }
 

@@ -29,17 +29,17 @@ struct HangarRecentView: View {
     /// eval (isEmpty + ForEach), on every segment switch. See
     /// HangarDerivedCache. The pair is derived in one pass so the sparkle
     /// set can never drift from the rows it describes.
-    /// The search haystacks ride the same memo, so typing a query filters
-    /// precomputed strings instead of rebuilding every row's text.
-    @State private var cache = DerivedCacheBox<([HangarRow], Set<String>, [String])>()
+    /// The search index rides the same memo, so typing a query filters
+    /// precomputed entries instead of rebuilding every row's text.
+    @State private var cache = DerivedCacheBox<([HangarRow], Set<String>, [HangarGrouping.SearchEntry])>()
 
-    private var derived: ([HangarRow], Set<String>, [String]) {
+    private var derived: ([HangarRow], Set<String>, [HangarGrouping.SearchEntry]) {
         cache.value(for: CatchFingerprint.of(catches)) {
             let rows = HangarGrouping.group(catches, by: .recent).first?.rows ?? []
             return (
                 rows,
                 HangarGrouping.firstOfTypeRowIDs(rows: rows, allCatches: catches),
-                HangarGrouping.searchHaystacks(for: rows)
+                HangarGrouping.searchIndex(for: rows)
             )
         }
     }
@@ -51,13 +51,13 @@ struct HangarRecentView: View {
         // properties read inside that closure, so every row coming on screen
         // hashed the whole Hangar: the Recent-list scroll stutter (2026-10),
         // worst on the biggest Hangars. Locals are captured by value instead.
-        let (allRows, firstOfTypeIDs, haystacks) = derived
+        let (allRows, firstOfTypeIDs, searchIndex) = derived
         // The field only exists past five cards. Gate the FILTER on the same
         // check, so deleting down to five can't leave an invisible query
         // hiding cards.
         let showsSearch = allRows.count >= HangarGrouping.searchMinRows
         let rows = showsSearch
-            ? HangarGrouping.search(allRows, haystacks: haystacks, query: query)
+            ? HangarGrouping.search(allRows, index: searchIndex, query: query)
             : allRows
         return VStack(spacing: 0) {
             if showsSearch {
@@ -134,7 +134,7 @@ struct HangarRecentView: View {
             TextField(
                 "",
                 text: $query,
-                prompt: Text("Search callsign, airline, aircraft")
+                prompt: Text("Search callsign, airline, aircraft, tier")
                     .foregroundStyle(Brand.Color.textTertiary)
             )
             .font(Brand.Font.body)
