@@ -67,8 +67,8 @@ enum HangarGrouping {
     case airline
     /// Single flat list of every dedup'd row, sorted by recency.
     /// Dedupe still applies (catches sharing an icao24 collapse into
-    /// one ×N row); only the section grouping is suppressed. Matches
-    /// the design canvas's "Recent" segmented option.
+    /// one ×N row); only the section grouping is suppressed. Backs the
+    /// Hangar's Catches segment (the design canvas's "Recent" option).
     case recent
 
     /// Title shown when a catch has no usable key for the selected
@@ -117,6 +117,77 @@ enum HangarGrouping {
                 default:             return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
                 }
             }
+    }
+
+    /// The Catches list shows its search field once it holds at least this
+    /// many cards; below that, scanning beats typing.
+    static let searchMinRows = 6
+
+    /// What `search` matches one row against: its folded card text and
+    /// its rarity tier. Built once per Hangar change (callers memoize it),
+    /// never per keystroke.
+    struct SearchEntry {
+        let text: String
+        let rarity: Rarity
+    }
+
+    /// Filters rows to those matching `query`, keeping order. Each
+    /// whitespace-separated term must match. A term that is exactly a
+    /// tier name ("rare", "epic") matches rows of that tier and nothing
+    /// else, so "common" doesn't also pull in UNCOMMON. Any other term is
+    /// a substring match on the card's identity and flight text
+    /// (callsign, registration, hex id, airline, make/model, typecode,
+    /// place, route codes) for the row's most recent catch, the one the
+    /// card shows. Case- and diacritic-insensitive; terms combine
+    /// ("epic boeing"). A blank query returns the rows unchanged.
+    ///
+    /// `index` must be `searchIndex(for: rows)`.
+    static func search(_ rows: [HangarRow], index: [SearchEntry], query: String) -> [HangarRow] {
+        let terms = query
+            .split(whereSeparator: \.isWhitespace)
+            .map { fold(String($0)) }
+        guard !terms.isEmpty else { return rows }
+        let matchers: [(SearchEntry) -> Bool] = terms.map { term in
+            if let tier = Rarity(rawValue: term) {
+                return { $0.rarity == tier }
+            }
+            return { $0.text.contains(term) }
+        }
+        return zip(rows, index).compactMap { row, entry in
+            matchers.allSatisfy { $0(entry) } ? row : nil
+        }
+    }
+
+    /// Convenience for callers without a memo (tests).
+    static func search(_ rows: [HangarRow], query: String) -> [HangarRow] {
+        search(rows, index: searchIndex(for: rows), query: query)
+    }
+
+    /// One entry per row, in row order, for `search`.
+    static func searchIndex(for rows: [HangarRow]) -> [SearchEntry] {
+        rows.map { row in
+            let c = row.mostRecent
+            let fields: [String?] = [
+                c.callsign,
+                c.registration,
+                row.icao24,
+                Airlines.operatorLabel(operatorName: c.operatorName, callsign: c.callsign),
+                AircraftNaming.canonical(
+                    typecode: c.typecode, manufacturer: c.manufacturer, model: c.model
+                ).displayName,
+                c.typecode,
+                c.placeName,
+                c.originIata, c.originIcao, c.destIata, c.destIcao,
+            ]
+            return SearchEntry(
+                text: fold(fields.compactMap { $0 }.joined(separator: " ")),
+                rarity: row.rarity
+            )
+        }
+    }
+
+    private static func fold(_ s: String) -> String {
+        s.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
     }
 
     /// Collapse catches sharing an icao24 into HangarRow entries.
