@@ -2,11 +2,12 @@
 //  HangarRecentView.swift
 //  Tailspot
 //
-//  Recent-view body for the Hangar sheet — a chronological feed of the
-//  dedup'd catches, newest-first, each rendered as the shared TailCard
-//  (callsign · airline · date · location). No filters and no rarity/type
-//  chrome; that's a Sets-view affordance and pre-redesign noise
-//  respectively. Spec § 6.
+//  Catches-view body for the Hangar sheet (labelled "Recent" until
+//  2026-10-30) — a chronological feed of the dedup'd catches,
+//  newest-first, each rendered as the shared TailCard (callsign ·
+//  airline · date · location). A search field sits on top once there
+//  are more than five cards (HangarGrouping.search). No rarity/type
+//  chrome; that's pre-redesign noise. Spec § 6.
 //
 
 import SwiftUI
@@ -17,6 +18,12 @@ struct HangarRecentView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Catch.caughtAt, order: .reverse) private var catches: [Catch]
     @State private var rowToDelete: HangarRow?
+    @State private var query: String
+
+    /// `initialQuery` exists for the snapshot harness; the app passes nothing.
+    init(initialQuery: String = "") {
+        _query = State(initialValue: initialQuery)
+    }
     /// Memoizes the grouped rows AND the first-of-type row set across body
     /// evals — this body used to run the full HangarGrouping pass TWICE per
     /// eval (isEmpty + ForEach), on every segment switch. See
@@ -38,39 +45,58 @@ struct HangarRecentView: View {
         // properties read inside that closure, so every row coming on screen
         // hashed the whole Hangar: the Recent-list scroll stutter (2026-10),
         // worst on the biggest Hangars. Locals are captured by value instead.
-        let (rows, firstOfTypeIDs) = derived
-        return ScrollView {
-            if rows.isEmpty {
-                Text("No catches yet")
-                    .font(Brand.Font.body)
-                    .foregroundStyle(Brand.Color.textTertiary)
-                    .padding(.top, 32)
-            } else {
-                LazyVStack(spacing: 10) {
-                    ForEach(rows) { row in
-                        // `firstOfTypeIDs`: icao24s whose card gets the
-                        // first-of-type sparkle + bonus share.
-                        NavigationLink(value: row) {
-                            TailCard(
-                                row: row,
-                                showPoints: true,
-                                isFirstOfType: firstOfTypeIDs.contains(row.icao24)
-                            )
-                        }
-                        .buttonStyle(.plain)
-                        .contextMenu {
-                            Button(role: .destructive) {
-                                rowToDelete = row
-                            } label: {
-                                Label("Delete", systemImage: "trash")
+        let (allRows, firstOfTypeIDs) = derived
+        // The field only exists past five cards. Gate the FILTER on the same
+        // check, so deleting down to five can't leave an invisible query
+        // hiding cards.
+        let showsSearch = allRows.count > HangarGrouping.searchMinRowsExclusive
+        let rows = showsSearch ? HangarGrouping.search(allRows, query: query) : allRows
+        return VStack(spacing: 0) {
+            if showsSearch {
+                searchField
+            }
+            ScrollView {
+                if allRows.isEmpty {
+                    Text("No catches yet")
+                        .font(Brand.Font.body)
+                        .foregroundStyle(Brand.Color.textTertiary)
+                        .padding(.top, 32)
+                } else if rows.isEmpty {
+                    Text("No catches match \u{201C}\(query.trimmingCharacters(in: .whitespaces))\u{201D}")
+                        .font(Brand.Font.body)
+                        .foregroundStyle(Brand.Color.textTertiary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 32)
+                        .padding(.top, 32)
+                } else {
+                    LazyVStack(spacing: 10) {
+                        ForEach(rows) { row in
+                            // `firstOfTypeIDs`: icao24s whose card gets the
+                            // first-of-type sparkle + bonus share.
+                            NavigationLink(value: row) {
+                                TailCard(
+                                    row: row,
+                                    showPoints: true,
+                                    isFirstOfType: firstOfTypeIDs.contains(row.icao24)
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            .contextMenu {
+                                Button(role: .destructive) {
+                                    rowToDelete = row
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
                             }
                         }
                     }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+                    .padding(.bottom, 32)
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 8)
-                .padding(.bottom, 32)
             }
+            // Scrolling the results puts the keyboard away.
+            .scrollDismissesKeyboard(.immediately)
         }
         .background(Brand.Color.bgPrimary)
         .alert(
@@ -89,6 +115,46 @@ struct HangarRecentView: View {
         } message: {
             Text("This can't be undone.")
         }
+    }
+
+    /// Custom field rather than `.searchable`: that modifier attaches to the
+    /// Hangar's NavigationStack, so it would show over Sets and Trophies too.
+    private var searchField: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(Brand.Color.textTertiary)
+            TextField(
+                "",
+                text: $query,
+                prompt: Text("Search callsign, airline, aircraft")
+                    .foregroundStyle(Brand.Color.textTertiary)
+            )
+            .font(Brand.Font.body)
+            .foregroundStyle(Brand.Color.textPrimary)
+            .tint(Brand.Color.cyan)
+            .autocorrectionDisabled()
+            .textInputAutocapitalization(.never)
+            .submitLabel(.search)
+            if !query.isEmpty {
+                Button {
+                    query = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(Brand.Color.textTertiary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Clear search")
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(
+            Brand.Color.bgElevated,
+            in: RoundedRectangle(cornerRadius: Brand.Radius.row)
+        )
+        .padding(.horizontal, 16)
+        .padding(.top, 4)
+        .padding(.bottom, 4)
     }
 
     private var deleteAlertTitle: String {

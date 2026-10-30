@@ -119,6 +119,49 @@ enum HangarGrouping {
             }
     }
 
+    /// The Catches list shows its search field only once it holds MORE
+    /// than this many cards; below that, scanning beats typing.
+    static let searchMinRowsExclusive = 5
+
+    /// Filters rows to those whose card text matches `query`, keeping
+    /// order. Matches what the card shows (callsign, registration, hex id,
+    /// airline, make/model, typecode, place, route codes) so a search
+    /// never hides a card for text the user can't see on it — or misses
+    /// one they can. Case- and diacritic-insensitive; every
+    /// whitespace-separated term must match somewhere ("delta 737").
+    /// A blank query returns the rows unchanged.
+    static func search(_ rows: [HangarRow], query: String) -> [HangarRow] {
+        let terms = query
+            .split(whereSeparator: \.isWhitespace)
+            .map { $0.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil) }
+        guard !terms.isEmpty else { return rows }
+        return rows.filter { row in
+            let haystack = searchText(for: row)
+            return terms.allSatisfy { haystack.contains($0) }
+        }
+    }
+
+    /// One folded string of everything searchable on a row's card.
+    private static func searchText(for row: HangarRow) -> String {
+        let c = row.mostRecent
+        let fields: [String?] = [
+            c.callsign,
+            c.registration,
+            row.icao24,
+            Airlines.operatorLabel(operatorName: c.operatorName, callsign: c.callsign),
+            AircraftNaming.canonical(
+                typecode: c.typecode, manufacturer: c.manufacturer, model: c.model
+            ).displayName,
+            c.typecode,
+            c.placeName,
+            c.originIata, c.originIcao, c.destIata, c.destIcao,
+        ]
+        return fields
+            .compactMap { $0 }
+            .joined(separator: " ")
+            .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
+    }
+
     /// Collapse catches sharing an icao24 into HangarRow entries.
     /// Within each row, `allCatches` is sorted most-recent-first so
     /// `allCatches.first == mostRecent`. The rows themselves are

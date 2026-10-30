@@ -2,7 +2,7 @@
 //  HangarSegmentedSwitcher.swift
 //  Tailspot
 //
-//  Top-of-Hangar segment switcher (Sets / Recent / Trophies) — a thin
+//  Top-of-Hangar segment switcher (Sets / Catches / Trophies) — a thin
 //  wrapper over the shared GlassSegmentedSlider (which grew out of four
 //  2026-07-19 field rounds on THIS control; construction notes live
 //  there). This file owns only the Hangar's segment model, label
@@ -17,7 +17,9 @@ enum HangarSegment: String, CaseIterable, Identifiable {
     var label: String {
         switch self {
         case .sets:     return "Sets"
-        case .recent:   return "Recent"
+        // Shown as "Catches" since 2026-10-30; the case keeps its old
+        // name so stored selections and call sites stay put.
+        case .recent:   return "Catches"
         case .trophies: return "Trophies"
         }
     }
