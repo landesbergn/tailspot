@@ -37,7 +37,7 @@ struct HangarChildBar: View {
                 .foregroundStyle(Brand.Color.textPrimary)
                 .lineLimit(1)
                 .truncationMode(.tail)
-                .padding(.horizontal, 56) // keep the title clear of the 44 pt back disc
+                .padding(.horizontal, 64) // 12 pt bar inset + 44 pt back disc + 8 pt gap
 
             HStack(spacing: 4) {
                 // The shared 44 pt back disc (ChromeButton.swift), so a

@@ -210,7 +210,7 @@ enum RP {
     static let bg = Color(hex: 0x08090C)
     static let ink = Color(hex: 0xE7EEF5)
     static let muted = Color(hex: 0x8DA0B2)
-    /// The quietest ink: ALT/SPD/ROUTE labels, ENTRY #, "tap to continue",
+    /// The quietest ink: ALT/SPD/ROUTE labels, ENTRY #,
     /// the bonus round's SKIP. Lifted from 0x5F7284 (4.01:1 on `bg`, 3.88:1
     /// on the share card's bgPrimary) to clear the WCAG AA 4.5:1 bar for
     /// small text, same hue (a11y pass, 2026-10-22): 4.74:1 on `bg`, 4.58:1
@@ -1137,7 +1137,7 @@ struct CatchRevealView: View {
         return (try? modelContext.fetch(d))?.first
     }
 
-    /// Card stacked ABOVE the CTA so the "tap to continue / View in Hangar"
+    /// Card stacked ABOVE the CTA so the "Continue / View in Hangar"
     /// row is always a reserved strip below the card — never overlapped by a
     /// tall (wrapped-name) card, which is what happened when the card was
     /// free-centered in the full screen and the CTA was pinned to the bottom.
