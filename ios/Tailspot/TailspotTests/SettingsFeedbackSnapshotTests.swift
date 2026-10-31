@@ -25,7 +25,7 @@ struct SettingsFeedbackSnapshotTests {
     private static let snapDir = URL(
         fileURLWithPath: "/private/tmp/tailspot_snaps/w2-settings", isDirectory: true)
 
-    private func snapshot<V: View>(_ view: V, as name: String, height: CGFloat) {
+    private func snapshot<V: View>(_ view: V, as name: String, height: CGFloat) async {
         try? FileManager.default.createDirectory(at: Self.snapDir, withIntermediateDirectories: true)
         let bounds = CGRect(x: 0, y: 0, width: 393, height: height)
         let host = UIHostingController(rootView: view)
@@ -34,7 +34,7 @@ struct SettingsFeedbackSnapshotTests {
         window.overrideUserInterfaceStyle = .dark
         window.makeKeyAndVisible()
         host.view.layoutIfNeeded()
-        RunLoop.main.run(until: Date().addingTimeInterval(0.4))
+        try? await Task.sleep(for: .seconds(0.4))
         let renderer = UIGraphicsImageRenderer(bounds: bounds)
         let png = renderer.pngData { _ in
             host.view.drawHierarchy(in: bounds, afterScreenUpdates: true)
@@ -43,7 +43,7 @@ struct SettingsFeedbackSnapshotTests {
         window.isHidden = true
     }
 
-    @Test func renderSettingsWholeList() {
+    @Test func renderSettingsWholeList() async {
         let defaults = UserDefaults.standard
         let keys = [SpotterHandle.storageKey, StreakReminders.enabledKey,
                     ChallengeReminderScheduler.enabledKey]
@@ -55,16 +55,16 @@ struct SettingsFeedbackSnapshotTests {
 
         var screen = SettingsScreen()
         screen._notifStatusOverride = .authorized
-        snapshot(NavigationStack { screen }, as: "settings_full_default", height: 1300)
-        snapshot(NavigationStack { screen }.dynamicTypeSize(.accessibility2),
-                 as: "settings_full_a11y2", height: 2600)
+        await snapshot(NavigationStack { screen }, as: "settings_full_default", height: 1300)
+        await snapshot(NavigationStack { screen }.dynamicTypeSize(.accessibility2),
+                       as: "settings_full_a11y2", height: 2600)
         #expect(true)
     }
 
     /// The pre-prompt card: the first ask, and the re-offer to someone iOS
     /// denied (only the button label differs). Over a dark stand-in for the
     /// viewfinder.
-    @Test func renderStreakAskCards() {
+    @Test func renderStreakAskCards() async {
         let variants: [(String, Int, String)] = [
             ("streak_ask_first", 1, "Notify me"),
             ("streak_reoffer_settings", 3, "Open Settings"),
@@ -74,8 +74,8 @@ struct SettingsFeedbackSnapshotTests {
                 Color(white: 0.18).ignoresSafeArea()
                 StreakAskCard(days: days, acceptLabel: label, onAccept: {}, onDecline: {})
             }
-            snapshot(card, as: "\(name)_default", height: 852)
-            snapshot(card.dynamicTypeSize(.accessibility2), as: "\(name)_a11y2", height: 852)
+            await snapshot(card, as: "\(name)_default", height: 852)
+            await snapshot(card.dynamicTypeSize(.accessibility2), as: "\(name)_a11y2", height: 852)
         }
         #expect(true)
     }

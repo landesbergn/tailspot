@@ -30,7 +30,7 @@ struct LeadersSheetSnapshotTests {
 
     /// Host `view` in a real window, let the NavigationStack lay out, write
     /// a PNG, and return the window so callers can inspect the hierarchy.
-    private func host<V: View>(_ view: V, snapshotAs name: String) -> UIWindow {
+    private func host<V: View>(_ view: V, snapshotAs name: String) async -> UIWindow {
         try? FileManager.default.createDirectory(at: Self.snapDir, withIntermediateDirectories: true)
         let bounds = CGRect(x: 0, y: 0, width: 393, height: 852)
         let hostVC = UIHostingController(rootView: view)
@@ -39,7 +39,7 @@ struct LeadersSheetSnapshotTests {
         window.overrideUserInterfaceStyle = .dark
         window.makeKeyAndVisible()
         hostVC.view.layoutIfNeeded()
-        RunLoop.main.run(until: Date().addingTimeInterval(0.4))
+        try? await Task.sleep(for: .seconds(0.4))
         let renderer = UIGraphicsImageRenderer(bounds: bounds)
         let png = renderer.pngData { _ in
             hostVC.view.drawHierarchy(in: bounds, afterScreenUpdates: true)
@@ -74,7 +74,7 @@ struct LeadersSheetSnapshotTests {
     /// title above the screen's own content. The screen is seeded through
     /// its DEBUG fixture initializer (the LeaderboardWindowSnapshotTests
     /// seam) so nothing here touches the network.
-    @Test func rootSheetShowsDoneAndLeaderboard() throws {
+    @Test func rootSheetShowsDoneAndLeaderboard() async throws {
         let container = try emptyContainer()
         let entries = [
             LeaderboardEntry(rank: 1, handle: "skykid", points: 4210, catches: 61),
@@ -84,7 +84,7 @@ struct LeadersSheetSnapshotTests {
         let screen = LeaderboardScreen(
             _debugWindows: [.week: LeaderboardResponse(entries: entries, me: MyStanding(rank: 2, points: 2755), window: "week")]
         )
-        let window = host(LeadersSheet(screen: screen).modelContainer(container), snapshotAs: "leaders_sheet_root")
+        let window = await host(LeadersSheet(screen: screen).modelContainer(container), snapshotAs: "leaders_sheet_root")
         defer { window.isHidden = true }
         // The navigation bar populates its items a run-loop turn or two
         // after the first layout, and CI's simulator is slower than a dev
@@ -93,7 +93,7 @@ struct LeadersSheetSnapshotTests {
         var strings = visibleStrings(in: window)
         let deadline = Date().addingTimeInterval(3)
         while !strings.contains("Leaderboard"), Date() < deadline {
-            RunLoop.main.run(until: Date().addingTimeInterval(0.2))
+            try? await Task.sleep(for: .seconds(0.2))
             strings = visibleStrings(in: window)
         }
         #expect(strings.contains("Leaderboard"), "the wrapped screen must keep its title: \(strings)")

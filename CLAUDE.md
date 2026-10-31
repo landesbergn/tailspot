@@ -78,11 +78,25 @@ xcodebuild test \
   -only-testing:TailspotTests
 ```
 
-First run ~3 min (sim cold-boot); cached ~30–60 s. Browse `TailspotTests/` for
-coverage — inline inventories drift. **`ADSBManager.init(source: ADSBSource =
+A cold run (fresh build + simulator boot) is ~6–7 min; a warm full run ~4 min, of
+which the tests themselves are ~2 min and the rest is the simulator clone booting and
+the host app launching. Browse `TailspotTests/` for coverage — inline inventories
+drift. **`ADSBManager.init(source: ADSBSource =
 TailspotBackendClient())`** has a defaulted param so production uses the real
 backend and tests inject a fixture; `ContentView`'s `@StateObject private var adsb
 = ADSBManager()` depends on the no-arg default — don't break that shape.
+
+Speed rules (2026-10-31 measurements, CHANGELOG):
+- **Most suites are `@MainActor`, so the main thread is the bottleneck**, not cores.
+  Never block it in a test: no `RunLoop.main.run(until:)` settle spins (a spin stalls
+  every other MainActor test for its whole duration, because GCD won't re-enter the
+  main queue). Use `try? await Task.sleep(for:)`, which also lets the view's `.task` run.
+- **Measure with Swift Testing's own number**, not the console's "(N seconds)" or the
+  xcresult durations (both include queue time in parallel runs). It is the "Test run
+  with N tests … passed after X seconds" line, which a parallel (clone) run only writes
+  to the xcresult: `xcrun xcresulttool get log --path R.xcresult --type action
+  --compact | grep -o 'Test run with[^"\\]*'`. For true per-test cost run with
+  `-parallel-testing-enabled NO` (Swift Testing then runs serially, as CI does).
 
 ## Workflow: four rings (local → main → TestFlight → App Store)
 

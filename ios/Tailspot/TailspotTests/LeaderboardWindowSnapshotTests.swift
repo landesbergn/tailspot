@@ -30,7 +30,7 @@ struct LeaderboardWindowSnapshotTests {
     /// Defaults to the legacy 393 × 852 canvas; the standing-line passes
     /// pass device sizes.
     private func snapshot<V: View>(_ view: V, as name: String,
-                                   width: CGFloat = 393, height: CGFloat = 852) {
+                                   width: CGFloat = 393, height: CGFloat = 852) async {
         try? FileManager.default.createDirectory(at: Self.snapDir, withIntermediateDirectories: true)
         let bounds = CGRect(x: 0, y: 0, width: width, height: height)
         let host = UIHostingController(rootView: view)
@@ -39,7 +39,7 @@ struct LeaderboardWindowSnapshotTests {
         window.overrideUserInterfaceStyle = .dark
         window.makeKeyAndVisible()
         host.view.layoutIfNeeded()
-        RunLoop.main.run(until: Date().addingTimeInterval(0.3))
+        try? await Task.sleep(for: .seconds(0.3))
         let renderer = UIGraphicsImageRenderer(bounds: bounds)
         let png = renderer.pngData { _ in
             host.view.drawHierarchy(in: bounds, afterScreenUpdates: true)
@@ -104,7 +104,7 @@ struct LeaderboardWindowSnapshotTests {
 
     // MARK: - Renders
 
-    @Test func renderWindowedBoards() throws {
+    @Test func renderWindowedBoards() async throws {
         let defaults = UserDefaults.standard
         let savedHandle = defaults.object(forKey: SpotterHandle.storageKey)
         defaults.set("noah", forKey: SpotterHandle.storageKey)
@@ -113,18 +113,18 @@ struct LeaderboardWindowSnapshotTests {
 
         // Week: tabs + countdown + single champion + podium + me row.
         let oneChamp = [LeaderboardChampion(handle: "skykid", points: 840, weekStart: "2026-06-29")]
-        snapshot(board([.week: weekResponse(champions: oneChamp)],
-                       selected: .week, container: container),
-                 as: "leaderboard_week")
+        await snapshot(board([.week: weekResponse(champions: oneChamp)],
+                             selected: .week, container: container),
+                       as: "leaderboard_week")
 
         // Shared crown: two champions side by side.
         let twoChamps = [
             LeaderboardChampion(handle: "skykid", points: 840, weekStart: "2026-06-29"),
             LeaderboardChampion(handle: "contrail", points: 840, weekStart: "2026-06-29"),
         ]
-        snapshot(board([.week: weekResponse(champions: twoChamps)],
-                       selected: .week, container: container),
-                 as: "leaderboard_week_champs2")
+        await snapshot(board([.week: weekResponse(champions: twoChamps)],
+                             selected: .week, container: container),
+                       as: "leaderboard_week_champs2")
 
         // 3+ champions with an anonymous one → "@a, anonymous spotter +1 more".
         let threeChamps = [
@@ -132,16 +132,16 @@ struct LeaderboardWindowSnapshotTests {
             LeaderboardChampion(handle: nil, points: 840, weekStart: "2026-06-29"),
             LeaderboardChampion(handle: "contrail", points: 840, weekStart: "2026-06-29"),
         ]
-        snapshot(board([.week: weekResponse(champions: threeChamps)],
-                       selected: .week, container: container),
-                 as: "leaderboard_week_champs3_anon")
+        await snapshot(board([.week: weekResponse(champions: threeChamps)],
+                             selected: .week, container: container),
+                       as: "leaderboard_week_champs3_anon")
 
         // Fresh week: nobody crowned last week AND nothing caught yet.
         let quiet = LeaderboardResponse(
             entries: [], me: nil, window: "week",
             resetsAt: weekResetsAt, champions: [])
-        snapshot(board([.week: quiet], selected: .week, container: container),
-                 as: "leaderboard_week_empty_nochamp")
+        await snapshot(board([.week: quiet], selected: .week, container: container),
+                       as: "leaderboard_week_empty_nochamp")
 
         // Month: countdown date line + last month's champion banner.
         let month = LeaderboardResponse(
@@ -155,8 +155,8 @@ struct LeaderboardWindowSnapshotTests {
                 LeaderboardChampion(handle: "maia", points: 1850,
                                      monthStart: "2026-06-01")
             ])
-        snapshot(board([.month: month], selected: .month, container: container),
-                 as: "leaderboard_month")
+        await snapshot(board([.month: month], selected: .month, container: container),
+                       as: "leaderboard_month")
 
         // All time: tabs, no countdown, no banner.
         let allTime = LeaderboardResponse(
@@ -165,14 +165,14 @@ struct LeaderboardWindowSnapshotTests {
             window: "all",
             resetsAt: nil,
             champions: nil)
-        snapshot(board([.all: allTime], selected: .all, container: container),
-                 as: "leaderboard_all")
+        await snapshot(board([.all: allTime], selected: .all, container: container),
+                       as: "leaderboard_all")
 
         // FAIL-SOFT: old-backend payload (no window key) → tabs hidden,
         // plain all-time board.
         let old = LeaderboardResponse(entries: entries, me: MyStanding(rank: 2, points: 315))
-        snapshot(board([.week: old], selected: .week, container: container),
-                 as: "leaderboard_failsoft_oldbackend")
+        await snapshot(board([.week: old], selected: .week, container: container),
+                       as: "leaderboard_failsoft_oldbackend")
         #expect(true)
     }
 
@@ -185,7 +185,7 @@ struct LeaderboardWindowSnapshotTests {
     /// tight pack), and `me.rank` is deliberately inflated past the row
     /// position to stand in for hidden handle-less/disabled devices — the
     /// heading must still print the ROW's rank.
-    @Test func renderStandingLineBoards() throws {
+    @Test func renderStandingLineBoards() async throws {
         let defaults = UserDefaults.standard
         let savedHandle = defaults.object(forKey: SpotterHandle.storageKey)
         let savedConfirmed = defaults.object(forKey: SpotterHandle.confirmedKey)
@@ -218,66 +218,66 @@ struct LeaderboardWindowSnapshotTests {
             }
             .ignoresSafeArea()
         }
-        func shoot<V: View>(_ view: V, _ name: String) {
-            snapshot(phone(view), as: name, width: 402, height: 874)
+        func shoot<V: View>(_ view: V, _ name: String) async {
+            await snapshot(phone(view), as: name, width: 402, height: 874)
         }
 
         // Week, mid-pack: row 11 (me.rank 13), 50 points behind #10.
         defaults.set("noah", forKey: SpotterHandle.storageKey)
-        shoot(board([.week: week(MyStanding(rank: 13, points: 95))],
-                    selected: .week, container: container),
-              "standing_week_midpack")
-        shoot(board([.week: week(MyStanding(rank: 13, points: 95))],
-                    selected: .week, container: container)
-                .dynamicTypeSize(.accessibility2),
-              "standing_week_midpack_a11y2")
+        await shoot(board([.week: week(MyStanding(rank: 13, points: 95))],
+                          selected: .week, container: container),
+                    "standing_week_midpack")
+        await shoot(board([.week: week(MyStanding(rank: 13, points: 95))],
+                          selected: .week, container: container)
+                      .dynamicTypeSize(.accessibility2),
+                    "standing_week_midpack_a11y2")
 
         // Month, mid-pack: its own board (twice the week's points).
         let month = LeaderboardResponse(entries: pack(scale: 2), me: MyStanding(rank: 13, points: 190),
                                         window: "month", resetsAt: monthResetsAt,
                                         totalCatchers: handles.count)
-        shoot(board([.month: month], selected: .month, container: container),
-              "standing_month_midpack")
+        await shoot(board([.month: month], selected: .month, container: container),
+                    "standing_month_midpack")
 
         // All time, #2 behind a whale: a big gap still shows (no cap).
         defaults.set("flydelta", forKey: SpotterHandle.storageKey)
         defaults.set("flydelta", forKey: SpotterHandle.confirmedKey)
         let all = LeaderboardResponse(entries: pack(scale: 6), me: MyStanding(rank: 2, points: 8160),
                                       window: "all", totalCatchers: handles.count)
-        shoot(board([.all: all], selected: .all, container: container),
-              "standing_all_bigGap")
+        await shoot(board([.all: all], selected: .all, container: container),
+                    "standing_all_bigGap")
 
         // #1 → "2,345 points ahead of @flydelta".
         defaults.set("chemtrails", forKey: SpotterHandle.storageKey)
         defaults.set("chemtrails", forKey: SpotterHandle.confirmedKey)
-        shoot(board([.week: week(MyStanding(rank: 1, points: 3705))],
-                    selected: .week, container: container),
-              "standing_week_leading")
+        await shoot(board([.week: week(MyStanding(rank: 1, points: 3705))],
+                          selected: .week, container: container),
+                    "standing_week_leading")
 
         // Handled (server-confirmed), nothing caught this week →
         // "You're not on the board yet" / "1 catch to get on the board".
         defaults.set("notlisted", forKey: SpotterHandle.storageKey)
         defaults.set("notlisted", forKey: SpotterHandle.confirmedKey)
-        shoot(board([.week: week(MyStanding(rank: 0, points: 0))],
-                    selected: .week, container: container),
-              "standing_week_makeboard")
+        await shoot(board([.week: week(MyStanding(rank: 0, points: 0))],
+                          selected: .week, container: container),
+                    "standing_week_makeboard")
 
         // No handle → "not on the board yet" with the claim-a-handle hint.
         defaults.set(SpotterHandle.defaultPlaceholder, forKey: SpotterHandle.storageKey)
-        shoot(board([.week: week(MyStanding(rank: 14, points: 160))],
-                    selected: .week, container: container),
-              "standing_week_nohandle")
-        shoot(board([.week: week(MyStanding(rank: 14, points: 160))],
-                    selected: .week, container: container)
-                .dynamicTypeSize(.accessibility2),
-              "standing_week_nohandle_a11y2")
+        await shoot(board([.week: week(MyStanding(rank: 14, points: 160))],
+                          selected: .week, container: container),
+                    "standing_week_nohandle")
+        await shoot(board([.week: week(MyStanding(rank: 14, points: 160))],
+                          selected: .week, container: container)
+                      .dynamicTypeSize(.accessibility2),
+                    "standing_week_nohandle_a11y2")
 
         // Old backend (no window key): "You're 11th" above the board, no goal.
         defaults.set("noah", forKey: SpotterHandle.storageKey)
-        shoot(NavigationStack {
-                  LeaderboardScreen(_debugEntries: pack(scale: 6), me: MyStanding(rank: 13, points: 570))
-              }.modelContainer(container),
-              "standing_oldBackend")
+        await shoot(NavigationStack {
+                        LeaderboardScreen(_debugEntries: pack(scale: 6), me: MyStanding(rank: 13, points: 570))
+                    }.modelContainer(container),
+                    "standing_oldBackend")
         #expect(true)
     }
 
@@ -286,7 +286,7 @@ struct LeaderboardWindowSnapshotTests {
     /// 59 / 83). Four states: week mid-pack, all time, #1, and handled but
     /// off the board. SE also gets accessibility3, where the prose must wrap,
     /// never truncate.
-    @Test func renderStandingDeviceMatrix() throws {
+    @Test func renderStandingDeviceMatrix() async throws {
         let defaults = UserDefaults.standard
         let savedHandle = defaults.object(forKey: SpotterHandle.storageKey)
         let savedConfirmed = defaults.object(forKey: SpotterHandle.confirmedKey)
@@ -313,14 +313,14 @@ struct LeaderboardWindowSnapshotTests {
         struct Device { let name: String; let w: CGFloat; let h: CGFloat; let top: CGFloat; let bottom: CGFloat }
         let devices = [Device(name: "se", w: 375, h: 667, top: 20, bottom: 49),
                        Device(name: "16", w: 393, h: 852, top: 59, bottom: 83)]
-        func shoot<V: View>(_ view: V, _ name: String, size: DynamicTypeSize = .large) {
+        func shoot<V: View>(_ view: V, _ name: String, size: DynamicTypeSize = .large) async {
             for d in devices {
-                snapshot(VStack(spacing: 0) {
-                             Color.black.frame(height: d.top)
-                             view.dynamicTypeSize(size)
-                             Color(white: 0.12).frame(height: d.bottom)
-                         }.ignoresSafeArea(),
-                         as: "standingD_\(name)_\(d.name)", width: d.w, height: d.h)
+                await snapshot(VStack(spacing: 0) {
+                                   Color.black.frame(height: d.top)
+                                   view.dynamicTypeSize(size)
+                                   Color(white: 0.12).frame(height: d.bottom)
+                               }.ignoresSafeArea(),
+                               as: "standingD_\(name)_\(d.name)", width: d.w, height: d.h)
             }
         }
 
@@ -328,19 +328,19 @@ struct LeaderboardWindowSnapshotTests {
         defaults.set("noah", forKey: SpotterHandle.confirmedKey)
         let midpack = board([.week: week(MyStanding(rank: 13, points: 95))],
                             selected: .week, container: container)
-        shoot(midpack, "week")
-        shoot(midpack, "week_a11y3", size: .accessibility3)
+        await shoot(midpack, "week")
+        await shoot(midpack, "week_a11y3", size: .accessibility3)
 
         defaults.set("flydelta", forKey: SpotterHandle.storageKey)
         defaults.set("flydelta", forKey: SpotterHandle.confirmedKey)
         let all = LeaderboardResponse(entries: pack(scale: 6), me: MyStanding(rank: 2, points: 8160),
                                       window: "all", totalCatchers: handles.count)
-        shoot(board([.all: all], selected: .all, container: container), "alltime")
+        await shoot(board([.all: all], selected: .all, container: container), "alltime")
 
         defaults.set("chemtrails", forKey: SpotterHandle.storageKey)
         defaults.set("chemtrails", forKey: SpotterHandle.confirmedKey)
-        shoot(board([.week: week(MyStanding(rank: 1, points: 3705))],
-                    selected: .week, container: container), "first")
+        await shoot(board([.week: week(MyStanding(rank: 1, points: 3705))],
+                          selected: .week, container: container), "first")
 
         // A full 50-row board I'm under: points to make it.
         defaults.set("notlisted", forKey: SpotterHandle.storageKey)
@@ -349,14 +349,14 @@ struct LeaderboardWindowSnapshotTests {
         let offBoard = LeaderboardResponse(entries: full, me: MyStanding(rank: 63, points: 120),
                                            window: "week", resetsAt: weekResetsAt, champions: nil,
                                            totalCatchers: 70)
-        shoot(board([.week: offBoard], selected: .week, container: container), "offboard")
+        await shoot(board([.week: offBoard], selected: .week, container: container), "offboard")
         #expect(true)
     }
 
     /// Profile hub with offline-cached weekly/monthly wins folded into the
     /// identity hero. Render every visibility combination so a visual pass
     /// covers the absent footer, both single-period layouts, and both periods.
-    @Test func renderProfileChampionSummary() throws {
+    @Test func renderProfileChampionSummary() async throws {
         let defaults = UserDefaults.standard
         let savedHandle = defaults.object(forKey: SpotterHandle.storageKey)
         let savedPoints = defaults.object(forKey: "tailspot.standing.points")
@@ -377,19 +377,19 @@ struct LeaderboardWindowSnapshotTests {
 
         defaults.set(0, forKey: "tailspot.standing.weeklyWins")
         defaults.set(0, forKey: "tailspot.standing.monthlyWins")
-        snapshot(ProfileScreen().modelContainer(container), as: "profile_champion_summary_no_wins")
+        await snapshot(ProfileScreen().modelContainer(container), as: "profile_champion_summary_no_wins")
 
         defaults.set(3, forKey: "tailspot.standing.weeklyWins")
-        snapshot(ProfileScreen().modelContainer(container), as: "profile_champion_summary_weekly_only")
+        await snapshot(ProfileScreen().modelContainer(container), as: "profile_champion_summary_weekly_only")
 
         defaults.set(0, forKey: "tailspot.standing.weeklyWins")
         defaults.set(2, forKey: "tailspot.standing.monthlyWins")
-        snapshot(ProfileScreen().modelContainer(container), as: "profile_champion_summary_monthly_only")
+        await snapshot(ProfileScreen().modelContainer(container), as: "profile_champion_summary_monthly_only")
 
         defaults.set(3, forKey: "tailspot.standing.weeklyWins")
-        snapshot(ProfileScreen().modelContainer(container), as: "profile_champion_summary_both")
-        snapshot(ProfileScreen().modelContainer(container).dynamicTypeSize(.accessibility2),
-                 as: "profile_champion_summary_both_a11y2")
+        await snapshot(ProfileScreen().modelContainer(container), as: "profile_champion_summary_both")
+        await snapshot(ProfileScreen().modelContainer(container).dynamicTypeSize(.accessibility2),
+                       as: "profile_champion_summary_both_a11y2")
         #expect(true)
     }
 }

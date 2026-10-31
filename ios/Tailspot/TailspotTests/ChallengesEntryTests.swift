@@ -88,7 +88,7 @@ struct ChallengesEntrySnapshotTests {
 
     private static let snapDir = URL(fileURLWithPath: "/private/tmp/tailspot_snaps", isDirectory: true)
 
-    private func host<V: View>(_ view: V, snapshotAs name: String) -> UIWindow {
+    private func host<V: View>(_ view: V, snapshotAs name: String) async -> UIWindow {
         try? FileManager.default.createDirectory(at: Self.snapDir, withIntermediateDirectories: true)
         let bounds = CGRect(x: 0, y: 0, width: 393, height: 852)
         let hostVC = UIHostingController(rootView: view)
@@ -97,7 +97,7 @@ struct ChallengesEntrySnapshotTests {
         window.overrideUserInterfaceStyle = .dark
         window.makeKeyAndVisible()
         hostVC.view.layoutIfNeeded()
-        RunLoop.main.run(until: Date().addingTimeInterval(0.6))
+        try? await Task.sleep(for: .seconds(0.6))
         let renderer = UIGraphicsImageRenderer(bounds: bounds)
         let png = renderer.pngData { _ in
             hostVC.view.drawHierarchy(in: bounds, afterScreenUpdates: true)
@@ -137,8 +137,8 @@ struct ChallengesEntrySnapshotTests {
 
     @Test func profileTileShowsLiveHeadline() async throws {
         let model = await demoModel(hubSeen: true)
-        let window = host(ProfileScreen().modelContainer(try container()).environment(model),
-                          snapshotAs: "challenges_entry_profile_live")
+        let window = await host(ProfileScreen().modelContainer(try container()).environment(model),
+                                snapshotAs: "challenges_entry_profile_live")
         defer { window.isHidden = true }
         #expect(titles(in: window).contains("Profile"))
     }
@@ -153,8 +153,8 @@ struct ChallengesEntrySnapshotTests {
         await model.refreshConfig()
         await model.refreshList()
         #expect(ChallengeEntryIndicator(active: model.activeCount, hubSeen: model.hubSeen) == .discovery)
-        let window = host(ProfileScreen().modelContainer(try container()).environment(model),
-                          snapshotAs: "challenges_entry_profile_first_run")
+        let window = await host(ProfileScreen().modelContainer(try container()).environment(model),
+                                snapshotAs: "challenges_entry_profile_first_run")
         defer { window.isHidden = true }
         #expect(titles(in: window).contains("Profile"))
     }
@@ -170,11 +170,11 @@ struct ChallengesEntrySnapshotTests {
         await model.refreshConfig()
         await model.refreshList()
         #expect(model.showsBarDiscoveryDot)
-        let window = host(ContentView()
-                            .modelContainer(try container())
-                            .environment(StreakToastRelay())
-                            .environment(model),
-                          snapshotAs: "challenges_entry_catch_screen_dot")
+        let window = await host(ContentView()
+                                  .modelContainer(try container())
+                                  .environment(StreakToastRelay())
+                                  .environment(model),
+                                snapshotAs: "challenges_entry_catch_screen_dot")
         defer { window.isHidden = true }
     }
 
@@ -188,8 +188,8 @@ struct ChallengesEntrySnapshotTests {
         let screen = LeaderboardScreen(
             _debugWindows: [.week: LeaderboardResponse(entries: entries, me: MyStanding(rank: 2, points: 2755), window: "week")]
         )
-        let window = host(LeadersSheet(screen: screen).modelContainer(try container()).environment(model),
-                          snapshotAs: "challenges_entry_leaders_count")
+        let window = await host(LeadersSheet(screen: screen).modelContainer(try container()).environment(model),
+                                snapshotAs: "challenges_entry_leaders_count")
         defer { window.isHidden = true }
         #expect(titles(in: window).contains("Leaderboard"))
     }
@@ -203,15 +203,15 @@ struct ChallengesEntrySnapshotTests {
         await model.refreshList()
         #expect(model.headline == .none)
         #expect(model.activeCount == 0)
-        let window = host(LeadersSheet().modelContainer(try container()).environment(model),
-                          snapshotAs: "challenges_entry_leaders_cold")
+        let window = await host(LeadersSheet().modelContainer(try container()).environment(model),
+                                snapshotAs: "challenges_entry_leaders_cold")
         defer { window.isHidden = true }
         #expect(titles(in: window).contains("Leaderboard"))
     }
 
-    @Test func settingsShowsChallengeRemindersToggle() throws {
-        let window = host(NavigationStack { SettingsScreen() }.modelContainer(try container()),
-                          snapshotAs: "challenges_entry_settings_toggle")
+    @Test func settingsShowsChallengeRemindersToggle() async throws {
+        let window = await host(NavigationStack { SettingsScreen() }.modelContainer(try container()),
+                                snapshotAs: "challenges_entry_settings_toggle")
         defer { window.isHidden = true }
         #expect(titles(in: window).contains("Settings"))
     }

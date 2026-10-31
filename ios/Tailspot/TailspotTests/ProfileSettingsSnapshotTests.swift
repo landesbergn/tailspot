@@ -29,7 +29,7 @@ struct ProfileSettingsSnapshotTests {
 
     /// Host `view` in a real window at iPhone-16 points and snapshot it.
     /// `afterScreenUpdates: true` forces the List/NavigationStack to lay out.
-    private func snapshot<V: View>(_ view: V, as name: String) {
+    private func snapshot<V: View>(_ view: V, as name: String) async {
         try? FileManager.default.createDirectory(at: Self.snapDir, withIntermediateDirectories: true)
         let bounds = CGRect(x: 0, y: 0, width: 393, height: 852)
         let host = UIHostingController(rootView: view)
@@ -39,7 +39,7 @@ struct ProfileSettingsSnapshotTests {
         window.makeKeyAndVisible()
         host.view.layoutIfNeeded()
         // One run-loop turn so async layout (List cells) settles.
-        RunLoop.main.run(until: Date().addingTimeInterval(0.3))
+        try? await Task.sleep(for: .seconds(0.3))
         let renderer = UIGraphicsImageRenderer(bounds: bounds)
         let png = renderer.pngData { _ in
             host.view.drawHierarchy(in: bounds, afterScreenUpdates: true)
@@ -74,7 +74,7 @@ struct ProfileSettingsSnapshotTests {
         return container
     }
 
-    @Test func renderProfileAndSettings() throws {
+    @Test func renderProfileAndSettings() async throws {
         let defaults = UserDefaults.standard
         // Deterministic identity + standing for the render; restore after.
         let savedHandle = defaults.object(forKey: SpotterHandle.storageKey)
@@ -90,27 +90,27 @@ struct ProfileSettingsSnapshotTests {
         }
 
         let container = try seededContainer()
-        snapshot(ProfileScreen().modelContainer(container), as: "profile_hub")
-        snapshot(NavigationStack { SettingsScreen() }, as: "settings")
+        await snapshot(ProfileScreen().modelContainer(container), as: "profile_hub")
+        await snapshot(NavigationStack { SettingsScreen() }, as: "settings")
         // UNITS section with the non-default choices selected.
         let prefs = UnitPreferences.shared
         let (savedAlt, savedSpd, savedDist) = (prefs.altitude, prefs.speed, prefs.distance)
         prefs.altitude = .meters
         prefs.speed = .kph
         prefs.distance = .miles
-        snapshot(NavigationStack { SettingsScreen() }, as: "settings_metric")
+        await snapshot(NavigationStack { SettingsScreen() }, as: "settings_metric")
         prefs.altitude = savedAlt
         prefs.speed = savedSpd
         prefs.distance = savedDist
-        snapshot(NavigationStack { RarityReferenceScreen() }, as: "reference_rarity")
-        snapshot(NavigationStack { MapScreen() }.modelContainer(container), as: "map")
+        await snapshot(NavigationStack { RarityReferenceScreen() }, as: "reference_rarity")
+        await snapshot(NavigationStack { MapScreen() }.modelContainer(container), as: "map")
         #expect(true)
     }
 
     /// The unclaimed-handle designed state (2026-07-10 polish sweep D6):
     /// Profile header must show the CLAIM YOUR HANDLE affordance, never
     /// "@spotter_42" masquerading as a claimed identity.
-    @Test func renderProfileUnclaimed() throws {
+    @Test func renderProfileUnclaimed() async throws {
         let defaults = UserDefaults.standard
         let savedHandle = defaults.object(forKey: SpotterHandle.storageKey)
         let savedPoints = defaults.object(forKey: "tailspot.standing.points")
@@ -124,10 +124,10 @@ struct ProfileSettingsSnapshotTests {
             defaults.set(savedRank, forKey: "tailspot.standing.rank")
         }
         let container = try seededContainer()
-        snapshot(ProfileScreen().modelContainer(container), as: "profile_hub_unclaimed")
+        await snapshot(ProfileScreen().modelContainer(container), as: "profile_hub_unclaimed")
         // Settings with an unclaimed handle: the field must show its
         // "handle" prompt, not a prefilled "spotter_42" value.
-        snapshot(NavigationStack { SettingsScreen() }, as: "settings_unclaimed")
+        await snapshot(NavigationStack { SettingsScreen() }, as: "settings_unclaimed")
         #expect(true)
     }
 
@@ -135,7 +135,7 @@ struct ProfileSettingsSnapshotTests {
     /// at-risk and safe states, and Settings' REMINDERS section in the
     /// permission-denied state. Seeds are date-relative (streaks are
     /// about "today") — visual pass only, nothing pixel-compares.
-    @Test func renderStreakStates() throws {
+    @Test func renderStreakStates() async throws {
         let defaults = UserDefaults.standard
         let savedHandle = defaults.object(forKey: SpotterHandle.storageKey)
         let savedPoints = defaults.object(forKey: "tailspot.standing.points")
@@ -166,11 +166,11 @@ struct ProfileSettingsSnapshotTests {
         }
         // Five consecutive days ending YESTERDAY → live 5-day streak, at risk.
         for back in 1...5 { seed(daysAgo: back) }
-        snapshot(ProfileScreen().modelContainer(container), as: "profile_streak_at_risk")
+        await snapshot(ProfileScreen().modelContainer(container), as: "profile_streak_at_risk")
         // Today's catch lands → 6 days, safe. Current == longest, so the
         // state line's record half reads "your best yet".
         seed(daysAgo: 0)
-        snapshot(ProfileScreen().modelContainer(container), as: "profile_streak_safe")
+        await snapshot(ProfileScreen().modelContainer(container), as: "profile_streak_safe")
 
         // Behind the record: a 2-day run today with an old 9-day run in the
         // history, so the suffix reads "best 9" instead. The other half of
@@ -187,13 +187,13 @@ struct ProfileSettingsSnapshotTests {
                 slantDistanceMeters: 9_800, typecode: "B789"
             ))
         }
-        snapshot(ProfileScreen().modelContainer(behind), as: "profile_streak_behind_best")
+        await snapshot(ProfileScreen().modelContainer(behind), as: "profile_streak_behind_best")
 
         // Settings: REMINDERS in the permission-denied state (dimmed toggle
         // + Open Settings escape hatch + explanatory footer).
         var denied = SettingsScreen()
         denied._notifStatusOverride = .denied
-        snapshot(NavigationStack { denied }, as: "settings_reminders_denied")
+        await snapshot(NavigationStack { denied }, as: "settings_reminders_denied")
         #expect(true)
     }
 
@@ -203,7 +203,7 @@ struct ProfileSettingsSnapshotTests {
     /// section must offer a way to turn reminders on, not show ON toggles
     /// that never fire. Both toggles are forced ON (the default) so the
     /// render matches what those users actually see.
-    @Test func renderReminderPermissionStates() throws {
+    @Test func renderReminderPermissionStates() async throws {
         let defaults = UserDefaults.standard
         let keys = [SpotterHandle.storageKey, StreakReminders.enabledKey,
                     ChallengeReminderScheduler.enabledKey]
@@ -221,28 +221,28 @@ struct ProfileSettingsSnapshotTests {
         for (status, name) in states {
             var screen = SettingsScreen()
             screen._notifStatusOverride = status
-            snapshot(NavigationStack { screen }, as: "settings_reminders_\(name)")
+            await snapshot(NavigationStack { screen }, as: "settings_reminders_\(name)")
         }
         #expect(true)
     }
 
     /// Empty-Hangar "Go outside." hero + a model-detail empty state — the
     /// two empty-state heads converted to Brand.Font.display (D3).
-    @Test func renderEmptyStates() throws {
+    @Test func renderEmptyStates() async throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         let empty = try ModelContainer(for: Catch.self, configurations: config)
         TestContainerRetention.retain(empty)
-        snapshot(HangarView().modelContainer(empty), as: "hangar_empty")
+        await snapshot(HangarView().modelContainer(empty), as: "hangar_empty")
         if let entry = CardSets.all.first?.entries.first {
-            snapshot(
-                NavigationStack { ModelDetailScreen(entry: entry) }.modelContainer(empty),
-                as: "model_detail_empty"
+            await snapshot(
+                      NavigationStack { ModelDetailScreen(entry: entry) }.modelContainer(empty),
+                      as: "model_detail_empty"
             )
         }
         #expect(true)
     }
 
-    @Test func renderLeaderboard() throws {
+    @Test func renderLeaderboard() async throws {
         let defaults = UserDefaults.standard
         let savedHandle = defaults.object(forKey: SpotterHandle.storageKey)
         defaults.set("noah", forKey: SpotterHandle.storageKey)
@@ -256,12 +256,12 @@ struct ProfileSettingsSnapshotTests {
             .init(rank: 5, handle: "dotbali", points: 660, catches: 12),
         ]
         let container = try seededContainer()
-        snapshot(
-            NavigationStack {
-                LeaderboardScreen(_debugEntries: entries, me: MyStanding(rank: 2, points: 2755))
-            }
-            .modelContainer(container),
-            as: "leaderboard"
+        await snapshot(
+                  NavigationStack {
+                      LeaderboardScreen(_debugEntries: entries, me: MyStanding(rank: 2, points: 2755))
+                  }
+                  .modelContainer(container),
+                  as: "leaderboard"
         )
         // Unranked variant (zero-point rank fix, 2026-08-24): the server sends
         // rank 0 for a device with zero in-window points; the YOU row must
@@ -269,22 +269,22 @@ struct ProfileSettingsSnapshotTests {
         // handle so the fixture's @noah at rank 2 doesn't read as the same
         // user.
         defaults.set("newspotter", forKey: SpotterHandle.storageKey)
-        snapshot(
-            NavigationStack {
-                LeaderboardScreen(_debugEntries: entries, me: MyStanding(rank: 0, points: 0))
-            }
-            .modelContainer(container),
-            as: "leaderboard_unranked"
+        await snapshot(
+                  NavigationStack {
+                      LeaderboardScreen(_debugEntries: entries, me: MyStanding(rank: 0, points: 0))
+                  }
+                  .modelContainer(container),
+                  as: "leaderboard_unranked"
         )
         // Handle-less variant exercises the "claim a handle" standing hint
         // (the section-header + stale-copy fixes both render here).
         defaults.set(SpotterHandle.defaultPlaceholder, forKey: SpotterHandle.storageKey)
-        snapshot(
-            NavigationStack {
-                LeaderboardScreen(_debugEntries: entries, me: nil)
-            }
-            .modelContainer(container),
-            as: "leaderboard_nohandle"
+        await snapshot(
+                  NavigationStack {
+                      LeaderboardScreen(_debugEntries: entries, me: nil)
+                  }
+                  .modelContainer(container),
+                  as: "leaderboard_nohandle"
         )
         #expect(true)
     }

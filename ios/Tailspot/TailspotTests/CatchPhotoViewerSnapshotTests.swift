@@ -73,7 +73,7 @@ struct CatchPhotoViewerSnapshotTests {
         return nil
     }
 
-    @Test func renderViewerFitAndZoomed() throws {
+    @Test func renderViewerFitAndZoomed() async throws {
         let url = try fixturePhotoURL()
         let host = UIHostingController(rootView: CatchPhotoViewer(url: url))
         let window = UIWindow(frame: Self.bounds)
@@ -85,7 +85,7 @@ struct CatchPhotoViewerSnapshotTests {
         // until the scroll view (image branch) appears, up to ~3 s.
         var scroll: UIScrollView? = nil
         for _ in 0..<30 {
-            RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+            try? await Task.sleep(for: .seconds(0.1))
             if let s = firstScrollView(in: host.view) { scroll = s; break }
         }
         snapshotWindow(host, as: "photo_viewer_1x_fit")
@@ -93,7 +93,7 @@ struct CatchPhotoViewerSnapshotTests {
         // Drive the zoom the pinch would: 3x, then pan-ish via zoom rect.
         if let scroll {
             scroll.setZoomScale(3, animated: false)
-            RunLoop.main.run(until: Date().addingTimeInterval(0.2))
+            try? await Task.sleep(for: .seconds(0.2))
             snapshotWindow(host, as: "photo_viewer_3x_zoomed")
         }
         window.isHidden = true
@@ -101,7 +101,7 @@ struct CatchPhotoViewerSnapshotTests {
 
     /// The entry point: the settled card whose hero is now tappable — pure
     /// SwiftUI, but rendered through the same window harness for parity.
-    @Test func renderDetailCardEntryPoint() throws {
+    @Test func renderDetailCardEntryPoint() async throws {
         let url = try fixturePhotoURL()
         let plane = CardPlane(
             callsign: "TS747", model: "Boeing 747-400", carrier: "Tailspot Test",
@@ -123,7 +123,7 @@ struct CatchPhotoViewerSnapshotTests {
         window.overrideUserInterfaceStyle = .dark
         window.makeKeyAndVisible()
         host.view.layoutIfNeeded()
-        RunLoop.main.run(until: Date().addingTimeInterval(0.3))
+        try? await Task.sleep(for: .seconds(0.3))
         snapshotWindow(host, as: "photo_viewer_entry_card")
         window.isHidden = true
     }

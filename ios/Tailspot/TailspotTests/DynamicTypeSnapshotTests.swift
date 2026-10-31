@@ -34,7 +34,7 @@ struct DynamicTypeSnapshotTests {
     /// Host `view` in a real window at iPhone-16 points and snapshot it —
     /// same drawHierarchy approach as ProfileSettingsSnapshotTests (List/
     /// NavigationStack containers come out blank under ImageRenderer).
-    private func snapshot<V: View>(_ view: V, as name: String) {
+    private func snapshot<V: View>(_ view: V, as name: String) async {
         try? FileManager.default.createDirectory(at: Self.snapDir, withIntermediateDirectories: true)
         let bounds = CGRect(x: 0, y: 0, width: 393, height: 852)
         let host = UIHostingController(rootView: view)
@@ -43,7 +43,7 @@ struct DynamicTypeSnapshotTests {
         window.overrideUserInterfaceStyle = .dark
         window.makeKeyAndVisible()
         host.view.layoutIfNeeded()
-        RunLoop.main.run(until: Date().addingTimeInterval(0.3))
+        try? await Task.sleep(for: .seconds(0.3))
         let renderer = UIGraphicsImageRenderer(bounds: bounds)
         let png = renderer.pngData { _ in
             host.view.drawHierarchy(in: bounds, afterScreenUpdates: true)
@@ -100,33 +100,33 @@ struct DynamicTypeSnapshotTests {
     /// (only the hosted-test environment sees that race — the app's
     /// container is permanent). Populated-Hangar visuals are covered by
     /// the on-device pass instead.
-    @Test func renderDynamicTypeScaling() throws {
+    @Test func renderDynamicTypeScaling() async throws {
         let container = try seededContainer()
         let empty = try ModelContainer(
             for: Catch.self,
             configurations: ModelConfiguration(isStoredInMemoryOnly: true)
         )
         TestContainerRetention.retain(empty)
-        snapshot(NavigationStack { SettingsScreen() }, as: "dt_settings_default")
-        snapshot(NavigationStack { SettingsScreen() }.dynamicTypeSize(.accessibility2),
-                 as: "dt_settings_a11y2")
-        snapshot(ProfileScreen().modelContainer(container), as: "dt_profile_default")
-        snapshot(ProfileScreen().modelContainer(container).dynamicTypeSize(.accessibility2),
-                 as: "dt_profile_a11y2")
-        snapshot(HangarView().modelContainer(empty), as: "dt_hangar_default")
-        snapshot(HangarView().modelContainer(empty).dynamicTypeSize(.accessibility2),
-                 as: "dt_hangar_a11y2")
+        await snapshot(NavigationStack { SettingsScreen() }, as: "dt_settings_default")
+        await snapshot(NavigationStack { SettingsScreen() }.dynamicTypeSize(.accessibility2),
+                       as: "dt_settings_a11y2")
+        await snapshot(ProfileScreen().modelContainer(container), as: "dt_profile_default")
+        await snapshot(ProfileScreen().modelContainer(container).dynamicTypeSize(.accessibility2),
+                       as: "dt_profile_a11y2")
+        await snapshot(HangarView().modelContainer(empty), as: "dt_hangar_default")
+        await snapshot(HangarView().modelContainer(empty).dynamicTypeSize(.accessibility2),
+                       as: "dt_hangar_a11y2")
         // Onboarding gained its anchors in the 2026-07-21 guideline pass
         // (mono relativeTo: + the Brand.Font.button token) — steps 1 (rows
         // of prose + mono labels) and 2 (the handle step's 22 pt mono
         // field) are the surfaces that scale. The step-0 mock-HUD
         // illustration stays fixed BY CHOICE — don't flag it in review.
         for step in [1, 2] {
-            snapshot(OnboardingFlow(onFinish: {}, initialStep: step).modelContainer(empty),
-                     as: "dt_onboarding_step\(step)_default")
-            snapshot(OnboardingFlow(onFinish: {}, initialStep: step).modelContainer(empty)
-                        .dynamicTypeSize(.accessibility2),
-                     as: "dt_onboarding_step\(step)_a11y2")
+            await snapshot(OnboardingFlow(onFinish: {}, initialStep: step).modelContainer(empty),
+                           as: "dt_onboarding_step\(step)_default")
+            await snapshot(OnboardingFlow(onFinish: {}, initialStep: step).modelContainer(empty)
+                              .dynamicTypeSize(.accessibility2),
+                           as: "dt_onboarding_step\(step)_a11y2")
         }
         #expect(true)
     }
