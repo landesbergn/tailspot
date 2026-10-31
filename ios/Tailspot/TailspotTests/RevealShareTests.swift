@@ -7,7 +7,8 @@
 //   - `RevealShareButtonMetrics`: the callsign-line button's ≥44 pt target.
 //   - `MultiCatchReveal.tally`: the points a multi-catch shows are what the
 //     server awards (base + first-of-type), with no combo multiplier.
-//   - `MultiCatchReveal.shareSubject`: which card the multi reveal shares.
+//   - `MultiCatchReveal.entryNumbers` / `chimeStep`: the run's per-plane
+//     entry numbers and chime ladder.
 //   - `CatchShare` copy + footer shared by the reveal and the detail pill.
 //
 
@@ -96,13 +97,6 @@ import Testing
         #expect(t.awarded == 60)
     }
 
-    @Test func bannerKeepsTheCelebrationWithoutAMultiplier() {
-        #expect(MultiCatchReveal.bannerLabel(for: .init()) == "ALREADY CAUGHT")
-        #expect(MultiCatchReveal.bannerLabel(for: MultiCatchReveal.tally([entry(.rare)])) == "CATCH ×1")
-        let two = MultiCatchReveal.tally([entry(.rare), entry(.common)])
-        #expect(MultiCatchReveal.bannerLabel(for: two) == "MULTI-CATCH ×2 · +60 pts")
-    }
-
     @Test func announcementSpeaksAwardedPointsAndNoCombo() {
         let t = MultiCatchReveal.tally([entry(.rare, firstOfType: true), entry(.common),
                                         entry(.uncommon, dup: true)])
@@ -111,13 +105,6 @@ import Testing
         #expect(s.contains("2 planes caught"))
         #expect(s.contains("1 already in hangar"))
         #expect(s.contains("\(t.awarded) points awarded"))
-    }
-
-    @Test func sharesTheRarestFreshCatch() {
-        let entries = [entry(.uncommon, callsign: "A"), entry(.epic, callsign: "B"),
-                       entry(.legendary, dup: true, callsign: "C"), entry(.epic, callsign: "D")]
-        // Legendary is a duplicate; first of the two epics wins the tie.
-        #expect(MultiCatchReveal.shareSubject(entries)?.plane.callsign == "B")
     }
 
     @Test func twoOfANewTypeEarnOneFirstOfTypeBonus() {
@@ -132,6 +119,21 @@ import Testing
         #expect(t.firstOfTypePoints == 2 * ScoringBonuses.firstOfTypeBonus(base: 10))
     }
 
+    @Test func entryNumbersCountUpToTheLastFreshEntry() {
+        // Two fresh + a duplicate between them; the Hangar holds 48 after.
+        let e = [entry(.rare), entry(.common, dup: true), entry(.uncommon)]
+        #expect(MultiCatchReveal.entryNumbers(e, lastEntryNumber: 48) == [47, 48, 48])
+    }
+
+    @Test func chimeLadderClimbsOnFreshPlanesOnly() {
+        let e = [entry(.rare), entry(.common, dup: true), entry(.uncommon)]
+        #expect(MultiCatchReveal.chimeStep(e, page: 0) == 0)
+        #expect(MultiCatchReveal.chimeStep(e, page: 1) == nil)
+        #expect(MultiCatchReveal.chimeStep(e, page: 2) == 1)
+        // The summary page (past the last plane) plays nothing.
+        #expect(MultiCatchReveal.chimeStep(e, page: 3) == nil)
+    }
+
     @Test func aTypeAlreadyInTheHangarIsNeverFirst() {
         let flags = MultiCatchReveal.runFirstOfType(typecodes: ["B738", nil, "E75L"],
                                                     heldTypecodes: ["B738"])
@@ -139,21 +141,6 @@ import Testing
         #expect(flags == [false, false, true])
     }
 
-    @Test func shareButtonLabelStartsWithTheVisibleTitle() {
-        let named = CardPlane(callsign: "UAL248", model: "Boeing 737-900", carrier: nil,
-                              rarity: .common, type: .narrow)
-        #expect(MultiCatchReveal.shareTitle(for: named) == "Share UAL248")
-        #expect(MultiCatchReveal.shareAccessibilityLabel(for: named) == "Share UAL248, Boeing 737-900")
-        let bare = CardPlane(callsign: nil, model: nil, carrier: nil, rarity: .common, type: .narrow)
-        #expect(MultiCatchReveal.shareTitle(for: bare) == "Share")
-        #expect(MultiCatchReveal.shareAccessibilityLabel(for: bare).hasPrefix("Share"))
-    }
-
-    @Test func allDuplicatesStillShareTheRarest() {
-        let entries = [entry(.common, dup: true, callsign: "A"), entry(.rare, dup: true, callsign: "B")]
-        #expect(MultiCatchReveal.shareSubject(entries)?.plane.callsign == "B")
-        #expect(MultiCatchReveal.shareSubject([]) == nil)
-    }
 }
 
 @MainActor
@@ -181,7 +168,6 @@ import Testing
                               rarity: .common, type: .ga, icao24: "a1b2c3")
         #expect(CatchShare.identifier(for: plane) == "A1B2C3")
         #expect(CatchShare.shareText(for: plane) == "Caught A1B2C3 · Cessna 172 on Tailspot")
-        #expect(MultiCatchReveal.shareTitle(for: plane) == "Share A1B2C3")
         let named = CardPlane(callsign: "N172SP", model: nil, carrier: nil,
                               rarity: .common, type: .ga, icao24: "a1b2c3")
         #expect(CatchShare.identifier(for: named) == "N172SP")

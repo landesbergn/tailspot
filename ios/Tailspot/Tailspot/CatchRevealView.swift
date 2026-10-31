@@ -38,10 +38,10 @@ import SwiftData      // the card back's one-off Hangar fetch on turn-over
 
 // MARK: - Reveal animation math (verbatim from the RevealV3 prototype)
 
-private func revClamp(_ x: Double, _ lo: Double = 0, _ hi: Double = 1) -> Double { min(max(x, lo), hi) }
+func revClamp(_ x: Double, _ lo: Double = 0, _ hi: Double = 1) -> Double { min(max(x, lo), hi) }
 /// Smoothstep from `a` to `b`, evaluated at `x`. Returns 0 below `a`,
 /// 1 above `b`, eased in between — the prototype's per-element timing.
-private func ss(_ a: Double, _ b: Double, _ x: Double) -> Double {
+func ss(_ a: Double, _ b: Double, _ x: Double) -> Double {
     let u = revClamp((x - a) / (b - a))
     return u * u * (3 - 2 * u)
 }
@@ -791,6 +791,21 @@ struct CatchRevealView: View {
     /// path (multi/duplicate fallbacks, ✦ Catch simulator, snapshots) —
     /// then `livePlane`/`liveGuess` collapse to the immutable inputs.
     var loader: RevealLoader? = nil
+
+    /// Set when this reveal is one plane of a multi-catch run
+    /// (`MultiCatchReveal` plays each plane's reveal in turn, 2026-10-31).
+    /// The exits then move through the run instead of leaving it: Continue
+    /// becomes "Next plane" (or "See the total" on the last plane), View in
+    /// Hangar becomes "Skip to total" before the last plane, and `reveal_dismissed` stays quiet
+    /// (the run is one moment, not N dismissals). nil = a standalone reveal.
+    var sequence: RevealSequence? = nil
+
+    struct RevealSequence: Equatable {
+        /// 0-based position of this plane in the run.
+        let index: Int
+        let count: Int
+        var isLast: Bool { index >= count - 1 }
+    }
 
     /// What the card actually renders: the loader's evolving snapshot when
     /// attached, else the immutable presentation value.
@@ -1983,7 +1998,7 @@ struct CatchRevealView: View {
             Button(action: { resolveAsSkipIfNeeded(); reportDismiss(.continue); onDismiss() }) {
                 // Buttons are prose: system text styles, not mono (beauty
                 // pass 2026-10-31), so the exits don't read as readouts.
-                Text("Continue")
+                Text(sequence.map { $0.isLast ? "See the total" : "Next plane" } ?? "Continue")
                     // 15 pt semibold: prose like the button beside it, one
                     // weight step up; 17 pt cost the tall-phone reveal its fit.
                     .font(Brand.Font.body.weight(.semibold))
@@ -1992,7 +2007,7 @@ struct CatchRevealView: View {
             }
             .buttonStyle(.plain)
             Button(action: { resolveAsSkipIfNeeded(); reportDismiss(.viewInHangar); onViewInHangar() }) {
-                Text("View in Hangar ›")
+                Text(sequence?.isLast == false ? "Skip to total ›" : "View in Hangar ›")
                     .font(Brand.Font.body)  // .subheadline, 15
                     .foregroundColor(RP.muted)
                     .contentShape(Rectangle().inset(by: -16))
@@ -2005,6 +2020,8 @@ struct CatchRevealView: View {
     }
 
     private func reportDismiss(_ method: RevealDismissAnalytics.Method) {
+        // Inside a multi-catch run each step is a page turn, not a dismiss.
+        guard sequence == nil else { return }
         RevealDismissAnalytics.capture(method: method, appearedAt: appearedAt, muted: isSimulated)
     }
 

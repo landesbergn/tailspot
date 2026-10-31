@@ -1,0 +1,219 @@
+<title>Tailspot Level-Up Plan</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+Condensed:wght@600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,600;1,400&display=swap">
+<style>
+/* Layout: one reading column, like a flight plan: a ranked list of bets, each a briefing block with a data strip. */
+:root {
+  --paper: #F6F8FA;
+  --sheet: #FFFFFF;
+  --ink: #0E1A26;
+  --ink-2: #3A4A5A;
+  --rule: #D5DDE5;
+  --cyan: #00708A;
+  --cyan-soft: #E3F3F7;
+  --amber: #8A5A00;
+  --amber-soft: #FFF4DC;
+  --rose: #A3283D;
+  --display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --body: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --paper: #0B1118; --sheet: #121B25; --ink: #E8EEF4; --ink-2: #A9B7C5; --rule: #26323F;
+  --cyan: #4FD0EA; --cyan-soft: #0F2A33; --amber: #F2C25B; --amber-soft: #2B220E; --rose: #F07A8E; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --paper: #0B1118; --sheet: #121B25; --ink: #E8EEF4; --ink-2: #A9B7C5; --rule: #26323F;
+  --cyan: #4FD0EA; --cyan-soft: #0F2A33; --amber: #F2C25B; --amber-soft: #2B220E; --rose: #F07A8E; color-scheme: dark; }
+
+body { background: var(--paper); color: var(--ink); font: 16px/1.6 var(--body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 40px 80px; }
+main { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 40px; }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; margin: 0; line-height: 1.15; }
+h1 { font-size: clamp(34px, 6vw, 48px); }
+h2 { font-size: 28px; }
+h3 { font-size: 22px; }
+p { margin: 0; max-width: 65ch; }
+.eyebrow { font: 600 12px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--cyan); }
+.lede { font-size: 19px; color: var(--ink-2); }
+section { display: flex; flex-direction: column; gap: 14px; }
+ul { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; max-width: 65ch; }
+code, .mono { font-family: var(--mono); font-size: .9em; }
+.strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px; background: var(--rule); border: 1px solid var(--rule); border-radius: 12px; overflow: hidden; }
+.strip div { background: var(--sheet); padding: 14px 16px; display: flex; flex-direction: column; gap: 4px; }
+.strip b { font: 600 26px/1.1 var(--mono); font-variant-numeric: tabular-nums; }
+.strip span { font-size: 13px; color: var(--ink-2); }
+.bet { background: var(--sheet); border: 1px solid var(--rule); border-radius: 16px; padding: 24px; display: flex; flex-direction: column; gap: 14px; }
+.bet header { display: flex; flex-direction: column; gap: 6px; }
+.tagrow { display: flex; flex-wrap: wrap; gap: 8px; }
+.tag { font: 600 12px/1 var(--mono); letter-spacing: .06em; padding: 6px 8px; border-radius: 6px; background: var(--cyan-soft); color: var(--cyan); }
+.tag.amber { background: var(--amber-soft); color: var(--amber); }
+.k { font: 600 12px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--ink-2); margin-top: 6px; }
+.hud { font-family: var(--mono); font-size: 14px; background: #08090C; color: #E7EEF5; padding: 2px 6px; border-radius: 4px; white-space: nowrap; }
+.decisions { background: var(--amber-soft); border-radius: 16px; padding: 24px; display: flex; flex-direction: column; gap: 12px; }
+.decisions h2 { color: var(--amber); }
+.decisions ol { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 10px; max-width: 65ch; }
+.tablewrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 12px; background: var(--sheet); }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th { font: 600 11px/1.2 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--ink-2); }
+td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+.timeline { display: grid; grid-template-columns: 110px 1fr; gap: 10px 16px; }
+.timeline .when { font: 600 13px/1.5 var(--mono); color: var(--cyan); }
+@media (max-width: 480px) { .timeline { grid-template-columns: 1fr; gap: 2px 0; } .timeline .when { margin-top: 10px; } .bet { padding: 18px; } }
+small, .note { color: var(--ink-2); font-size: 14px; }
+</style>
+
+<main>
+  <header style="display:flex;flex-direction:column;gap:12px">
+    <div class="eyebrow">Tailspot · 31 Oct 2026</div>
+    <h1>Leveling up Tailspot</h1>
+    <p class="lede">The beauty pass polished the margins. This plan is about the middle: four bets that change what using Tailspot feels like. It comes from four research passes (strategy, 60 days of PostHog data, the core loop code, and the rendered screens), 15 pitches from five design lenses, and three judges scoring each pitch.</p>
+  </header>
+
+  <section>
+    <div class="eyebrow">Diagnosis</div>
+    <h2>The catch works. The game around it doesn't.</h2>
+    <p>The reveal card is the one screen built to a high standard. The camera, the trigger and the Hangar never were. Most of a session is spent on an empty sky that shows one grey pill. The trigger is the weakest button in the app, and the reveal still plays stock iOS system sounds. After the first month nothing pulls people back from outside the app. The Hangar reads like a log file, and every catch of a type after the first is worth nothing. The best moment in the game, catching two or three planes at once, had the oldest screen.</p>
+    <div class="strip" aria-label="Key numbers, last 60 days, real users only">
+      <div><b>~1.7</b><span>real new users a day (46% of “new users” are Apple review devices)</span></div>
+      <div><b>21%</b><span>of new users saw a plane but never caught one, the biggest single leak</span></div>
+      <div><b>65% vs 26%</b><span>D1 return with vs without a catch on day 0</span></div>
+      <div><b>12%</b><span>D30 retention; streak reminders reached 10 people</span></div>
+    </div>
+    <p class="note">Simulator, test accounts, TestFlight and Apple review devices are excluded. One Concord user with about 10,000 catches is set aside, which is why medians are used. With about 105 real new users, read percentages as ±10 points.</p>
+  </section>
+
+  <section>
+    <div class="eyebrow">The four bets, in recommended order</div>
+
+    <article class="bet">
+      <header>
+        <div class="tagrow"><span class="tag">BET 1 · CAMERA</span><span class="tag">~2.5 WEEKS</span><span class="tag">NO BACKEND</span></div>
+        <h3>Inbound: the sky tells you what's coming</h3>
+      </header>
+      <p>The empty sky becomes the first beat of the catch. Up to three chevrons on the edge of the frame point at planes about to come into view, each tagged like <span class="hud">B738 · SW · ~2 MIN</span>. A plane that would be new to your Hangar gets a gold NEW TYPE tag, and rare-or-better planes pulse in their tier colour. Tap a chevron to pin it: it slides along the edge as you turn, counts down, and hands off to the normal bracket already pinned. A rare plane gets one amber placard, <span class="hud">747-8F INBOUND · EPIC · LOOK NE · ~3 MIN</span>. When nothing is coming the screen says so: <span class="hud">QUIET SKY · NEXT TRAFFIC ~6 MIN NW</span>. This replaces the steering pill.</p>
+      <div class="k">Why first</div>
+      <p>It goes straight at the measured leak (people who see a plane but don't catch it, and people waiting on an empty sky). A catch on day 0 is worth 2.5× on D1. It needs no server work: <code>ADSBManager</code> already polls a 50 km box and re-extrapolates every second.</p>
+      <div class="k">First slice</div>
+      <ul>
+        <li><code>InboundPredictor</code>: pure; runs each track forward 5 minutes against the same visibility model the labels use.</li>
+        <li>An overlay on the empty-sky seam, hidden when compass error is above about 25°, with no ETA near airports.</li>
+        <li>Telemetry for shown, pinned, arrived and caught, behind a PostHog flag. “Predicted that plane, then caught it” is also a clean ground-truth signal for the north star.</li>
+      </ul>
+      <div class="k">Risks</div>
+      <p>Planes turn, so ETAs carry “~” and are measured before the flag widens. A bad compass draws a confidently wrong arrow, which is why the gate is required.</p>
+    </article>
+
+    <article class="bet">
+      <header>
+        <div class="tagrow"><span class="tag">BET 2 · THE CATCH</span><span class="tag">~3.5 WEEKS</span><span class="tag">NO BACKEND</span></div>
+        <h3>The catch moment: a trigger worth pulling</h3>
+      </header>
+      <p>One catch model, and a shutter that feels like an instrument:</p>
+      <ul>
+        <li>The bracket clicks onto the plane with a tick and a light haptic.</li>
+        <li>The capture ring fills with the tier colour of what's framed and shows ×2 or ×3 pips.</li>
+        <li>Firing plays a designed shutter sound. The frame freezes and punches in on the plane, and that crop flies into the card's photo window as the split-flap starts.</li>
+        <li>Each tier ends with its own sound, so you hear a legendary with your eyes closed.</li>
+        <li>A tap on empty sky next to a plane buzzes and flicks a chevron toward it.</li>
+      </ul>
+      <div class="k">Evidence</div>
+      <p>The median catcher taps empty sky 10 times, and 62 people rage-clicked. The app has no Core Haptics, and its audio is <code>AudioServicesPlaySystemSound</code> with stock IDs.</p>
+      <div class="k">First slice</div>
+      <ul>
+        <li>Settle frame-is-the-catch vs legacy and delete the loser.</li>
+        <li>A <code>CatchFeel</code> sound and haptic kit that respects the silent switch.</li>
+        <li>Pull the trigger out of <code>ContentView</code>, which is at its type-check budget.</li>
+        <li>Phase 2: punch-in and fly-in. This likely moves the reveal off <code>fullScreenCover</code>, so it goes behind its own flag.</li>
+      </ul>
+    </article>
+
+    <article class="bet">
+      <header>
+        <div class="tagrow"><span class="tag">BET 3 · COLLECTION</span><span class="tag">~5 WEEKS</span><span class="tag">LOCAL ONLY</span></div>
+        <h3>The Hangar as a place</h3>
+      </header>
+      <ul>
+        <li><b>One card at three sizes</b> (hero, tile, mini), used everywhere: reveal, Hangar, share and challenges. The old holo card is deleted.</li>
+        <li><b>Catches become a wall</b> of your own photos, grouped by month, with a header for types, rarest card and streak.</li>
+        <li><b>Tier as a restrained material:</b> matte, printed edge, a foil edge that shifts as you tilt (rare), a slow holo sweep (epic), gold foil (legendary).</li>
+        <li><b>Type mastery</b> makes repeat catches count: LOGGED → SPOTTED (3) → REGULAR (10, 3 operators) → ACE (25, 5 operators, plus a night or high-altitude catch). Ranks never take over the screen and earn no points.</li>
+        <li><b>Sets become field-guide pages:</b> caught models show your best photo, missing ones a tinted silhouette. A percentage ring becomes a hunting list.</li>
+      </ul>
+      <div class="k">Why</div>
+      <p>The median catcher has 12 catches and the 90th percentile about 197. Most catches are repeats, and today repeats are worthless. Mastery is derived from local data, so there's no migration and it survives a Hangar restore.</p>
+    </article>
+
+    <article class="bet">
+      <header>
+        <div class="tagrow"><span class="tag">BET 4 · OUTSIDE THE APP</span><span class="tag">~4 WEEKS</span><span class="tag amber">BACKEND + PRIVACY CALL</span></div>
+        <h3>Sky Watch: “A 747 is about to cross your sky”</h3>
+      </header>
+      <p>An opt-in after the third catch: watch “my sky” (rounded to about 1 km) and up to two named spots. You choose what's worth a ping (rare and up plus types you don't have, or legendary only), with a cap of one or two a day, quiet hours, and daylight only. Tapping the notification opens the camera with Inbound already pinned on that plane.</p>
+      <div class="k">Why</div>
+      <p>It's the only lever that makes someone look up without opening the app. Weekly actives are flat at 42–54. You scoped this on 2026-07-21 and it was never built. APNs and the push-token route already exist for Challenges.</p>
+      <div class="k">The catch</div>
+      <p>It's the first time the server holds a standing location for a device. It must be opt-in, coarse, deletable, disclosed in the privacy policy, and kept out of PostHog. The server ships first, and all changes are additive.</p>
+    </article>
+  </section>
+
+  <section>
+    <div class="eyebrow">Already moving</div>
+    <h2>Multi-catch, rebuilt today</h2>
+    <p>Multi-catch now plays each plane as the real single-catch reveal, in turn, behind a stories-style progress strip. Each fresh plane climbs one rung of the chime ladder. It ends on a summary card in the reveal's own style: a split-flap “3 PLANES” head, a row per plane (photo, model, callsign, tier, points), the ledger and the same quiet exits. The magenta fan of tilted mini-cards is gone. It's on the beauty-pass branch for your device check.</p>
+    <p>The vision suggests a further step, called Formation. The cards would be dealt as a stack, commonest first, with shorter gaps, and the last card would get the full reveal. It would land with Bet 2's sound kit and the shared card component from Bet 3. There would be no multi-catch bonus points in v1: points would need a server scoring change, and they reward farming at airports.</p>
+  </section>
+
+  <section>
+    <div class="eyebrow">Sequencing</div>
+    <h2>Eleven weeks, two tracks at a time</h2>
+    <div class="timeline">
+      <div class="when">Weeks 1–3</div><div>Inbound phase 1 and the catch-moment phase 1, in parallel. They touch different seams: the empty-sky overlay versus the trigger and reveal.</div>
+      <div class="when">Weeks 3–5</div><div>Punch-in and fly-in, plus the shared card component, which lands in time for Formation and the Hangar wall.</div>
+      <div class="when">Weeks 5–8</div><div>Mastery, field guides and materials. Start Sky Watch's backend once Inbound's predicted-vs-arrived accuracy is known.</div>
+      <div class="when">Weeks 8–11</div><div>Sky Watch to TestFlight, then to the App Store with phased release.</div>
+    </div>
+    <p class="note">Every bet ships behind a PostHog flag, one TestFlight build per batch, with a review doc and before/after images per PR.</p>
+  </section>
+
+  <section>
+    <div class="eyebrow">All 15 pitches</div>
+    <h2>What the judges thought</h2>
+    <p class="note">The score is the mean of three judges (a demanding player, the strategist, the iOS engineer) across ambition, user value, strategic fit and feasibility, each out of 10.</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Score</th><th>Pitch</th><th>Lens</th><th>Outcome</th></tr></thead>
+      <tbody>
+        <tr><td class="n">8.1</td><td>Inbound: the sky tells you what's coming</td><td>Catch moment</td><td>Bet 1</td></tr>
+        <tr><td class="n">8.0</td><td>Inbound: the empty sky becomes a radar scope</td><td>Empty sky</td><td>Merged into Bet 1 (pinning, telemetry); scope dropped</td></tr>
+        <tr><td class="n">7.8</td><td>Sky Watch</td><td>Empty sky</td><td>Bet 4</td></tr>
+        <tr><td class="n">7.7</td><td>WANTED: the sky becomes a hunt list</td><td>Progression</td><td>Gap targeting folded into Bets 1 and 4</td></tr>
+        <tr><td class="n">7.5</td><td>Instrument Sky: a live traffic scope</td><td>Visual world</td><td>Trigger ring kept for Bet 2; scope too dense</td></tr>
+        <tr><td class="n">7.4</td><td>The Hangar as a place</td><td>Progression</td><td>Bet 3</td></tr>
+        <tr><td class="n">7.3</td><td>The Lock: a trigger worth pulling</td><td>Catch moment</td><td>Bet 2</td></tr>
+        <tr><td class="n">6.8</td><td>The Living Card</td><td>Visual world</td><td>Card at three sizes kept; Blender dependency dropped</td></tr>
+        <tr><td class="n">6.4</td><td>Crescendo: multi-catch as the jackpot</td><td>Catch moment</td><td>Formation, inside Bet 2</td></tr>
+        <tr><td class="n">6.2</td><td>Seasons</td><td>Progression</td><td>Later: standings feel empty at ~50 weekly actives</td></tr>
+        <tr><td class="n">6.2</td><td>Plane Passports</td><td>Social</td><td>Later: most airframes would have one stamp</td></tr>
+        <tr><td class="n">6.0</td><td>Spot Together</td><td>Social</td><td>Later: about 5 weeks for an unproven pattern</td></tr>
+        <tr><td class="n">5.9</td><td>The Flight Deck: one motion and sound grammar</td><td>Visual world</td><td>Sound kit moved into Bet 2; reskin is “margins” work</td></tr>
+        <tr><td class="n">5.9</td><td>Spots &amp; Passport almanac</td><td>Empty sky</td><td>Later: too little density, adds location exposure</td></tr>
+        <tr><td class="n">5.7</td><td>Dares</td><td>Social</td><td>Dropped: most would expire unmet</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section class="decisions">
+    <h2>Decisions only you can make</h2>
+    <ol>
+      <li><b>Frame-is-the-catch or legacy?</b> One has to become the only catch model before Bet 2. The flag's data may be thin.</li>
+      <li><b>Server-held location for Sky Watch.</b> This changes PLAN §6.5 and needs a privacy-policy revision.</li>
+      <li><b>Taste calls on device:</b> the sound kit and whether it's on by default, Inbound's density on the bare HUD, the tier materials, and moving Rare off brand cyan.</li>
+      <li><b>Mastery thresholds,</b> and confirming that ranks earn no points and never interrupt.</li>
+      <li><b>No new points in v1.</b> Formation and bounty bonuses wait until behaviour shows they matter.</li>
+      <li><b>Where to start.</b> The recommendation is Inbound, because it needs no backend work and goes straight at the biggest leak.</li>
+    </ol>
+  </section>
+</main>
