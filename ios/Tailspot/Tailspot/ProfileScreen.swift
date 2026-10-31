@@ -145,10 +145,10 @@ struct ProfileScreen: View {
                 }
             }
             .toolbar {
+                // Share sits top LEFT so the close X has the top-right
+                // corner to itself (Noah, 2026-10-31): two glass buttons
+                // side by side read as a pair and invite a mis-tap.
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Done") { dismiss() }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
                     // Share is the page's one action, so it keeps the brand's
                     // cyan CTA accent — but via the SYSTEM's chrome, not our
                     // own. On iOS 26 the toolbar wraps every item in its own
@@ -158,7 +158,7 @@ struct ProfileScreen: View {
                     // rendering bug (Noah's device pass, 2026-08-25).
                     // `.glassProminent` + `.tint` makes the toolbar's own
                     // glass carry the accent instead — one bubble, sized and
-                    // aligned like its Done sibling, hit target included.
+                    // aligned like its close sibling, hit target included.
                     // A direct ShareLink, deliberately minimal (Noah,
                     // 2026-07-08): one tap → the system share sheet with a
                     // short invite with the claimed username + the App Store
@@ -186,6 +186,13 @@ struct ProfileScreen: View {
                             "has_rank": .bool(cachedServerRank >= 1),
                         ])
                     })
+                }
+                // Close goes in the outermost top-right slot: every screen
+                // that returns to the camera closes there (back-controls
+                // pass, 2026-10-30). `role: .close` is the iOS 26 close
+                // button — the system draws the X and the glass.
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(role: .close) { dismiss() }
                 }
             }
         }

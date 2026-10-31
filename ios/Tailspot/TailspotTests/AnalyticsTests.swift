@@ -521,6 +521,22 @@ struct AnalyticsFacadeTests {
         }
     }
 
+    // MARK: - reveal_dismissed (lives here for the same reason)
+
+    @Test @MainActor func revealDismissedSendsOnceAndMutedSendsNothing() {
+        withSink { sink in
+            let appeared = Date(timeIntervalSince1970: 1_000)
+            RevealDismissAnalytics.capture(method: .viewInHangar, appearedAt: appeared,
+                                           now: appeared.addingTimeInterval(2), muted: false)
+            RevealDismissAnalytics.capture(method: .continue, appearedAt: appeared,
+                                           now: appeared.addingTimeInterval(2), muted: true)
+            let mine = sink.captured.filter { $0.event == "reveal_dismissed" }
+            #expect(mine.count == 1)
+            #expect(mine.first?.properties["method"]?.jsonValue as? String == "view_in_hangar")
+            #expect(mine.first?.properties["dwell_ms"]?.jsonValue as? Int == 2000)
+        }
+    }
+
     @Test func messagesComposerResultMapsToFunnelOutcome() {
         #expect(CatchShareAnalytics.outcome(.sent) == .completed)
         #expect(CatchShareAnalytics.outcome(.cancelled) == .cancelled)

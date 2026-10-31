@@ -138,6 +138,13 @@ the source + each one's focused test file — they're not restated here.
   TimelineView's own ticks. Anything that must track motion live goes inside a
   `TimelineView` (the AR overlay, the debug Cam-el line); one-shot reads (the
   shutter-press snapshot, 1 Hz ticks) just read it. Don't re-add `@Published`.
+- **Never detach the preview layer's session.** `previewLayer.session = nil`
+  while a sheet covers the camera left that sheet's toolbar buttons holding
+  their tap until the NEXT touch anywhere: Profile's and the Leaderboard's X
+  took two or more presses (2026-10-30, bisected in the simulator with a log on
+  the action). `PreviewView.setSessionActive` hides the view while stopped
+  instead. If a sheet button "needs two taps", suspect presenter-side layer
+  work done once the sheet has appeared, not the button.
 - **Design system (2026-07-10 polish decisions).** The app is **locked to dark**
   (`preferredColorScheme(.dark)` at the root — keep the per-view light-mode
   compensations as belt-and-suspenders, but light mode is dead). Corner radii snap
@@ -152,6 +159,12 @@ the source + each one's focused test file — they're not restated here.
   don't "fix" them (the HUD status pill, `HUDStatusPill`, is the exception: it
   scales and wraps centred with a 16 pt gutter), and don't add a bare `.system(size:)` to a prose surface. Chrome rule: custom chrome for game surfaces (Hangar/cards/reveals),
   stock-but-branded system nav for utility screens (Settings/Map/Leaderboard).
+  **Exit rule (2026-10-30, design/back-controls-audit.html):** putting a screen
+  away is an X in the outermost top-RIGHT slot; going back one level is a
+  chevron top-LEFT. Custom chrome uses `ChromeButton(.close | .back)` (44 pt
+  DRAWN disc, not just a 44 pt hit area); system toolbars use
+  the native `Button(role: .close)`. Forms keep "Cancel". Don't reintroduce "Done" or
+  small/grey exits — a tester couldn't see them outdoors.
 - **Logging through `Log.swift`, never `print(...)`.** `os.Logger` instances by
   category (`adsb`, `location`, `motion`, `ui`, `analytics`, `metrics`); subsystem
   `com.landesberg.tailspot`. Use

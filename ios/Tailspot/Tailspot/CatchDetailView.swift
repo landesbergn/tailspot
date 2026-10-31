@@ -123,10 +123,11 @@ struct CatchDetailView: View {
                     }
                 }
                 .padding(.horizontal, 18)
-                // Clears the 44 pt floating chrome bar (8 pt top inset + 36 pt
-                // pill) with a 12 pt breath — was 72 pt of dead air (2026-08-12
-                // spacing pass: the pills → photo gap read as empty).
-                .padding(.top, 56)
+                // Clears the floating chrome bar (8 pt top inset + 44 pt
+                // ChromeButton) with a 16 pt breath. The discs grew from 36 pt in
+                // the 2026-10-30 back-controls pass; left at 56 the card's
+                // outline nearly touched them (Noah's device pass).
+                .padding(.top, 8 + ChromeMetrics.disc + 16)
                 .padding(.bottom, 40)
             }
 
@@ -314,55 +315,33 @@ struct CatchDetailView: View {
 
     // MARK: - Floating chrome pills
 
-    /// Back chevron (left) + trash + share (right) — `.ultraThinMaterial`
-    /// discs with a white 10% hairline. System nav bar is hidden so they
-    /// own the top of the view.
+    /// Back (left, when pushed from the Hangar) or close (far right, when
+    /// presented as a sheet from the Map) + trash + share — 44 pt glass
+    /// `ChromeButton`s, the shared exit rule (ChromeButton.swift). System nav
+    /// bar is hidden so they own the top of the view.
     private var chromeBar: some View {
-        HStack {
-            chromePill(icon: presentedModally ? "xmark" : "chevron.left") { dismiss() }
-                .accessibilityLabel(presentedModally ? "Close" : "Back")
-            Spacer()
-            Button {
-                showDeleteConfirm = true
-            } label: {
-                chromePillBody(icon: "trash", tint: Brand.Color.alertWarning)
+        HStack(spacing: 8) {
+            if !presentedModally {
+                ChromeButton(.back) { dismiss() }
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Delete catch")
-            .padding(.trailing, 8)
+            Spacer()
+            ChromeButton(systemName: "trash", tint: Brand.Color.alertWarning,
+                         accessibilityLabel: "Delete catch") {
+                showDeleteConfirm = true
+            }
             // Share opens CatchShareSheet (swipeable shapes + destinations).
             // This tap is the top of the share funnel; the sheet reports the
             // rest (CatchShareAnalytics).
-            Button {
+            ChromeButton(systemName: "square.and.arrow.up", accessibilityLabel: "Share catch") {
                 CatchShareAnalytics(plane: detailPlane, hasCatchPhoto: hasCatchPhoto, source: .detail)
                     .sheetOpened()
                 showShareSheet = true
-            } label: {
-                chromePillBody(icon: "square.and.arrow.up")
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Share catch")
+            if presentedModally {
+                ChromeButton(.close) { dismiss() }
+            }
         }
         .padding(.horizontal, 16)
-    }
-
-    private func chromePill(icon: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            chromePillBody(icon: icon)
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func chromePillBody(icon: String, tint: Color = Brand.Color.textPrimary) -> some View {
-        Image(systemName: icon)
-            .font(.system(size: 14, weight: .semibold))
-            .foregroundStyle(tint)
-            .frame(width: 36, height: 36)
-            .background(.ultraThinMaterial, in: .circle)
-            .overlay(Circle().strokeBorder(.white.opacity(0.10), lineWidth: 1))
-            // 44pt minimum hit target (HIG): the disc stays 36pt visually,
-            // the tappable region grows 4pt past every edge via contentShape.
-            .contentShape(Rectangle().inset(by: -4))
     }
 
     /// Share copy, built by `CatchShare` so the reveal's Share says the same.

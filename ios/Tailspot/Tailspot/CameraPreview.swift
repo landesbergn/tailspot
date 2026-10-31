@@ -205,15 +205,28 @@ final class PreviewView: UIView {
     /// Start or stop the capture session. Stopping powers down the ISP + the
     /// 30 fps frame delivery while the app is inactive or a fully opaque
     /// utility presentation covers the AR view (see `CameraPreview.isActive`).
-    /// The preview layer is detached while stopped so it cannot expose a stale
-    /// frozen frame when one of those presentations dismisses.
+    ///
+    /// The preview is HIDDEN while stopped so it cannot expose a stale frozen
+    /// frame when one of those presentations dismisses, and it reappears only
+    /// once `startRunning()` has returned and live frames are flowing again.
+    /// It used to detach the layer's session instead (`previewLayer.session =
+    /// nil`), but on iOS 26 that detach leaves the sheet covering the camera
+    /// unable to finish a tap: a toolbar button's action waited for the NEXT
+    /// touch, so Profile's and the Leaderboard's close buttons took two or
+    /// more presses (2026-10-30, bisected in the simulator). Hiding is plain
+    /// UIKit and keeps the session attached.
     func setSessionActive(_ wanted: Bool) {
         guard wanted != wantsRunning else { return }
         wantsRunning = wanted
-        previewLayer.session = wanted ? session : nil   // main-thread layer work
-        sessionQueue.async { [session] in
+        if !wanted { isHidden = true }
+        sessionQueue.async { [weak self, session] in
             if wanted {
                 if !session.isRunning { session.startRunning() }
+                DispatchQueue.main.async {
+                    // A stop requested meanwhile wins; it hides again anyway.
+                    guard let self, self.wantsRunning else { return }
+                    self.isHidden = false
+                }
             } else if session.isRunning {
                 session.stopRunning()
             }

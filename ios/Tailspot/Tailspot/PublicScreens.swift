@@ -41,6 +41,10 @@ struct LeaderboardScreen: View {
     /// The handle the server has acknowledged (HandleSyncer's marker) — the
     /// standing card's make-the-board goal is hidden for a stranded handle.
     @AppStorage(SpotterHandle.confirmedKey) private var confirmedHandle: String?
+    /// Set by `LeadersSheet` when this screen is the root of its own sheet:
+    /// the screen then draws the close X itself (top right) and moves the
+    /// challenges flag to the top left (see `rootSheetClose`).
+    @Environment(\.rootSheetClose) private var rootSheetClose
 
     // MARK: State
 
@@ -164,7 +168,18 @@ struct LeaderboardScreen: View {
         // render nothing when no ChallengesModel is in the environment
         // (snapshot harness) or the server has the feature off.
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) { ChallengesFlagButton() }
+            // As a root sheet the X owns the top-right corner, so the
+            // challenges flag moves to the top left (Noah's device pass,
+            // 2026-10-30). Pushed inside Profile, the back button has the
+            // left and the flag stays right.
+            if let rootSheetClose {
+                ToolbarItem(placement: .topBarLeading) { ChallengesFlagButton() }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(role: .close) { rootSheetClose() }
+                }
+            } else {
+                ToolbarItem(placement: .topBarTrailing) { ChallengesFlagButton() }
+            }
         }
         // Runs on appear AND whenever the selected tab changes: a fresh tab
         // fetches (spinner — it has no data yet); a cached tab re-fetches
