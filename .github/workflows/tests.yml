@@ -68,9 +68,14 @@ jobs:
       # *clone* of the simulator for testing, which ignores the device we
       # pre-booted above and pays the cold-boot cost again on the critical
       # path. The suite ran on a single clone anyway (no cross-process
-      # parallelism to lose), and Swift Testing still runs individual tests
-      # concurrently in-process, so this trades nothing for the boot overlap
-      # (verified 2026-08-15: identical 914 tests / 119 suites either way).
+      # parallelism to lose; verified 2026-08-15: identical 914 tests / 119
+      # suites either way). It DOES cost in-process parallelism: with this
+      # flag Swift Testing runs the tests one at a time (2026-10-31: run
+      # 41085490141's per-test durations sum to 266 s of its 297 s run).
+      # Locally that parallelism saves about a quarter of the run (most
+      # suites are @MainActor and share one thread), still less than a cold
+      # clone boot on a fresh runner, so the flag stays. It does mean every
+      # fixed sleep in a test is wall time here.
       - name: Run TailspotTests
         run: |
           set -o pipefail

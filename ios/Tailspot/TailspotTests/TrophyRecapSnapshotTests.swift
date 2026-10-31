@@ -31,7 +31,7 @@ struct TrophyRecapSnapshotTests {
     /// is parameterized so the full Hangar trophy list (taller than a phone)
     /// can be captured in one image — including the below-the-fold masked
     /// secret rows.
-    private func snapshot<V: View>(_ view: V, as name: String, height: CGFloat = 852) {
+    private func snapshot<V: View>(_ view: V, as name: String, height: CGFloat = 852) async {
         try? FileManager.default.createDirectory(at: Self.snapDir, withIntermediateDirectories: true)
         let bounds = CGRect(x: 0, y: 0, width: 393, height: height)
         let host = UIHostingController(rootView: view)
@@ -40,7 +40,7 @@ struct TrophyRecapSnapshotTests {
         window.overrideUserInterfaceStyle = .dark
         window.makeKeyAndVisible()
         host.view.layoutIfNeeded()
-        RunLoop.main.run(until: Date().addingTimeInterval(0.3))
+        try? await Task.sleep(for: .seconds(0.3))
         // Explicit scale: the default (screen scale, 3×) would push the tall
         // full-list captures past Metal's max texture extent and come out
         // blank — 1× is plenty for a layout eyeball at 4000+ points.
@@ -60,12 +60,12 @@ struct TrophyRecapSnapshotTests {
 
     // MARK: - Recap sheet
 
-    @Test func renderRecapStates() {
+    @Test func renderRecapStates() async {
         // 1 trophy — the minimum recap (singular copy, lone hex centered).
-        snapshot(
-            TrophyRecapView(recap: TrophyRecap(achievements: [real("firstcatch")]), onDismiss: {})
-                ._snapshotScreen(size: CGSize(width: 393, height: 852)),
-            as: "recap_one_trophy"
+        await snapshot(
+                  TrophyRecapView(recap: TrophyRecap(achievements: [real("firstcatch")]), onDismiss: {})
+                      ._snapshotScreen(size: CGSize(width: 393, height: 852)),
+                  as: "recap_one_trophy"
         )
 
         // A packed case — two dozen earned incl. the new points/guess
@@ -75,10 +75,10 @@ struct TrophyRecapSnapshotTests {
                        "world", "airlines", "places", "rarehunter", "regular",
                        "night", "firstrare", "epic", "heavymetal", "freighter",
                        "varietypack", "homebody", "redeye", "groundstop"]
-        snapshot(
-            TrophyRecapView(recap: TrophyRecap(achievements: manyIds.map(real)), onDismiss: {})
-                ._snapshotScreen(size: CGSize(width: 393, height: 852)),
-            as: "recap_many_trophies"
+        await snapshot(
+                  TrophyRecapView(recap: TrophyRecap(achievements: manyIds.map(real)), onDismiss: {})
+                      ._snapshotScreen(size: CGSize(width: 393, height: 852)),
+                  as: "recap_many_trophies"
         )
 
         // Long titles — synthetic worst case for cell wrapping/clipping.
@@ -93,10 +93,10 @@ struct TrophyRecapSnapshotTests {
                         summary: "", iconName: "bolt",
                         tiers: [.init(tier: .gold, at: 1)], progress: { _ in 1 }),
         ]
-        snapshot(
-            TrophyRecapView(recap: TrophyRecap(achievements: longNames), onDismiss: {})
-                ._snapshotScreen(size: CGSize(width: 393, height: 852)),
-            as: "recap_long_names"
+        await snapshot(
+                  TrophyRecapView(recap: TrophyRecap(achievements: longNames), onDismiss: {})
+                      ._snapshotScreen(size: CGSize(width: 393, height: 852)),
+                  as: "recap_long_names"
         )
     }
 

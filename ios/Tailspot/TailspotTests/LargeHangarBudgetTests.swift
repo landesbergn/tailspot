@@ -174,7 +174,7 @@ struct LargeHangarBudgetTests {
     private static var sink = 0
 
     /// The fastest of `runs` timings, in seconds.
-    private func fastest(runs: Int = 3, _ body: () -> Void) -> Double {
+    private static func fastest(runs: Int = 3, _ body: () -> Void) -> Double {
         let clock = ContinuousClock()
         var best = Double.greatestFiniteMagnitude
         for _ in 0..<runs {
@@ -184,6 +184,13 @@ struct LargeHangarBudgetTests {
             best = min(best, seconds)
         }
         return best
+    }
+
+    /// One full `Trophies.inputs` pass at 10k rows (min of 3), measured once
+    /// for the checks that compare against it. Each pass is ~1 s in Debug,
+    /// so re-measuring it per test cost the suite several seconds.
+    private static let fullInputsPass10k: Double = fastest {
+        sink &+= Trophies.inputs(from: hangar10k).totalCatches
     }
 
     // MARK: - Fixture sanity
@@ -374,7 +381,7 @@ struct LargeHangarBudgetTests {
         // Read before and after in one synchronous stretch on the main actor,
         // so no other suite's search can land in between.
         let evaluationsBefore = TrophyAchievementDates.prefixEvaluations
-        let seconds = fastest(runs: 1) { center.enqueueNewUnlocks(from: rows) }
+        let seconds = Self.fastest(runs: 1) { center.enqueueNewUnlocks(from: rows) }
         let evaluations = TrophyAchievementDates.prefixEvaluations - evaluationsBefore
         print("[LargeHangarBudget] roster-bump upgrade launch @10k: \(Int(seconds * 1000)) ms")
         #expect(ledger.rosterVersion == Trophies.rosterVersion)
@@ -443,8 +450,7 @@ struct LargeHangarBudgetTests {
 
     /// Budgets and the measurements behind them live in `Budget` below.
     @Test func trophyInputsWithinBudgetAt10k() {
-        let rows = Self.hangar10k
-        let t = fastest { Self.sink &+= Trophies.inputs(from: rows).totalCatches }
+        let t = Self.fullInputsPass10k
         print("[LargeHangarBudget] Trophies.inputs @10k: \(Int(t * 1000)) ms")
         #expect(t < Budget.inputs10k,
                 "Trophies.inputs took \(t) s at 10k rows, over a ~10x-headroom ceiling of \(Budget.inputs10k) s: an order-of-magnitude slip, not runner noise")
@@ -452,7 +458,7 @@ struct LargeHangarBudgetTests {
 
     @Test func hangarGroupingWithinBudgetAt10k() {
         let rows = Self.hangar10k
-        let t = fastest { Self.sink &+= HangarGrouping.group(rows, by: .recent).count }
+        let t = Self.fastest { Self.sink &+= HangarGrouping.group(rows, by: .recent).count }
         print("[LargeHangarBudget] HangarGrouping.group @10k: \(Int(t * 1000)) ms")
         #expect(t < Budget.grouping10k,
                 "HangarGrouping.group took \(t) s at 10k rows, over a ~10x-headroom ceiling of \(Budget.grouping10k) s: an order-of-magnitude slip, not runner noise")
@@ -464,9 +470,9 @@ struct LargeHangarBudgetTests {
     /// HangarRecentView memo, not per keystroke.
     @Test func catchesSearchKeystrokeWithinBudgetAt10k() {
         let rows = HangarGrouping.group(Self.hangar10k, by: .recent).first?.rows ?? []
-        let build = fastest { Self.sink &+= HangarGrouping.searchIndex(for: rows).count }
+        let build = Self.fastest { Self.sink &+= HangarGrouping.searchIndex(for: rows).count }
         let index = HangarGrouping.searchIndex(for: rows)
-        let t = fastest {
+        let t = Self.fastest {
             Self.sink &+= HangarGrouping.search(rows, index: index, query: "epic boeing 737").count
         }
         print("[LargeHangarBudget] search index @10k: \(Int(build * 1000)) ms; keystroke: \(Int(t * 1000)) ms")
@@ -476,7 +482,7 @@ struct LargeHangarBudgetTests {
 
     @Test func distinctMatchKeysWithinBudgetAt10k() {
         let rows = Self.hangar10k
-        let t = fastest { Self.sink &+= CardSets.distinctMatchKeys(for: rows).count }
+        let t = Self.fastest { Self.sink &+= CardSets.distinctMatchKeys(for: rows).count }
         print("[LargeHangarBudget] CardSets.distinctMatchKeys @10k: \(Int(t * 1000)) ms")
         #expect(t < Budget.matchKeys10k,
                 "distinctMatchKeys took \(t) s at 10k rows, over a ~10x-headroom ceiling of \(Budget.matchKeys10k) s: an order-of-magnitude slip, not runner noise")
@@ -490,8 +496,8 @@ struct LargeHangarBudgetTests {
         defer { drop(suiteName) }
         let center = makeCenter(in: suite)
         center.enqueueNewUnlocks(from: rows)
-        let hit = fastest { center.enqueueNewUnlocks(from: rows) }
-        let full = fastest { Self.sink &+= Trophies.inputs(from: rows).totalCatches }
+        let hit = Self.fastest { center.enqueueNewUnlocks(from: rows) }
+        let full = Self.fullInputsPass10k
         print("[LargeHangarBudget] re-diff @10k: memo hit \(Int(hit * 1000)) ms vs full inputs \(Int(full * 1000)) ms")
         #expect(hit < full)
     }
@@ -502,8 +508,8 @@ struct LargeHangarBudgetTests {
     /// full pass, or memoizing stops paying for itself.
     @Test func catchPathTokenOverheadIsLogged() {
         let rows = Self.hangar10k
-        let token = fastest { Self.sink &+= TrophyInputsToken.of(rows) }
-        let full = fastest { Self.sink &+= Trophies.inputs(from: rows).totalCatches }
+        let token = Self.fastest { Self.sink &+= TrophyInputsToken.of(rows) }
+        let full = Self.fullInputsPass10k
         print("[LargeHangarBudget] catch path @10k: token \(Int(token * 1000)) ms per diff (x2 per catch) on top of full inputs \(Int(full * 1000)) ms per diff")
         #expect(token < full)
     }
@@ -513,8 +519,8 @@ struct LargeHangarBudgetTests {
     @Test func trophyInputsScalesLinearly() {
         let small = Self.hangar2500
         let large = Self.hangar10k
-        let tSmall = fastest { Self.sink &+= Trophies.inputs(from: small).totalCatches }
-        let tLarge = fastest { Self.sink &+= Trophies.inputs(from: large).totalCatches }
+        let tSmall = Self.fastest { Self.sink &+= Trophies.inputs(from: small).totalCatches }
+        let tLarge = Self.fastest { Self.sink &+= Trophies.inputs(from: large).totalCatches }
         let ratio = tLarge / tSmall
         print("[LargeHangarBudget] Trophies.inputs 2.5k \(Int(tSmall * 1000)) ms → 10k \(Int(tLarge * 1000)) ms (\(ratio)x)")
         #expect(ratio < 10, "4x the rows cost \(ratio)x (linear ≈ 4x, quadratic ≈ 16x) — something went quadratic")

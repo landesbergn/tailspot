@@ -126,52 +126,54 @@ struct HandleClaimerTests {
 
 // MARK: - Visual pass
 
-/// Renders the sheet's states to /private/tmp/tailspot_snaps for the PR's
-/// before/after table. Profile + Settings "after" renders come from
-/// ProfileSettingsSnapshotTests (profile_hub, settings, *_unclaimed).
-@MainActor
-@Suite("Handle edit sheet snapshots", .serialized)
-struct HandleEditSnapshotTests {
-    private static let snapDir = URL(fileURLWithPath: "/private/tmp/tailspot_snaps", isDirectory: true)
+extension StandardDefaultsSnapshotSuites {
+    /// Renders the sheet's states to /private/tmp/tailspot_snaps for the PR's
+    /// before/after table. Profile + Settings "after" renders come from
+    /// ProfileSettingsSnapshotTests (profile_hub, settings, *_unclaimed).
+    @MainActor
+    @Suite("Handle edit sheet snapshots", .serialized)
+    struct HandleEditSnapshotTests {
+        private static let snapDir = URL(fileURLWithPath: "/private/tmp/tailspot_snaps", isDirectory: true)
 
-    /// Host the sheet's content directly at medium-detent height (about half
-    /// an iPhone 16 screen). A real `.sheet` presentation draws blank in an
-    /// offscreen test window, so the grabber and rounded top aren't shown.
-    private func snapshot(_ sheet: HandleEditSheet, as name: String) async {
-        try? FileManager.default.createDirectory(at: Self.snapDir, withIntermediateDirectories: true)
-        let bounds = CGRect(x: 0, y: 0, width: 393, height: 440)
-        let host = UIHostingController(rootView: sheet)
-        let window = UIWindow(frame: bounds)
-        window.rootViewController = host
-        window.overrideUserInterfaceStyle = .dark
-        window.makeKeyAndVisible()
-        try? await Task.sleep(for: .seconds(0.5))
-        let png = UIGraphicsImageRenderer(bounds: bounds).pngData { _ in
-            host.view.drawHierarchy(in: bounds, afterScreenUpdates: true)
+        /// Host the sheet's content directly at medium-detent height (about half
+        /// an iPhone 16 screen). A real `.sheet` presentation draws blank in an
+        /// offscreen test window, so the grabber and rounded top aren't shown.
+        private func snapshot(_ sheet: HandleEditSheet, as name: String) async {
+            try? FileManager.default.createDirectory(at: Self.snapDir, withIntermediateDirectories: true)
+            let bounds = CGRect(x: 0, y: 0, width: 393, height: 440)
+            let host = UIHostingController(rootView: sheet)
+            let window = UIWindow(frame: bounds)
+            window.rootViewController = host
+            window.overrideUserInterfaceStyle = .dark
+            window.makeKeyAndVisible()
+            try? await Task.sleep(for: .seconds(0.5))
+            let png = UIGraphicsImageRenderer(bounds: bounds).pngData { _ in
+                host.view.drawHierarchy(in: bounds, afterScreenUpdates: true)
+            }
+            try? png.write(to: Self.snapDir.appendingPathComponent("\(name).png"))
+            window.isHidden = true
         }
-        try? png.write(to: Self.snapDir.appendingPathComponent("\(name).png"))
-        window.isHidden = true
-    }
 
-    private func withHandle(_ value: String, _ body: () async -> Void) async {
-        let defaults = UserDefaults.standard
-        let saved = defaults.object(forKey: SpotterHandle.storageKey)
-        defaults.set(value, forKey: SpotterHandle.storageKey)
-        await body()
-        defaults.set(saved, forKey: SpotterHandle.storageKey)
-    }
+        private func withHandle(_ value: String, _ body: () async -> Void) async {
+            let defaults = UserDefaults.standard
+            let saved = defaults.object(forKey: SpotterHandle.storageKey)
+            defaults.set(value, forKey: SpotterHandle.storageKey)
+            await body()
+            defaults.set(saved, forKey: SpotterHandle.storageKey)
+        }
 
-    @Test func renderSheetStates() async {
-        await withHandle("noah") {
-            await snapshot(HandleEditSheet(source: "snapshot", initialDraft: "noah_spots"), as: "handle_sheet_edit")
-            await snapshot(HandleEditSheet(source: "snapshot", initialDraft: "maia",
-                                           initialOutcome: .taken("maia")), as: "handle_sheet_taken")
-            await snapshot(HandleEditSheet(source: "snapshot", initialDraft: "noah_spots",
-                                           initialOutcome: .failed), as: "handle_sheet_offline")
+        @Test func renderSheetStates() async {
+            await withHandle("noah") {
+                await snapshot(HandleEditSheet(source: "snapshot", initialDraft: "noah_spots"), as: "handle_sheet_edit")
+                await snapshot(HandleEditSheet(source: "snapshot", initialDraft: "maia",
+                                               initialOutcome: .taken("maia")), as: "handle_sheet_taken")
+                await snapshot(HandleEditSheet(source: "snapshot", initialDraft: "noah_spots",
+                                               initialOutcome: .failed), as: "handle_sheet_offline")
+            }
+            await withHandle(SpotterHandle.defaultPlaceholder) {
+                await snapshot(HandleEditSheet(source: "snapshot"), as: "handle_sheet_claim")
+            }
+            #expect(true)
         }
-        await withHandle(SpotterHandle.defaultPlaceholder) {
-            await snapshot(HandleEditSheet(source: "snapshot"), as: "handle_sheet_claim")
-        }
-        #expect(true)
     }
 }

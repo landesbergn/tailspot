@@ -34,7 +34,7 @@ struct ChallengeScreensSnapshotTests {
     enum Device { case iphone16, se }
 
     private func snapshot<V: View>(_ view: V, as name: String, settle: TimeInterval = 0.6,
-                                   device: Device = .iphone16) {
+                                   device: Device = .iphone16) async {
         try? FileManager.default.createDirectory(at: Self.snapDir, withIntermediateDirectories: true)
         let bounds = device == .se
             ? CGRect(x: 0, y: 0, width: 375, height: 667)
@@ -45,7 +45,7 @@ struct ChallengeScreensSnapshotTests {
         window.overrideUserInterfaceStyle = .dark
         window.makeKeyAndVisible()
         host.view.layoutIfNeeded()
-        RunLoop.main.run(until: Date().addingTimeInterval(settle))
+        try? await Task.sleep(for: .seconds(settle))
         let renderer = UIGraphicsImageRenderer(bounds: bounds)
         let png = renderer.pngData { _ in
             host.view.drawHierarchy(in: bounds, afterScreenUpdates: true)
@@ -84,20 +84,20 @@ struct ChallengeScreensSnapshotTests {
 
     @Test func hubLoaded() async {
         let (model, _) = await makeModel()
-        snapshot(hub(model), as: "challenges_hub")
-        snapshot(hub(model).dynamicTypeSize(.accessibility2), as: "challenges_hub_a11y2")
+        await snapshot(hub(model), as: "challenges_hub")
+        await snapshot(hub(model).dynamicTypeSize(.accessibility2), as: "challenges_hub_a11y2")
     }
 
     @Test func hubEmpty() async {
         let (model, _) = await makeModel(state: ChallengeFixtures.emptyState())
-        snapshot(hub(model), as: "challenges_hub_empty")
+        await snapshot(hub(model), as: "challenges_hub_empty")
     }
 
     @Test func hubHistoryOnly() async {
         var s = ChallengeFixtures.demoState(now: Self.now)
         s.open = []
         let (model, _) = await makeModel(state: s)
-        snapshot(hub(model), as: "challenges_hub_history_only")
+        await snapshot(hub(model), as: "challenges_hub_history_only")
     }
 
     @Test func hubLoading() async {
@@ -107,7 +107,7 @@ struct ChallengeScreensSnapshotTests {
         let slow = ChallengesModel(service: stalling, currentBuild: 100, now: { Self.now },
                                    defaults: UserDefaults(suiteName: "stall-\(UUID().uuidString)")!)
         _ = model
-        snapshot(hub(slow), as: "challenges_hub_loading", settle: 0.4)
+        await snapshot(hub(slow), as: "challenges_hub_loading", settle: 0.4)
     }
 
     @Test func hubErrorAndOfflineCache() async {
@@ -115,44 +115,44 @@ struct ChallengeScreensSnapshotTests {
         let (m1, s1) = await makeModel(preloaded: false)
         await m1.refreshConfig()
         s1.fail("list", with: .network("offline"))
-        snapshot(hub(m1), as: "challenges_hub_error")
+        await snapshot(hub(m1), as: "challenges_hub_error")
         // Offline with a cached list: preload, then make the next refresh fail.
         let (m2, s2) = await makeModel()
         s2.fail("list", with: .network("offline"))
-        snapshot(hub(m2), as: "challenges_hub_offline_cache")
+        await snapshot(hub(m2), as: "challenges_hub_offline_cache")
     }
 
     @Test func hubUnavailableAndUpdateRequired() async {
         var disabled = ChallengeFixtures.demoState(now: Self.now)
         disabled.config = ChallengesConfig(enabled: false, availability: "public", minBuild: 1, appStoreURL: nil)
         let (m1, _) = await makeModel(state: disabled)
-        snapshot(hub(m1), as: "challenges_hub_unavailable")
+        await snapshot(hub(m1), as: "challenges_hub_unavailable")
 
         var old = ChallengeFixtures.demoState(now: Self.now)
         old.config = ChallengesConfig(enabled: true, availability: "public", minBuild: 999,
                                       appStoreURL: "https://apps.apple.com/app/id6773470079")
         let (m2, _) = await makeModel(state: old, currentBuild: 95)
-        snapshot(hub(m2), as: "challenges_hub_update_required")
+        await snapshot(hub(m2), as: "challenges_hub_update_required")
     }
 
     // MARK: Create sheet
 
     @Test func createSheetStates() async {
         let (model, _) = await makeModel()
-        snapshot(ChallengeCreateSheet(onCreated: { _ in }, _debugNow: Self.now).environment(model),
-                 as: "challenge_create_default")
-        snapshot(ChallengeCreateSheet(onCreated: { _ in }, _debugName: "Hi", _debugNow: Self.now).environment(model),
-                 as: "challenge_create_invalid_name")
-        snapshot(ChallengeCreateSheet(onCreated: { _ in }, _debugStartMode: .scheduled, _debugNow: Self.now).environment(model),
-                 as: "challenge_create_scheduled")
-        snapshot(ChallengeCreateSheet(onCreated: { _ in }, _debugName: "The Great Wednesday Flyoff", _debugNow: Self.now).environment(model),
-                 as: "challenge_create_name_too_long")
+        await snapshot(ChallengeCreateSheet(onCreated: { _ in }, _debugNow: Self.now).environment(model),
+                       as: "challenge_create_default")
+        await snapshot(ChallengeCreateSheet(onCreated: { _ in }, _debugName: "Hi", _debugNow: Self.now).environment(model),
+                       as: "challenge_create_invalid_name")
+        await snapshot(ChallengeCreateSheet(onCreated: { _ in }, _debugStartMode: .scheduled, _debugNow: Self.now).environment(model),
+                       as: "challenge_create_scheduled")
+        await snapshot(ChallengeCreateSheet(onCreated: { _ in }, _debugName: "The Great Wednesday Flyoff", _debugNow: Self.now).environment(model),
+                       as: "challenge_create_name_too_long")
         // A start that went stale while the sheet sat open (10 minutes out):
         // the sheet moves it to the earliest valid minute and says why.
-        snapshot(ChallengeCreateSheet(onCreated: { _ in }, _debugStartMode: .scheduled,
-                                      _debugScheduledAt: Self.now.addingTimeInterval(10 * 60),
-                                      _debugNow: Self.now).environment(model),
-                 as: "challenge_create_scheduled_moved")
+        await snapshot(ChallengeCreateSheet(onCreated: { _ in }, _debugStartMode: .scheduled,
+                                            _debugScheduledAt: Self.now.addingTimeInterval(10 * 60),
+                                            _debugNow: Self.now).environment(model),
+                       as: "challenge_create_scheduled_moved")
     }
 
     // MARK: Join sheet
@@ -164,15 +164,15 @@ struct ChallengeScreensSnapshotTests {
         func sheet(_ phase: P, code: String? = nil) -> some View {
             ChallengeJoinSheet(code: code, via: "code_entry", onJoined: { _ in }, _debugPhase: phase).environment(model)
         }
-        snapshot(sheet(.entry), as: "challenge_join_entry")
-        snapshot(sheet(P.from(preview: invites[ChallengeFixtures.Codes.joinable]!), code: ChallengeFixtures.Codes.joinable), as: "challenge_join_preview")
-        snapshot(sheet(P.from(preview: invites[ChallengeFixtures.Codes.needsHandle]!), code: ChallengeFixtures.Codes.needsHandle), as: "challenge_join_needs_handle")
-        snapshot(sheet(P.from(preview: invites[ChallengeFixtures.Codes.full]!)), as: "challenge_join_full")
-        snapshot(sheet(P.from(preview: invites[ChallengeFixtures.Codes.ended]!)), as: "challenge_join_ended")
-        snapshot(sheet(P.from(preview: invites[ChallengeFixtures.Codes.cancelled]!)), as: "challenge_join_cancelled")
-        snapshot(sheet(P.from(preview: invites[ChallengeFixtures.Codes.alreadyIn]!)), as: "challenge_join_already_in")
-        snapshot(sheet(.failed(.notFound)), as: "challenge_join_not_found")
-        snapshot(sheet(.failed(.unavailable)), as: "challenge_join_unavailable")
+        await snapshot(sheet(.entry), as: "challenge_join_entry")
+        await snapshot(sheet(P.from(preview: invites[ChallengeFixtures.Codes.joinable]!), code: ChallengeFixtures.Codes.joinable), as: "challenge_join_preview")
+        await snapshot(sheet(P.from(preview: invites[ChallengeFixtures.Codes.needsHandle]!), code: ChallengeFixtures.Codes.needsHandle), as: "challenge_join_needs_handle")
+        await snapshot(sheet(P.from(preview: invites[ChallengeFixtures.Codes.full]!)), as: "challenge_join_full")
+        await snapshot(sheet(P.from(preview: invites[ChallengeFixtures.Codes.ended]!)), as: "challenge_join_ended")
+        await snapshot(sheet(P.from(preview: invites[ChallengeFixtures.Codes.cancelled]!)), as: "challenge_join_cancelled")
+        await snapshot(sheet(P.from(preview: invites[ChallengeFixtures.Codes.alreadyIn]!)), as: "challenge_join_already_in")
+        await snapshot(sheet(.failed(.notFound)), as: "challenge_join_not_found")
+        await snapshot(sheet(.failed(.unavailable)), as: "challenge_join_unavailable")
     }
 
     // MARK: Detail
@@ -180,7 +180,7 @@ struct ChallengeScreensSnapshotTests {
     @Test func detailUpcomingCreatorAndParticipant() async {
         let (model, _) = await makeModel()
         await model.loadDetail(id: "c-upcoming")
-        snapshot(detail(model, id: "c-upcoming"), as: "challenge_detail_upcoming_creator")
+        await snapshot(detail(model, id: "c-upcoming"), as: "challenge_detail_upcoming_creator")
 
         // The same challenge as a non-creator participant.
         var s = ChallengeFixtures.demoState(now: Self.now)
@@ -194,47 +194,47 @@ struct ChallengeScreensSnapshotTests {
                                                         winners: [], alreadyIn: nil, newDevice: nil)
         let (m2, _) = await makeModel(state: s)
         await m2.loadDetail(id: "c-upcoming-guest")
-        snapshot(detail(m2, id: "c-upcoming-guest"), as: "challenge_detail_upcoming_participant")
+        await snapshot(detail(m2, id: "c-upcoming-guest"), as: "challenge_detail_upcoming_participant")
     }
 
     @Test func detailLive() async {
         let (model, _) = await makeModel()
         await model.loadDetail(id: "c-live")
         try? await model.loadLog(id: "c-live", handle: "noah")
-        snapshot(detail(model, id: "c-live"), as: "challenge_detail_live")
-        snapshot(detail(model, id: "c-live", expanded: ["noah"]), as: "challenge_detail_live_expanded")
-        snapshot(detail(model, id: "c-live").dynamicTypeSize(.accessibility2), as: "challenge_detail_live_a11y2")
+        await snapshot(detail(model, id: "c-live"), as: "challenge_detail_live")
+        await snapshot(detail(model, id: "c-live", expanded: ["noah"]), as: "challenge_detail_live_expanded")
+        await snapshot(detail(model, id: "c-live").dynamicTypeSize(.accessibility2), as: "challenge_detail_live_a11y2")
     }
 
     @Test func detailResults() async {
         // First view: nothing seen yet.
         let (first, _) = await makeModel()
         await first.loadDetail(id: "c-won")
-        snapshot(detail(first, id: "c-won", reduceMotion: false), as: "challenge_detail_results_first", settle: 1.0)
+        await snapshot(detail(first, id: "c-won", reduceMotion: false), as: "challenge_detail_results_first", settle: 1.0)
         #expect(first.seenResultIds.contains("c-won"), "opening the results must mark them seen")
 
         // Reduce Motion: laurels are simply present.
         let (rm, _) = await makeModel()
         await rm.loadDetail(id: "c-won")
-        snapshot(detail(rm, id: "c-won", reduceMotion: true), as: "challenge_detail_results_first_reduce_motion")
+        await snapshot(detail(rm, id: "c-won", reduceMotion: true), as: "challenge_detail_results_first_reduce_motion")
 
         // Quiet: already seen.
         let (quiet, _) = await makeModel(seenResults: ["c-won"])
         await quiet.loadDetail(id: "c-won")
-        snapshot(detail(quiet, id: "c-won"), as: "challenge_detail_results_quiet")
+        await snapshot(detail(quiet, id: "c-won"), as: "challenge_detail_results_quiet")
 
         // Lost, with a shared crown up top.
         let (lost, _) = await makeModel(seenResults: ["c-lost"])
         await lost.loadDetail(id: "c-lost")
-        snapshot(detail(lost, id: "c-lost"), as: "challenge_detail_results_lost")
+        await snapshot(detail(lost, id: "c-lost"), as: "challenge_detail_results_lost")
 
         // SE height: the winner block and the first standings row must
         // both be on screen without scrolling (spec §13; the 2026-09-06
         // reveal bug is why this class gets its own render).
         let (se, _) = await makeModel()
         await se.loadDetail(id: "c-won")
-        snapshot(detail(se, id: "c-won", reduceMotion: false), as: "challenge_detail_results_first_se",
-                 settle: 1.0, device: .se)
+        await snapshot(detail(se, id: "c-won", reduceMotion: false), as: "challenge_detail_results_first_se",
+                       settle: 1.0, device: .se)
     }
 
     /// A suite-named `UserDefaults` carrying a claimed handle, injected into
@@ -254,32 +254,32 @@ struct ChallengeScreensSnapshotTests {
         // A claimed handle so the form itself renders (the unclaimed case
         // shows the claim card and is covered by createSheetStates).
         let handleStore = claimedHandleDefaults()
-        snapshot(ChallengeCreateSheet(onCreated: { _ in }, _debugNow: Self.now).environment(model)
-                    .defaultAppStorage(handleStore)
-                    .dynamicTypeSize(.accessibility2),
-                 as: "challenge_create_a11y2")
+        await snapshot(ChallengeCreateSheet(onCreated: { _ in }, _debugNow: Self.now).environment(model)
+                          .defaultAppStorage(handleStore)
+                          .dynamicTypeSize(.accessibility2),
+                       as: "challenge_create_a11y2")
         let invites = ChallengeFixtures.demoState(now: Self.now).invites
         let preview = ChallengeJoinSheet.Phase.from(preview: invites[ChallengeFixtures.Codes.joinable]!)
-        snapshot(ChallengeJoinSheet(code: ChallengeFixtures.Codes.joinable, via: "code_entry", onJoined: { _ in },
-                                    _debugPhase: preview).environment(model)
-                    .defaultAppStorage(handleStore)
-                    .dynamicTypeSize(.accessibility2),
-                 as: "challenge_join_preview_a11y2")
+        await snapshot(ChallengeJoinSheet(code: ChallengeFixtures.Codes.joinable, via: "code_entry", onJoined: { _ in },
+                                          _debugPhase: preview).environment(model)
+                          .defaultAppStorage(handleStore)
+                          .dynamicTypeSize(.accessibility2),
+                       as: "challenge_join_preview_a11y2")
     }
 
     @Test func createSheetWithClaimedHandleShowsNoClaimCard() async {
         let (model, _) = await makeModel()
-        snapshot(ChallengeCreateSheet(onCreated: { _ in }, _debugNow: Self.now).environment(model)
-                    .defaultAppStorage(claimedHandleDefaults()),
-                 as: "challenge_create_claimed")
+        await snapshot(ChallengeCreateSheet(onCreated: { _ in }, _debugNow: Self.now).environment(model)
+                          .defaultAppStorage(claimedHandleDefaults()),
+                       as: "challenge_create_claimed")
     }
 
     @Test func detailNoContestAndCancelled() async {
         let (model, _) = await makeModel(seenResults: ["c-nocontest", "c-cancelled"])
         await model.loadDetail(id: "c-nocontest")
-        snapshot(detail(model, id: "c-nocontest"), as: "challenge_detail_no_contest")
+        await snapshot(detail(model, id: "c-nocontest"), as: "challenge_detail_no_contest")
         await model.loadDetail(id: "c-cancelled")
-        snapshot(detail(model, id: "c-cancelled"), as: "challenge_detail_cancelled")
+        await snapshot(detail(model, id: "c-cancelled"), as: "challenge_detail_cancelled")
     }
 
     /// Two spotters, nobody scored: the server's no_contest reads "Tie", and
@@ -300,7 +300,7 @@ struct ChallengeScreensSnapshotTests {
             winners: [], alreadyIn: nil, newDevice: nil)
         let (model, _) = await makeModel(state: s)
         await model.loadDetail(id: "c-tie")
-        snapshot(detail(model, id: "c-tie"), as: "challenge_detail_zero_zero_tie")
+        await snapshot(detail(model, id: "c-tie"), as: "challenge_detail_zero_zero_tie")
     }
 
     /// Right after Create: a live challenge with only you in it. The code
@@ -319,7 +319,7 @@ struct ChallengeScreensSnapshotTests {
             winners: [], alreadyIn: nil, newDevice: nil)
         let (model, _) = await makeModel(state: s)
         await model.loadDetail(id: "c-solo")
-        snapshot(detail(model, id: "c-solo"), as: "challenge_detail_just_created_solo")
+        await snapshot(detail(model, id: "c-solo"), as: "challenge_detail_just_created_solo")
     }
 }
 
