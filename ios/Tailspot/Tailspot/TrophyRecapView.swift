@@ -77,7 +77,10 @@ struct TrophyRecapView: View {
             } else {
                 ScrollView {
                     grid(t: t)
-                        .padding(.vertical, 16)
+                        .padding(.top, 16)
+                        // 28 = the fade below: scrolled to the end, the last
+                        // row clears the fade instead of sitting in it.
+                        .padding(.bottom, 28)
                 }
                 // `.mask` keeps only the parts of the view where the mask
                 // shape is opaque: solid black down to the last 28 pt, then

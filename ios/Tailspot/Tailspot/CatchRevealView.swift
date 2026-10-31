@@ -1875,6 +1875,17 @@ struct CatchRevealView: View {
                         scale: scale, accent: accent)
                     .opacity(ss(0.6, 0.76, t))
                 Rectangle().fill(RP.rule).frame(height: 1)
+            } else if stillLoading {
+                // Nothing for row one YET, but a route may land with the
+                // finished snapshot: hold row one's height (invisible) so
+                // its arrival doesn't push the card down mid-reveal.
+                VStack(alignment: .leading, spacing: 12 * scale) {
+                    statRow(alt: livePlane.altText, speed: livePlane.speedText,
+                            dist: livePlane.distText, scale: scale, accent: accent)
+                    Rectangle().frame(height: 1)
+                }
+                .hidden()
+                .accessibilityHidden(true)
             }
             Group {
                 if let render {
@@ -2102,9 +2113,11 @@ struct CatchRevealView: View {
             .padding(.horizontal, 14 * scale)
             .padding(.vertical, 11 * scale)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(state.background, in: .rect(cornerRadius: Brand.Radius.row))
+            // Scaled with the rest of the artboard chip (artboard radii stay
+            // computed; Brand.Radius doc).
+            .background(state.background, in: .rect(cornerRadius: Brand.Radius.row * scale))
             .overlay(
-                RoundedRectangle(cornerRadius: Brand.Radius.row)
+                RoundedRectangle(cornerRadius: Brand.Radius.row * scale)
                     .strokeBorder(state.border, lineWidth: 1)
             )
         }
