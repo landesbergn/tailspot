@@ -1,0 +1,357 @@
+<title>Sky Hint Mockups</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=B612+Mono:wght@400;700&family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Sans+Condensed:wght@600;700&display=swap">
+<style>
+/* Layout: a spectrum, top to bottom, from "the app tells you nothing" to "the app tells you where". Each concept is a row of real-size phone frames drawn over a real field shot, with a short readout of what it gives away. */
+:root {
+  --paper: #F5F7F9; --sheet: #FFFFFF; --ink: #0E1A26; --ink-2: #3E4D5C; --rule: #D6DEE6;
+  --accent: #00708A; --accent-soft: #E2F2F6; --warn: #8A5A00; --warn-soft: #FFF3D6;
+  --display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --body: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+  --hud: "B612 Mono", ui-monospace, Menlo, monospace;
+  /* the app's own HUD palette (Brand.swift); fixed in both page themes, because it is the phone */
+  --bgP: #0A0E1A; --bgE: #1A2030; --tx1: #E8F4FF; --tx2: #A0B0C0; --tx3: #7F8B98; --cy: #00D4FF;
+  --epic: #9B5DE5; --amber: #FFB800; --gold: #FBBF24; --halo: #050810;
+  --s: .62;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --paper: #0C1218; --sheet: #131C26; --ink: #E7EEF4; --ink-2: #A8B6C3; --rule: #27333F;
+  --accent: #4FD0EA; --accent-soft: #0F2A33; --warn: #F2C25B; --warn-soft: #2B220E; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --paper: #0C1218; --sheet: #131C26; --ink: #E7EEF4; --ink-2: #A8B6C3; --rule: #27333F;
+  --accent: #4FD0EA; --accent-soft: #0F2A33; --warn: #F2C25B; --warn-soft: #2B220E; color-scheme: dark; }
+body { background: var(--paper); color: var(--ink); font: 16px/1.6 var(--body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 40px 80px; }
+main { max-width: 1120px; margin: 0 auto; display: flex; flex-direction: column; gap: 56px; }
+h1, h2 { font-family: var(--display); margin: 0; line-height: 1.15; text-wrap: balance; }
+h1 { font-size: clamp(32px, 5vw, 44px); }
+h2 { font-size: 28px; }
+p { margin: 0; max-width: 68ch; }
+.eyebrow { font: 700 12px/1 var(--hud); letter-spacing: .14em; text-transform: uppercase; color: var(--accent); }
+.lede { font-size: 18px; color: var(--ink-2); }
+section.concept { display: flex; flex-direction: column; gap: 18px; padding-top: 28px; border-top: 1px solid var(--rule); }
+.scale { display: flex; align-items: center; gap: 10px; font: 700 11px/1 var(--hud); letter-spacing: .1em; color: var(--ink-2); }
+.scale i { display: block; width: 120px; height: 6px; border-radius: 3px; background: var(--rule); position: relative; }
+.scale i b { position: absolute; inset: 0 auto 0 0; border-radius: 3px; background: var(--accent); }
+.frames { display: flex; flex-wrap: wrap; gap: 24px; }
+figure { margin: 0; display: flex; flex-direction: column; gap: 10px; width: calc(393px * var(--s)); }
+figcaption { font-size: 14px; color: var(--ink-2); }
+figcaption b { color: var(--ink); }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.facts div { background: var(--sheet); border: 1px solid var(--rule); border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.facts h3 { margin: 0; font: 700 11px/1.2 var(--hud); letter-spacing: .12em; text-transform: uppercase; color: var(--ink-2); }
+.facts p { font-size: 15px; }
+.take { background: var(--accent-soft); border-radius: 12px; padding: 14px 16px; font-size: 15px; max-width: none; }
+.take b { color: var(--accent); }
+.reco { background: var(--sheet); border: 1px solid var(--rule); border-radius: 16px; padding: 24px; display: flex; flex-direction: column; gap: 12px; }
+.reco ol { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 8px; max-width: 70ch; }
+
+/* ---------- phone ---------- */
+.ph { width: calc(393px * var(--s)); height: calc(852px * var(--s)); border-radius: calc(44px * var(--s)); overflow: hidden; position: relative; box-shadow: 0 0 0 1px var(--rule), 0 10px 30px rgba(10,14,26,.18); background: #000; flex: none; }
+.scr { position: absolute; left: 0; top: 0; width: 393px; height: 852px; transform: scale(var(--s)); transform-origin: 0 0; background-size: cover; background-position: center top; font-family: var(--hud); color: var(--tx1); }
+.sky-e { background-image: url("sky_empty.jpg"); }
+.sky-p { background-image: url("sky_plane.jpg"); }
+.dim::after { content: ""; position: absolute; inset: 0; background: rgba(0,0,0,.35); }
+.island { position: absolute; left: 50%; top: 11px; width: 124px; height: 36px; margin-left: -62px; border-radius: 18px; background: #000; z-index: 30; }
+.scrim { position: absolute; inset: auto 0 0 0; height: 200px; background: linear-gradient(to top, rgba(5,8,16,.55), rgba(5,8,16,0)); }
+.glass { background: rgba(10,14,26,.75); border: 1px solid rgba(232,244,255,.08); }
+.profile { position: absolute; right: 16px; top: 62px; width: 44px; height: 44px; border-radius: 22px; display: grid; place-items: center; }
+.btn56 { position: absolute; bottom: 46px; width: 56px; height: 56px; border-radius: 16px; display: grid; place-items: center; }
+.btn56.l { left: 28px; } .btn56.r { right: 28px; }
+.badge { position: absolute; right: -4px; top: -4px; background: #3DD68C; color: var(--bgP); font: 700 10px/1 var(--hud); padding: 2px 5px; border-radius: 8px; }
+.capture { position: absolute; left: 50%; bottom: 38px; width: 72px; height: 72px; margin-left: -36px; border-radius: 50%; border: 3px solid var(--cy); background: rgba(10,14,26,.55); display: grid; place-items: center; font: 700 10px/1 var(--hud); letter-spacing: 1px; color: var(--cy); }
+.capture.off { border-color: var(--tx3); border-width: 1.5px; background: transparent; color: var(--tx3); }
+.pill { position: absolute; left: 50%; top: 686px; transform: translate(-50%, -50%); display: flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 22px; white-space: nowrap; font: 700 10px/1.35 var(--hud); letter-spacing: 1.2px; color: var(--tx2); }
+.pill .dot { width: 6px; height: 6px; border-radius: 3px; background: var(--tx2); opacity: .75; flex: none; }
+.pill .lines { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.pill .l2 { font-weight: 400; color: var(--tx3); }
+.ann { position: absolute; font: 400 12px/1.3 var(--body); color: #fff; background: rgba(0,112,138,.92); padding: 4px 8px; border-radius: 6px; letter-spacing: 0; }
+/* brackets */
+.brk { position: absolute; width: 64px; height: 64px; }
+.brk i { position: absolute; width: 14px; height: 14px; border-color: var(--cy); border-style: solid; border-width: 0; filter: drop-shadow(0 0 0 var(--halo)) drop-shadow(0 0 1.5px var(--halo)) drop-shadow(0 0 1px var(--halo)); }
+.brk .a { left: 0; top: 0; border-left-width: 2.5px; border-top-width: 2.5px; border-top-left-radius: 3px; }
+.brk .b { right: 0; top: 0; border-right-width: 2.5px; border-top-width: 2.5px; border-top-right-radius: 3px; }
+.brk .c { left: 0; bottom: 0; border-left-width: 2.5px; border-bottom-width: 2.5px; border-bottom-left-radius: 3px; }
+.brk .d { right: 0; bottom: 0; border-right-width: 2.5px; border-bottom-width: 2.5px; border-bottom-right-radius: 3px; }
+.lbl { position: absolute; transform: translateX(-50%); text-align: center; text-shadow: 0 0 2px var(--halo), 0 0 1px var(--halo); white-space: nowrap; }
+.ring { position: absolute; border-radius: 50%; border: 1.5px solid rgba(0,212,255,.9); box-shadow: 0 0 0 1px var(--halo); transform: translate(-50%, -50%); }
+.finger { position: absolute; width: 40px; height: 40px; border-radius: 20px; background: rgba(255,255,255,.25); transform: translate(-50%, -50%); }
+/* sheet */
+.sheet { position: absolute; left: 0; right: 0; bottom: 0; top: 420px; background: var(--bgE); border-radius: 26px 26px 0 0; padding: 26px 22px; display: flex; flex-direction: column; gap: 0; z-index: 5; }
+.grab { position: absolute; left: 50%; top: 8px; width: 36px; height: 5px; margin-left: -18px; border-radius: 3px; background: var(--tx3); }
+.row { display: flex; justify-content: space-between; font: 400 13px/1 var(--hud); padding: 9px 0; border-bottom: 1px solid rgba(232,244,255,.06); color: var(--tx2); }
+.row b { color: var(--tx1); font-weight: 400; } .row b.z { color: var(--tx3); }
+/* lock screen */
+.lock { background: linear-gradient(180deg, #0B1626 0%, #18304D 55%, #2B4A6B 100%); font-family: -apple-system, system-ui, sans-serif; }
+.lock .date { position: absolute; top: 76px; width: 100%; text-align: center; font: 600 19px/1 -apple-system, system-ui, sans-serif; color: rgba(255,255,255,.85); }
+.lock .time { position: absolute; top: 96px; width: 100%; text-align: center; font: 700 96px/1 -apple-system, system-ui, sans-serif; letter-spacing: -2px; color: rgba(255,255,255,.92); }
+.wrect { position: absolute; top: 216px; left: 50%; width: 170px; margin-left: -85px; font: 700 12px/1.3 var(--hud); color: rgba(255,255,255,.9); background: rgba(255,255,255,.12); border-radius: 14px; padding: 9px 12px; backdrop-filter: blur(8px); }
+.wrect .t { font-weight: 400; color: rgba(255,255,255,.6); font-size: 11px; }
+.wcirc { position: absolute; top: 216px; left: 54px; width: 60px; height: 60px; border-radius: 30px; background: rgba(255,255,255,.12); display: grid; place-items: center; text-align: center; font: 700 22px/1 var(--hud); color: rgba(255,255,255,.92); }
+.wcirc small { display: block; font: 700 7px/1 var(--hud); letter-spacing: 1px; margin-top: 2px; }
+.notif { position: absolute; left: 12px; right: 12px; bottom: 120px; background: rgba(40,48,62,.72); backdrop-filter: blur(14px); border-radius: 22px; padding: 12px 14px; display: grid; grid-template-columns: 38px 1fr; gap: 10px; color: #fff; font: 400 14px/1.3 -apple-system, system-ui, sans-serif; }
+.appicon { width: 38px; height: 38px; border-radius: 9px; background: var(--bgP); display: grid; place-items: center; border: 1px solid rgba(255,255,255,.15); }
+.notif .h { display: flex; justify-content: space-between; font-weight: 600; } .notif .h span { font-weight: 400; color: rgba(255,255,255,.6); font-size: 13px; }
+.home { background: linear-gradient(160deg, #1B2B40, #33506E 60%, #4A6A8A); }
+.wsmall { position: absolute; left: 26px; top: 80px; width: 158px; height: 158px; border-radius: 26px; background: var(--bgP); padding: 16px; display: flex; flex-direction: column; gap: 4px; }
+.apps { position: absolute; left: 210px; top: 80px; display: grid; grid-template-columns: 62px 62px; gap: 34px 26px; }
+.apps i { width: 62px; height: 62px; border-radius: 15px; background: rgba(255,255,255,.18); display: block; }
+/* inbound */
+.chev { position: absolute; display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 8px; font: 700 10px/1.3 var(--hud); letter-spacing: 1px; white-space: nowrap; }
+.chev .arrow { font-size: 15px; color: var(--tx1); }
+.newtype { color: var(--gold); }
+.placard { position: absolute; left: 16px; right: 72px; top: 62px; background: var(--amber); color: #0A0E1A; border-radius: 16px; padding: 10px 14px; font: 700 12px/1.35 var(--hud); letter-spacing: 1px; }
+@media (max-width: 480px) { :root { --s: .5; } .frames { gap: 16px; } }
+</style>
+
+<main>
+  <header style="display:flex;flex-direction:column;gap:12px">
+    <div class="eyebrow">Tailspot · sky hints · 31 Oct 2026</div>
+    <h1>How much should the sky give away?</h1>
+    <p class="lede">You said you want the game to be about seeing something and then catching it, not being told where it is. You liked Sky Watch for being exploratory, didn't want the server holding a location, and don't want sound. Five designers each took one angle on that, and a judge picked four concepts that span the range. They're ordered here from “tells you nothing” to “tells you where”, with Inbound as originally pitched at the end for comparison. Every frame is drawn on a real field shot from Berkeley, with the current HUD chrome redrawn on top.</p>
+  </header>
+
+  <!-- ===== 1. SPOT TO NAME ===== -->
+  <section class="concept">
+    <div class="scale">GIVES AWAY <i><b style="width:6%"></b></i> NOTHING</div>
+    <h2>1 · Spot to Name</h2>
+    <p>The camera never labels a plane you haven't found. You look with your own eyes and tap the speck. If it's a real plane, the brackets close on it and its callsign types on. The name is the reward for spotting.</p>
+    <div class="frames">
+      <figure>
+        <div class="ph"><div class="scr sky-p">
+          <div class="island"></div><div class="scrim"></div>
+          <div class="profile glass"><svg width="18" height="18" viewBox="0 0 24 24" fill="#E8F4FF"><circle cx="12" cy="8" r="4.2"/><path d="M3.5 21c.9-4.6 4.4-7 8.5-7s7.6 2.4 8.5 7z"/></svg></div>
+          <div class="pill glass"><span class="dot"></span><span>LOOK UP · TAP WHAT YOU SEE</span></div>
+          <div class="btn56 l glass"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#E8F4FF" stroke-width="2"><path d="M3 11 12 5l9 6v8H3z"/><path d="M8 19v-5h8v5"/></svg><span class="badge">242</span></div>
+          <div class="capture off">CAPTURE</div>
+          <div class="btn56 r glass"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#E8F4FF" stroke-width="2"><path d="M9 6h12M9 12h12M9 18h12"/><text x="1" y="8" font-size="7" fill="#E8F4FF" stroke="none" font-family="sans-serif">1</text><text x="1" y="14" font-size="7" fill="#E8F4FF" stroke="none" font-family="sans-serif">2</text><text x="1" y="20" font-size="7" fill="#E8F4FF" stroke="none" font-family="sans-serif">3</text></svg></div>
+        </div></div>
+        <figcaption><b>Empty sky.</b> Nothing shows until you find it. There's a plane in this frame (follow the contrail), but the screen looks the same as if there weren't.</figcaption>
+      </figure>
+      <figure>
+        <div class="ph"><div class="scr sky-p">
+          <div class="island"></div><div class="scrim"></div>
+          <div class="profile glass"><svg width="18" height="18" viewBox="0 0 24 24" fill="#E8F4FF"><circle cx="12" cy="8" r="4.2"/><path d="M3.5 21c.9-4.6 4.4-7 8.5-7s7.6 2.4 8.5 7z"/></svg></div>
+          <div class="finger" style="left:173px;top:404px"></div>
+          <div class="ring" style="left:172px;top:403px;width:28px;height:28px"></div>
+          <div class="pill glass"><span class="dot"></span><span>LOOK UP · TAP WHAT YOU SEE</span></div>
+          <div class="btn56 l glass"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#E8F4FF" stroke-width="2"><path d="M3 11 12 5l9 6v8H3z"/><path d="M8 19v-5h8v5"/></svg><span class="badge">242</span></div>
+          <div class="capture off">CAPTURE</div>
+          <div class="btn56 r glass"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#E8F4FF" stroke-width="2"><path d="M9 6h12M9 12h12M9 18h12"/></svg></div>
+        </div></div>
+        <figcaption><b>The tap.</b> A cyan ring shrinks onto your finger. A miss just fades away, with no penalty and no text.</figcaption>
+      </figure>
+      <figure>
+        <div class="ph"><div class="scr sky-p">
+          <div class="island"></div><div class="scrim"></div>
+          <div class="profile glass"><svg width="18" height="18" viewBox="0 0 24 24" fill="#E8F4FF"><circle cx="12" cy="8" r="4.2"/><path d="M3.5 21c.9-4.6 4.4-7 8.5-7s7.6 2.4 8.5 7z"/></svg></div>
+          <div class="lbl" style="left:172px;top:351px;font:700 9px/1 var(--hud);letter-spacing:1.4px;color:var(--cy)">SPOTTED</div>
+          <div class="brk" style="left:140px;top:371px"><i class="a"></i><i class="b"></i><i class="c"></i><i class="d"></i></div>
+          <div class="lbl" style="left:172px;top:443px;font:700 13px/1 var(--hud)">SWA1287</div>
+          <div class="lbl" style="left:172px;top:461px;font:400 10px/1 var(--hud);color:var(--tx2)">B738 · 11,400 FT · 9 KM</div>
+          <div class="pill glass" style="color:var(--cy)"><span class="dot" style="background:var(--cy);opacity:1"></span><span>1 NAMED</span></div>
+          <div class="btn56 l glass"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#E8F4FF" stroke-width="2"><path d="M3 11 12 5l9 6v8H3z"/><path d="M8 19v-5h8v5"/></svg><span class="badge">242</span></div>
+          <div class="capture">CAPTURE</div>
+          <div class="btn56 r glass"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#E8F4FF" stroke-width="2"><path d="M9 6h12M9 12h12M9 18h12"/></svg></div>
+        </div></div>
+        <figcaption><b>Named.</b> The brackets lock with one light haptic tick and the name types on. Only now does Capture light up.</figcaption>
+      </figure>
+    </div>
+    <div class="facts">
+      <div><h3>Keeps back</h3><p>Everything. You choose where to look, find the speck yourself, and commit with a tap.</p></div>
+      <div><h3>Privacy</h3><p>Nothing new. It uses the same polls the open camera already makes.</p></div>
+      <div><h3>Build</h3><p>Mostly exists already. Tap-to-reveal already resolves a tap to a plane; this makes it the only way to get a label. Ship behind a flag and A/B it on first-catch rate.</p></div>
+    </div>
+    <p class="take"><b>Risk.</b> This is the purest version of your sentence, and the hardest game. New users already struggle (21% see a plane and never catch it). Keep today's auto-labels until the first catch, then switch to spotting.</p>
+  </section>
+
+  <!-- ===== 2. SKY WIDGET ===== -->
+  <section class="concept">
+    <div class="scale">GIVES AWAY <i><b style="width:25%"></b></i> A STALE MOOD</div>
+    <h2>2 · Sky widget (Sky Watch with no server and no push)</h2>
+    <p>A lock-screen and Home Screen widget that reads the sky near you like weather: quiet, steady or busy, how many planes are above you, and the rarest tier up there. It never pushes and it's dated, so it reads as a forecast you check, not an alert.</p>
+    <div class="frames">
+      <figure>
+        <div class="ph"><div class="scr lock">
+          <div class="island"></div>
+          <div class="date">Friday 31 October</div>
+          <div class="time">2:14</div>
+          <div class="wcirc">7<small>ABOVE</small></div>
+          <div class="wrect" style="left:auto;right:30px;margin-left:0;width:190px">SKY · BUSY<br>7 ABOVE · RAREST EPIC<br><span class="t">AS OF 2:09 PM</span></div>
+        </div></div>
+        <figcaption><b>Lock screen.</b> The OS makes lock-screen widgets one colour, so the tier is a word, not a colour.</figcaption>
+      </figure>
+      <figure>
+        <div class="ph"><div class="scr home">
+          <div class="island"></div>
+          <div class="wsmall">
+            <span style="font:700 10px/1 var(--hud);letter-spacing:1.4px;color:var(--cy)">SKY NOW</span>
+            <span style="font:700 26px/1.1 var(--hud);margin-top:6px">BUSY</span>
+            <span style="font:400 12px/1.3 var(--hud);color:var(--tx2)">7 ABOVE</span>
+            <span style="font:400 12px/1.3 var(--hud);color:var(--tx2)">RAREST <b style="color:var(--epic)">EPIC</b></span>
+            <span style="font:400 10px/1 var(--hud);color:var(--tx3);margin-top:auto">AS OF 2:09 PM</span>
+          </div>
+          <div class="apps"><i></i><i></i><i></i><i></i></div>
+        </div></div>
+        <figcaption><b>Home Screen.</b> In colour here. Tap it to open the camera, with no arrow waiting.</figcaption>
+      </figure>
+      <figure>
+        <div class="ph"><div class="scr home">
+          <div class="island"></div>
+          <div class="wsmall">
+            <span style="font:700 10px/1 var(--hud);letter-spacing:1.4px;color:var(--cy)">SKY NOW</span>
+            <span style="font:700 20px/1.1 var(--hud);margin-top:6px;color:var(--tx3)">NO READING</span>
+            <span style="font:400 13px/1.35 var(--body);color:var(--tx2);margin-top:6px">Open Tailspot to read the sky</span>
+          </div>
+          <div class="apps"><i></i><i></i><i></i><i></i></div>
+        </div></div>
+        <figcaption><b>Stale.</b> After about 45 minutes, or once you've moved, it says so instead of showing an old number as live.</figcaption>
+      </figure>
+    </div>
+    <div class="facts">
+      <div><h3>Keeps back</h3><p>Direction, distance, type and timing, and even whether that plane is still there by the time you're outside.</p></div>
+      <div><h3>Privacy</h3><p>The server keeps nothing. The widget asks for location when iOS refreshes it and makes the same anonymous request the open app makes. If you decline, it shows the app's last reading.</p></div>
+      <div><h3>Build</h3><p>A WidgetKit extension (a new target), sharing the reading through an App Group. iOS decides how often it refreshes, which is why every reading is dated.</p></div>
+    </div>
+  </section>
+
+  <!-- ===== 3. SKY REPORT ===== -->
+  <section class="concept">
+    <div class="scale">GIVES AWAY <i><b style="width:45%"></b></i> IS IT WORTH LOOKING</div>
+    <h2>3 · Sky Report (the empty-sky pill reads the conditions)</h2>
+    <p>The grey “NO AIRCRAFT IN VIEW” pill becomes a conditions readout: how busy the sky is, how many planes are above your horizon, and the rarest tier up there. It answers “is it worth looking?” and never “where?”.</p>
+    <div class="frames">
+      <figure>
+        <div class="ph"><div class="scr sky-e">
+          <div class="island"></div><div class="scrim"></div>
+          <div class="profile glass"><svg width="18" height="18" viewBox="0 0 24 24" fill="#E8F4FF"><circle cx="12" cy="8" r="4.2"/><path d="M3.5 21c.9-4.6 4.4-7 8.5-7s7.6 2.4 8.5 7z"/></svg></div>
+          <div class="pill glass"><span class="dot"></span><span class="lines"><span>SKY · QUIET</span><span class="l2">3 NEARBY · NONE ABOVE YOU</span></span></div>
+          <div class="btn56 l glass"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#E8F4FF" stroke-width="2"><path d="M3 11 12 5l9 6v8H3z"/><path d="M8 19v-5h8v5"/></svg><span class="badge">242</span></div>
+          <div class="capture off">CAPTURE</div>
+          <div class="btn56 r glass"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#E8F4FF" stroke-width="2"><path d="M9 6h12M9 12h12M9 18h12"/></svg></div>
+        </div></div>
+        <figcaption><b>Quiet.</b> This replaces today's “NO AIRCRAFT IN VIEW · 3 NEARBY”.</figcaption>
+      </figure>
+      <figure>
+        <div class="ph"><div class="scr sky-e">
+          <div class="island"></div><div class="scrim"></div>
+          <div class="profile glass"><svg width="18" height="18" viewBox="0 0 24 24" fill="#E8F4FF"><circle cx="12" cy="8" r="4.2"/><path d="M3.5 21c.9-4.6 4.4-7 8.5-7s7.6 2.4 8.5 7z"/></svg></div>
+          <div class="pill glass"><span class="dot"></span><span class="lines"><span>SKY · BUSY</span><span class="l2">6 ABOVE · <b style="color:var(--epic)">1 EPIC</b> · 1 NEW TO YOU</span></span></div>
+          <div class="ann" style="left:200px;top:610px">tier only, no direction</div>
+          <div class="btn56 l glass"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#E8F4FF" stroke-width="2"><path d="M3 11 12 5l9 6v8H3z"/><path d="M8 19v-5h8v5"/></svg><span class="badge">242</span></div>
+          <div class="capture off">CAPTURE</div>
+          <div class="btn56 r glass"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#E8F4FF" stroke-width="2"><path d="M9 6h12M9 12h12M9 18h12"/></svg></div>
+        </div></div>
+        <figcaption><b>Something good is up.</b> Only the tier takes a colour. No glow, no pulse, no haptic. It never names the type.</figcaption>
+      </figure>
+      <figure>
+        <div class="ph"><div class="scr sky-e dim">
+          <div class="island"></div>
+          <div class="sheet">
+            <div class="grab"></div>
+            <div style="font:700 11px/1 var(--hud);letter-spacing:1.3px;color:var(--cy);margin-bottom:14px">CONDITIONS · NOW</div>
+            <div class="row">AIRLINERS<b>4</b></div>
+            <div class="row">WIDEBODIES<b>1</b></div>
+            <div class="row">BIZ JETS<b class="z">0</b></div>
+            <div class="row">GA<b>1</b></div>
+            <div class="row">HELICOPTERS<b class="z">0</b></div>
+            <div class="row">MILITARY<b class="z">0</b></div>
+            <div class="row" style="margin-top:10px">RAREST UP<b style="color:var(--epic);font-weight:700">EPIC</b></div>
+            <div class="row" style="border:0">NEW TO YOU<b>1</b></div>
+            <p style="font:400 13px/1.4 var(--body);color:var(--tx3);margin-top:12px">Planes above your horizon and within reach. No directions.</p>
+          </div>
+        </div></div>
+        <figcaption><b>Tap the pill</b> for the full conditions. There's no map, no compass and no arrows.</figcaption>
+      </figure>
+    </div>
+    <div class="facts">
+      <div><h3>Keeps back</h3><p>Which plane is the rare one, its bearing, height, distance, type and airline. You still scan the whole sky.</p></div>
+      <div><h3>Privacy</h3><p>Nothing new: it uses the open app's polls, and “new to you” is checked on the phone.</p></div>
+      <div><h3>Build</h3><p>Small. A pure function in the existing pill, held for 20 s so it doesn't flicker. It only counts planes you could actually turn and catch.</p></div>
+    </div>
+  </section>
+
+  <!-- ===== 4. SIGHTING REPORT ===== -->
+  <section class="concept">
+    <div class="scale">GIVES AWAY <i><b style="width:65%"></b></i> A CLASS AND A WINDOW</div>
+    <h2>4 · Sighting report (an on-device Sky Watch push)</h2>
+    <p>Opt-in and off by default. When the app goes to the background, it looks at the last sky it fetched. If something rare will pass within reach, it schedules one silent local notification that says what kind of plane, not which or where. It's capped at one a day.</p>
+    <div class="frames">
+      <figure>
+        <div class="ph"><div class="scr lock">
+          <div class="island"></div>
+          <div class="date">Friday 31 October</div>
+          <div class="time">2:14</div>
+          <div class="notif">
+            <div class="appicon"><svg width="20" height="20" viewBox="0 0 24 24" fill="#00D4FF"><path d="M21 15.5v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V8.5l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-6z"/></svg></div>
+            <div><div class="h">Sighting report <span>now</span></div>A four-engine heavy is about to pass within reach. You have about 10 minutes.</div>
+          </div>
+        </div></div>
+        <figcaption><b>Lock screen.</b> Passive delivery: no sound, no vibration, no screen wake. It removes itself when the window closes.</figcaption>
+      </figure>
+      <figure>
+        <div class="ph"><div class="scr sky-e">
+          <div class="island"></div><div class="scrim"></div>
+          <div class="profile glass"><svg width="18" height="18" viewBox="0 0 24 24" fill="#E8F4FF"><circle cx="12" cy="8" r="4.2"/><path d="M3.5 21c.9-4.6 4.4-7 8.5-7s7.6 2.4 8.5 7z"/></svg></div>
+          <div class="pill glass"><span class="dot" style="background:var(--epic);opacity:1"></span><span>REPORT · A FOUR-ENGINE HEAVY · ~7 MIN</span></div>
+          <div class="btn56 l glass"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#E8F4FF" stroke-width="2"><path d="M3 11 12 5l9 6v8H3z"/><path d="M8 19v-5h8v5"/></svg><span class="badge">242</span></div>
+          <div class="capture off">CAPTURE</div>
+          <div class="btn56 r glass"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#E8F4FF" stroke-width="2"><path d="M9 6h12M9 12h12M9 18h12"/></svg></div>
+        </div></div>
+        <figcaption><b>Opened.</b> The camera carries the report, with no bearing, ever. If the plane has gone, it says “REPORT ENDED” and steps aside.</figcaption>
+      </figure>
+    </div>
+    <div class="facts">
+      <div><h3>Keeps back</h3><p>Direction, height, distance, airline and exact type. You know a heavy is coming, but not from where.</p></div>
+      <div><h3>Privacy</h3><p>The server keeps nothing. The report is scheduled on the phone from the last tile the open app fetched, and the app reads no location in the background.</p></div>
+      <div><h3>Limit</h3><p>It only knows what was coming when you last closed the app, so it can't watch your sky all day. That's the cost of keeping the server out of it.</p></div>
+    </div>
+  </section>
+
+  <!-- ===== 5. INBOUND AS PITCHED ===== -->
+  <section class="concept">
+    <div class="scale">GIVES AWAY <i><b style="width:92%"></b></i> WHERE AND WHEN</div>
+    <h2>For comparison · Inbound as pitched</h2>
+    <p>This is the version from the level-up plan: chevrons on the edge of the frame point at planes about to come into view, with type, direction and time. It's the most effective at getting a first catch, and the furthest from “see it, then catch it”.</p>
+    <div class="frames">
+      <figure>
+        <div class="ph"><div class="scr sky-e">
+          <div class="island"></div><div class="scrim"></div>
+          <div class="profile glass"><svg width="18" height="18" viewBox="0 0 24 24" fill="#E8F4FF"><circle cx="12" cy="8" r="4.2"/><path d="M3.5 21c.9-4.6 4.4-7 8.5-7s7.6 2.4 8.5 7z"/></svg></div>
+          <div class="chev glass" style="left:10px;top:300px"><span class="arrow">‹</span><span>B738 · SW · ~2 MIN</span></div>
+          <div class="chev glass" style="right:10px;top:420px"><span>A359 · NE · ~4 MIN<br><span class="newtype">NEW TYPE</span></span><span class="arrow">›</span></div>
+          <div class="chev glass" style="left:50%;top:150px;transform:translateX(-50%)"><span class="arrow">˄</span><span>C172 · ~1 MIN</span></div>
+          <div class="btn56 l glass"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#E8F4FF" stroke-width="2"><path d="M3 11 12 5l9 6v8H3z"/><path d="M8 19v-5h8v5"/></svg><span class="badge">242</span></div>
+          <div class="capture off">CAPTURE</div>
+          <div class="btn56 r glass"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#E8F4FF" stroke-width="2"><path d="M9 6h12M9 12h12M9 18h12"/></svg></div>
+        </div></div>
+        <figcaption><b>Chevrons.</b> Up to three planes on the way, each with a type, a direction and an ETA.</figcaption>
+      </figure>
+      <figure>
+        <div class="ph"><div class="scr sky-e">
+          <div class="island"></div><div class="scrim"></div>
+          <div class="placard">747-8F INBOUND · EPIC<br>LOOK NE · ~3 MIN</div>
+          <div class="profile glass"><svg width="18" height="18" viewBox="0 0 24 24" fill="#E8F4FF"><circle cx="12" cy="8" r="4.2"/><path d="M3.5 21c.9-4.6 4.4-7 8.5-7s7.6 2.4 8.5 7z"/></svg></div>
+          <div class="chev glass" style="right:10px;top:300px;border-color:rgba(155,93,229,.6)"><span>747-8F · NE · ~3 MIN</span><span class="arrow">›</span></div>
+          <div class="btn56 l glass"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#E8F4FF" stroke-width="2"><path d="M3 11 12 5l9 6v8H3z"/><path d="M8 19v-5h8v5"/></svg><span class="badge">242</span></div>
+          <div class="capture off">CAPTURE</div>
+          <div class="btn56 r glass"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#E8F4FF" stroke-width="2"><path d="M9 6h12M9 12h12M9 18h12"/></svg></div>
+        </div></div>
+        <figcaption><b>Rare placard.</b> It tells you exactly what to look for and where.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="reco">
+    <div class="eyebrow">My read</div>
+    <h2>A camera that rewards looking, and a widget for the heads-up</h2>
+    <ol>
+      <li><b>Sky Report first.</b> It's the smallest build, changes the screen people spend most of their time on, and gives nothing away but “is it worth looking?”. It needs no new data and no new permissions.</li>
+      <li><b>Spot to Name as a flagged experiment</b> for players with at least one catch. It turns your sentence into the core rule, and a tap on a speck you found is also a stronger “this catch is real” signal than an auto-label.</li>
+      <li><b>The Sky widget is the Sky Watch to build:</b> pull-only, dated, nothing on the server. Hold the Sighting report back unless the widget proves people want a push.</li>
+      <li><b>Inbound as pitched is shelved.</b> It answers “where?”, which is what you said the game shouldn't do.</li>
+      <li><b>No sound kit.</b> Haptics stay as they are, a single light tick at most.</li>
+    </ol>
+  </section>
+</main>
