@@ -64,6 +64,35 @@ nonisolated private enum Fx {
                                "closeup": "loading", "has_type_info": "false"])
     }
 
+    @Test func aTurnSaysWhichCatchItWas() {
+        let p = CardTurnAnalytics.properties(source: .detail, flipped: true,
+                                             closeup: .none, hasTypeInfo: false,
+                                             catchUuids: ["UUID-A", "UUID-B"],
+                                             icao24: "ac5c1f")
+        #expect(strings(p)["catch_uuid"] == "UUID-A")
+        #expect(strings(p)["catch_uuids"] == "UUID-A,UUID-B")
+        #expect(strings(p)["icao24"] == "ac5c1f")
+    }
+
+    @Test func anUnknownCatchIsOmittedNotBlank() {
+        let p = CardTurnAnalytics.properties(source: .reveal, flipped: true,
+                                             closeup: .none, hasTypeInfo: false,
+                                             catchUuids: [""], icao24: nil)
+        #expect(p["catch_uuid"] == nil)
+        #expect(p["catch_uuids"] == nil)
+        #expect(p["icao24"] == nil)
+    }
+
+    @MainActor @Test func aCatchUuidIsMintedOnceAndKept() {
+        let row = Catch(icao24: "ac5c1f", callsign: nil, model: nil, manufacturer: nil,
+                        caughtAt: Date(timeIntervalSince1970: 1_783_150_000),
+                        observerLat: 37.87, observerLon: -122.27, slantDistanceMeters: 9_800)
+        #expect(row.serverUuid == nil)
+        let minted = row.ensureServerUuid()
+        #expect(row.serverUuid == minted)
+        #expect(row.ensureServerUuid() == minted)
+    }
+
     @Test func aTurnToTheBackWaitsForTheCloseup() {
         #expect(!CardTurnAnalytics.sendsImmediately(flipped: true, closeup: .loading))
         #expect(CardTurnAnalytics.sendsImmediately(flipped: true, closeup: .none))

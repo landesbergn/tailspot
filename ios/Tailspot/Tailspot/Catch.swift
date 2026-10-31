@@ -271,6 +271,21 @@ final class Catch {
     /// Display code for the destination. Same preference as `displayOrigin`.
     var displayDest: String? { destIata ?? destIcao }
 
+    /// This catch's `serverUuid`, minted now if it has none. Once set it is
+    /// never regenerated, so minting early is safe: the uploader, the guess
+    /// hold and analytics all end up holding the same key. Analytics sends it
+    /// as `catch_uuid` from the catch moment on (2026-10-31), which is what
+    /// lets `catch_card_turned` join back to `catch_performed` in PostHog.
+    /// The caller saves; an unsaved uuid is re-minted only if the app dies
+    /// before the next save, and then nothing was uploaded under it yet.
+    @discardableResult
+    func ensureServerUuid() -> String {
+        if let serverUuid { return serverUuid }
+        let minted = UUID().uuidString
+        serverUuid = minted
+        return minted
+    }
+
     /// The photo focus as a CGPoint, or nil when either axis is missing
     /// (pre-field rows) — callers treat nil as "center crop".
     var photoFocus: CGPoint? {

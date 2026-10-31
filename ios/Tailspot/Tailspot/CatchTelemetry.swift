@@ -173,7 +173,8 @@ nonisolated enum CatchTelemetry {
         category: String? = nil,
         originIcao: String? = nil,
         destIcao: String? = nil,
-        catchMode: CatchMode? = nil
+        catchMode: CatchMode? = nil,
+        catchUuid: String? = nil
     ) -> [String: AnalyticsValue] {
         var props: [String: AnalyticsValue] = [
             "icao24": .string(icao24),
@@ -192,6 +193,9 @@ nonisolated enum CatchTelemetry {
             // closer). Together they watch the fix without a new dashboard.
             "multi_n": .int(multiN),
         ]
+        // Which catch this is (`Catch.serverUuid`, the backend's catch uuid
+        // too). Joins `catch_card_turned` and `catch_uploaded` to this row.
+        addNonBlank("catch_uuid", catchUuid, to: &props)
         if let c = visualFixConfidence { props["visual_fix_confidence"] = .double(Double(c)) }
         if let a = angularSizeArcmin { props["angular_size_arcmin"] = .double(a) }
         // L4 detector soft-gate verdict for this target; omitted when the
@@ -370,7 +374,8 @@ nonisolated enum CatchTelemetry {
         placeName: String?,
         firstOfType: Bool? = nil,
         guessKind: String? = nil,
-        guessCorrect: Bool? = nil
+        guessCorrect: Bool? = nil,
+        catchUuid: String? = nil
     ) -> [String: AnalyticsValue] {
         var props: [String: AnalyticsValue] = [
             "icao24": .string(icao24),
@@ -387,6 +392,7 @@ nonisolated enum CatchTelemetry {
         addNonBlank("category", category, to: &props)
         addNonBlank("callsign", callsign, to: &props)
         addNonBlank("place_name", placeName, to: &props)
+        addNonBlank("catch_uuid", catchUuid, to: &props)
         // Bonus outcomes behind the awarded `points` (2026-08-13): the
         // server's first-of-type verdict (+50% already inside points), and —
         // only when a guess round actually ran — its kind + verdict. All
@@ -529,7 +535,9 @@ nonisolated enum CatchTelemetry {
             category: row.category,
             originIcao: row.originIcao,
             destIcao: row.destIcao,
-            catchMode: catchMode
+            catchMode: catchMode,
+            // Minted by runCatch before the save.
+            catchUuid: row.serverUuid
         ))
     }
 
@@ -617,7 +625,8 @@ nonisolated enum CatchTelemetry {
             // which must NOT land as a recorded wrong answer. Server verdict
             // preferred; frozen local verdict as fallback (old backend).
             guessCorrect: row.guessKind != nil
-                ? (response.guessCorrect ?? row.guessCorrect) : nil
+                ? (response.guessCorrect ?? row.guessCorrect) : nil,
+            catchUuid: row.serverUuid
         ))
     }
 

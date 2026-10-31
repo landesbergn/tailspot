@@ -224,7 +224,11 @@ struct CatchDetailView: View {
         pendingTurnReport = false
         CardTurnAnalytics.capture(source: .detail, flipped: flipped,
                                   closeup: backModel.closeup,
-                                  hasTypeInfo: typeInfo != nil)
+                                  hasTypeInfo: typeInfo != nil,
+                                  // The card stands for every catch of this
+                                  // airframe in the group; its own one first.
+                                  rows: [first] + row.allCatches.filter { $0 !== first },
+                                  icao24: first.icao24)
     }
 
     private func computeTypeFacts() {

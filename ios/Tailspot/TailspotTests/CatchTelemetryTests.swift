@@ -122,6 +122,28 @@ struct CatchTelemetryTests {
         #expect(p["visual_fix_confidence"] == nil)
     }
 
+    @Test func performedAndUploadedCarryTheCatchUuid() {
+        // The join key the catch log uses to tell whether a card was turned.
+        let uuid = "C0FFEE00-0000-0000-0000-000000000001"
+        let performed = CatchTelemetry.performedProperties(
+            icao24: "ac5c1f", rarity: "rare", aircraftType: "wide", slantKm: 7.5,
+            visualConfirmEnabled: false, visualFixConfidence: nil, catchUuid: uuid
+        )
+        #expect(performed["catch_uuid"]?.jsonValue as? String == uuid)
+        let uploaded = CatchTelemetry.uploadedProperties(
+            icao24: "ac5c1f", rarity: "rare", points: 10, duplicate: false,
+            registration: nil, typecode: nil, manufacturer: nil, model: nil,
+            operatorName: nil, aircraftType: nil, category: nil, callsign: nil,
+            placeName: nil, catchUuid: uuid
+        )
+        #expect(uploaded["catch_uuid"]?.jsonValue as? String == uuid)
+        let none = CatchTelemetry.performedProperties(
+            icao24: "ac5c1f", rarity: "rare", aircraftType: "wide", slantKm: 7.5,
+            visualConfirmEnabled: false, visualFixConfidence: nil
+        )
+        #expect(none["catch_uuid"] == nil)
+    }
+
     @Test func performedCarriesIdentityRouteAndBasePoints() {
         // The 2026-08-13 enrichment: WHAT was caught rides the north-star
         // event itself, in the same vocabulary as catch_uploaded.

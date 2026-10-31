@@ -71,19 +71,36 @@ nonisolated extension CardBackCloseup {
 
 /// `catch_card_turned` — fired each time a card is turned over, either way.
 /// One helper so the detail screen and the reveal send the same shape.
+/// Since 2026-10-31 it also says which catch was being looked at: `icao24`,
+/// `catch_uuid` (the card's own catch) and `catch_uuids` (comma-separated,
+/// every catch the card stands for: a Hangar card groups all catches of one
+/// airframe). The uuids match `catch_uuid` on `catch_performed`, so the
+/// PostHog catch log can show whether each catch's card was ever turned.
 enum CardTurnAnalytics {
     enum Source: String { case detail, reveal }
 
     /// The event's properties. Pure, so tests pin the shape.
+    /// `catchUuids[0]` is the card's own catch. Uuids and `icao24` are
+    /// omitted when unknown (the reveal's early shell before its row
+    /// exists), never sent blank.
     nonisolated static func properties(source: Source, flipped: Bool,
                                        closeup: CardBackCloseup,
-                                       hasTypeInfo: Bool) -> [String: AnalyticsValue] {
-        [
+                                       hasTypeInfo: Bool,
+                                       catchUuids: [String] = [],
+                                       icao24: String? = nil) -> [String: AnalyticsValue] {
+        var props: [String: AnalyticsValue] = [
             "source": .string(source.rawValue),
             "side": .string(flipped ? "back" : "front"),
             "closeup": .string(closeup.analyticsValue),
             "has_type_info": .bool(hasTypeInfo),
         ]
+        let uuids = catchUuids.filter { !$0.isEmpty }
+        if let own = uuids.first {
+            props["catch_uuid"] = .string(own)
+            props["catch_uuids"] = .string(uuids.joined(separator: ","))
+        }
+        if let icao24, !icao24.isEmpty { props["icao24"] = .string(icao24) }
+        return props
     }
 
     /// Whether a turn can be reported right away. A turn to the back while
@@ -96,12 +113,19 @@ enum CardTurnAnalytics {
     }
 
     /// Sends the event unless `muted` (the DEBUG simulated reveal).
+    /// `rows` are the catches the card stands for, the card's own first.
+    /// Rows already deleted are skipped (touching a model that has left its
+    /// context can trap); a live row with no uuid yet gets one minted.
     static func capture(source: Source, flipped: Bool, closeup: CardBackCloseup,
-                        hasTypeInfo: Bool, muted: Bool = false) {
+                        hasTypeInfo: Bool, rows: [Catch], icao24: String?,
+                        muted: Bool = false) {
         guard !muted else { return }
+        let live = rows.filter { !CatchUploader.isGone($0) }
         Analytics.capture("catch_card_turned",
                           properties(source: source, flipped: flipped,
-                                     closeup: closeup, hasTypeInfo: hasTypeInfo))
+                                     closeup: closeup, hasTypeInfo: hasTypeInfo,
+                                     catchUuids: live.map { $0.ensureServerUuid() },
+                                     icao24: live.first?.icao24 ?? icao24))
     }
 }
 
