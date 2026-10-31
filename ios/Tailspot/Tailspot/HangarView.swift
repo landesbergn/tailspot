@@ -114,26 +114,13 @@ struct HangarView: View {
                     .fixedSize()
             }
             // Visible dismiss for the sheet (HIG: sheets need an explicit
-            // way out — swipe-down alone is undiscoverable). Quiet chrome
-            // so it doesn't fight the wordmark; the empty state instead
-            // dismisses via its "Open AR view" CTA.
-            Button {
-                dismiss()
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Brand.Color.textSecondary)
-                    .frame(width: 30, height: 30)
-                    .background(Brand.Color.bgElevated, in: .circle)
-                    // 44pt minimum hit target (HIG): the disc stays 30pt
-                    // visually, the tappable region grows past every edge.
-                    .contentShape(Rectangle().inset(by: -7))
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Close hangar")
+            // way out — swipe-down alone is undiscoverable). The shared
+            // 44 pt close, top right like every sheet (ChromeButton.swift);
+            // it used to be a 30 pt grey X a tester couldn't see outdoors.
+            ChromeButton(.close, accessibilityLabel: "Close hangar") { dismiss() }
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.vertical, 6)
         .frame(maxWidth: .infinity)
         .background(Brand.Color.bgPrimary)
         .overlay(alignment: .bottom) {

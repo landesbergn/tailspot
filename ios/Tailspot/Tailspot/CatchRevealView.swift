@@ -770,6 +770,10 @@ struct CatchRevealView: View {
     /// gating the dismiss CTAs and the success haptic.
     @State private var settled = false
 
+    /// When the reveal first appeared, for `reveal_dismissed`'s dwell.
+    /// Separate from `start`, which a skip-tap rewinds.
+    @State private var appearedAt: Date?
+
     /// Pauses the reveal's `TimelineView` once every animation clock has
     /// clamped. `TimelineView(.animation)` ticks at the display's native rate
     /// (up to 120 Hz) for as long as it's mounted — so without this it keeps
@@ -938,7 +942,10 @@ struct CatchRevealView: View {
                 HeroZoomOverlay(model: heroZoom)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .onAppear { start = Date() }
+            .onAppear {
+                start = Date()
+                if appearedAt == nil { appearedAt = start }
+            }
             .task {
                 try? await Task.sleep(for: .seconds(duration))
                 withAnimation(.easeOut(duration: 0.3)) { settled = true }
@@ -1236,11 +1243,14 @@ struct CatchRevealView: View {
         })
     }
 
-    /// Vertical padding of the CTA strip, plus its ~15 pt text line — the
+    /// Vertical padding of the CTA strip, plus its ~19 pt text line — the
     /// fallback viewport estimate for the first layout pass, before
-    /// `onGeometryChange` reports the real scroll-viewport height.
-    private static let ctaStripPadding: (top: CGFloat, bottom: CGFloat) = (26, 30)
-    private static let ctaStripEstimate: CGFloat = ctaStripPadding.top + 15 + ctaStripPadding.bottom
+    /// `onGeometryChange` reports the real scroll-viewport height. The
+    /// 14 pt "Continue" (back-controls pass, 2026-10-30) is ~4 pt taller
+    /// than the old 11 pt line, so the padding gave back 2 pt a side and
+    /// the strip, and therefore the card, kept its height.
+    private static let ctaStripPadding: (top: CGFloat, bottom: CGFloat) = (24, 28)
+    private static let ctaStripEstimate: CGFloat = ctaStripPadding.top + 19 + ctaStripPadding.bottom
 
     /// Measured height of the scroll viewport above the CTA strip; nil until
     /// the first layout pass reports it. It is the scroll content's MINIMUM
@@ -1401,6 +1411,7 @@ struct CatchRevealView: View {
         if settled {
             // A margin tap while the (unanswered) chips are up counts as a skip.
             resolveAsSkipIfNeeded()
+            reportDismiss(.tapAnywhere)
             onDismiss()
         } else {
             // Skip the animation straight to its final frame.
@@ -1879,30 +1890,40 @@ struct CatchRevealView: View {
         }
     }
 
-    /// "tap to continue · View in Hangar ›". Share lives on the card's
-    /// callsign line (`shareButton`), not here: as a third text link in this
-    /// row it was easy to miss.
+    /// "Continue · View in Hangar ›". Share lives on the card's callsign
+    /// line (`shareButton`), not here: as a third text link in this row it
+    /// was easy to miss.
+    ///
+    /// Back-controls pass (2026-10-30): this used to read "tap to continue"
+    /// at 11 pt in the faintest ink, beside a brighter rarity-tinted Hangar
+    /// link, so the common exit was the hardest thing on screen to see. Now
+    /// Continue is the bright one and the Hangar link steps down. Kept as a
+    /// text row rather than a full-width button so the card keeps its
+    /// height on an SE; `reveal_dismissed` tells us if that's enough.
     private func ctaRow() -> some View {
-        HStack(spacing: 18) {
+        HStack(spacing: 22) {
             // A real Button (not a bare tap gesture) so VoiceOver/Switch
             // Control get a dismiss control; the inset contentShape grows the
-            // ~13 pt text to a ≥44 pt hit area without moving the layout.
-            Button(action: { resolveAsSkipIfNeeded(); onDismiss() }) {
-                Text("tap to continue")
-                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                    .tracking(1.2).foregroundColor(RP.faint)
+            // text to a ≥44 pt hit area without moving the layout.
+            Button(action: { resolveAsSkipIfNeeded(); reportDismiss(.continue); onDismiss() }) {
+                Text("Continue")
+                    .font(.system(size: 14, weight: .bold, design: .monospaced))
+                    .tracking(0.6).foregroundColor(RP.ink)
                     .contentShape(Rectangle().inset(by: -16))
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Continue")
-            Button(action: { resolveAsSkipIfNeeded(); onViewInHangar() }) {
+            Button(action: { resolveAsSkipIfNeeded(); reportDismiss(.viewInHangar); onViewInHangar() }) {
                 Text("View in Hangar ›")
-                    .font(.system(size: 12, weight: .bold, design: .monospaced))
-                    .tracking(0.5).foregroundColor(livePlane.rarity.tint)
+                    .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                    .tracking(0.3).foregroundColor(RP.muted)
                     .contentShape(Rectangle().inset(by: -16))
             }
             .buttonStyle(.plain)
         }
+    }
+
+    private func reportDismiss(_ method: RevealDismissAnalytics.Method) {
+        RevealDismissAnalytics.capture(method: method, appearedAt: appearedAt, muted: isSimulated)
     }
 
     // MARK: - Share button

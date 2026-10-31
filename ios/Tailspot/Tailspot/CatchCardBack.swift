@@ -678,8 +678,9 @@ struct WikipediaSummarySheet: View {
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
+                // iOS 26 close button: the same X every sheet uses.
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(role: .close) { dismiss() }
                 }
             }
         }

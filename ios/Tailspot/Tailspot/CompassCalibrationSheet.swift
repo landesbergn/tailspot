@@ -72,8 +72,9 @@ struct CompassCalibrationSheet: View {
             .navigationTitle("Compass")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                // iOS 26 close button: the same X every sheet uses.
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }
+                    Button(role: .close) { dismiss() }
                 }
             }
         }

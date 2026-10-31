@@ -37,29 +37,18 @@ struct HangarChildBar: View {
                 .foregroundStyle(Brand.Color.textPrimary)
                 .lineLimit(1)
                 .truncationMode(.tail)
-                .padding(.horizontal, 56) // keep the title clear of the chevron
+                .padding(.horizontal, 56) // keep the title clear of the 44 pt back disc
 
             HStack(spacing: 4) {
-                Button {
-                    dismiss()
-                } label: {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(Brand.Color.cyan)
-                        .frame(width: 36, height: 36)
-                        // 44pt minimum hit target (HIG): keep the 36pt visual
-                        // footprint, grow the tappable region 4pt past every
-                        // edge via contentShape.
-                        .contentShape(Rectangle().inset(by: -4))
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Back")
+                // The shared 44 pt back disc (ChromeButton.swift), so a
+                // Hangar push looks like the catch detail's back control.
+                ChromeButton(.back) { dismiss() }
 
                 Spacer()
             }
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.vertical, 4)
         .frame(maxWidth: .infinity)
         .background(Brand.Color.bgPrimary)
         .overlay(alignment: .bottom) {

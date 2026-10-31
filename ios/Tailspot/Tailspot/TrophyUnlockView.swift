@@ -135,9 +135,12 @@ struct TrophyUnlockView: View {
     @ViewBuilder
     private func footer(remaining: Int) -> some View {
         VStack(spacing: 10) {
-            Text("Tap to continue")
-                .font(Brand.Font.mono(size: 11, weight: .semibold))
-                .foregroundStyle(Brand.Color.textTertiary)
+            // Readable, in the main ink (back-controls pass, 2026-10-30):
+            // was 11 pt tertiary grey "Tap to continue", easy to miss
+            // outdoors. The whole card is still the tap target.
+            Text("Continue")
+                .font(Brand.Font.mono(size: 14, weight: .bold))
+                .foregroundStyle(Brand.Color.textPrimary)
             if remaining > 1 {
                 Button {
                     center.skipAll()
