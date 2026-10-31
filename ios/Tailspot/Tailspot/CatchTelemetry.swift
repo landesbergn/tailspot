@@ -536,7 +536,8 @@ nonisolated enum CatchTelemetry {
             originIcao: row.originIcao,
             destIcao: row.destIcao,
             catchMode: catchMode,
-            catchUuid: row.ensureServerUuid()
+            // Minted by runCatch before the save.
+            catchUuid: row.serverUuid
         ))
     }
 

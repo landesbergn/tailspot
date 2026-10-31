@@ -1131,9 +1131,11 @@ struct CatchRevealView: View {
         CardTurnAnalytics.capture(source: .reveal, flipped: flipped,
                                   closeup: backModel.closeup,
                                   hasTypeInfo: backTypeInfo != nil,
-                                  // The loader's row once it lands (the early
-                                  // shell can turn before it exists).
-                                  row: loader?.row ?? backRow,
+                                  // With a loader, only its own row: before it
+                                  // lands (an early-shell turn) `backRow` may be
+                                  // an older catch of the same airframe, so the
+                                  // uuid is left off rather than misattributed.
+                                  rows: [loader == nil ? backRow : loader?.row].compactMap { $0 },
                                   icao24: livePlane.icao24,
                                   muted: isSimulated)
     }

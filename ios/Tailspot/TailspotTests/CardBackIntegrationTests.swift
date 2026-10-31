@@ -67,17 +67,19 @@ nonisolated private enum Fx {
     @Test func aTurnSaysWhichCatchItWas() {
         let p = CardTurnAnalytics.properties(source: .detail, flipped: true,
                                              closeup: .none, hasTypeInfo: false,
-                                             catchUuid: "C0FFEE00-0000-0000-0000-000000000001",
+                                             catchUuids: ["UUID-A", "UUID-B"],
                                              icao24: "ac5c1f")
-        #expect(strings(p)["catch_uuid"] == "C0FFEE00-0000-0000-0000-000000000001")
+        #expect(strings(p)["catch_uuid"] == "UUID-A")
+        #expect(strings(p)["catch_uuids"] == "UUID-A,UUID-B")
         #expect(strings(p)["icao24"] == "ac5c1f")
     }
 
     @Test func anUnknownCatchIsOmittedNotBlank() {
         let p = CardTurnAnalytics.properties(source: .reveal, flipped: true,
                                              closeup: .none, hasTypeInfo: false,
-                                             catchUuid: "", icao24: nil)
+                                             catchUuids: [""], icao24: nil)
         #expect(p["catch_uuid"] == nil)
+        #expect(p["catch_uuids"] == nil)
         #expect(p["icao24"] == nil)
     }
 
