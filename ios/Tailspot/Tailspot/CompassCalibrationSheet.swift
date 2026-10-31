@@ -2,15 +2,20 @@
 //  CompassCalibrationSheet.swift
 //  Tailspot
 //
-//  Surfaced when the user taps the AR caution badge. Explains why
-//  the compass reads as untrustworthy, demonstrates the figure-8
-//  motion that re-calibrates the magnetometer, and shows a live
-//  readout of current heading + accuracy so the user can see the
-//  ±° number drop as they move the phone.
+//  Surfaced when the user taps the AR caution badge. Says the compass is
+//  off, shows the figure-8 motion that re-calibrates the magnetometer,
+//  and shows the live accuracy so the user can watch the ±° number drop
+//  as they move the phone. When it drops under the good line the head
+//  flips to "fixed" and a success haptic fires, since someone waving
+//  their phone around can't read the screen.
 //
 //  The sheet doesn't actually call any calibration API — iOS
 //  performs the calibration in the background once the user makes
 //  the motion. We just show the user what to do.
+//
+//  The close X is the only way out. A "Got it" button sat under it until
+//  the 2026-10-31 copy pass; with the native X on every sheet it was a
+//  second, louder way to do the same thing.
 //
 
 import SwiftUI
@@ -31,14 +36,15 @@ struct CompassCalibrationSheet: View {
     /// so a transient bad sample doesn't flip the indicator back.
     @State private var calibratedThisSession = false
 
-    private var accuracyText: String {
-        guard let acc = location.headingAccuracy, acc >= 0 else { return "—" }
-        return String(format: "±%.0f°", acc)
-    }
+    /// Flips only on a real recovery (not the onAppear seed), so the
+    /// success haptic doesn't fire for a user who opened it already good.
+    @State private var recoveredWhileOpen = false
 
-    private var headingText: String {
-        guard let h = location.heading else { return "—" }
-        return String(format: "%.0f°", h)
+    /// nil when CoreLocation has no valid accuracy (it reports -1 while
+    /// the compass is badly uncalibrated).
+    private var accuracyText: String? {
+        guard let acc = location.headingAccuracy, acc >= 0 else { return nil }
+        return String(format: "±%.0f°", acc)
     }
 
     private var accuracyIsGood: Bool {
@@ -48,38 +54,54 @@ struct CompassCalibrationSheet: View {
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                Brand.Color.bgPrimary.ignoresSafeArea()
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 20) {
-                        headlineBlock
-                        readoutCard
-                        animationBlock
-                        explanationBlock
-                        Spacer(minLength: 16)
-                    }
-                    .padding(.horizontal, 22)
-                    .padding(.top, 8)
-                    .padding(.bottom, 28)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(calibratedThisSession ? "Compass fixed" : "Your compass is off")
+                        .brandDisplayFont()
+                        .foregroundStyle(Brand.Color.textPrimary)
+                    Text(calibratedThisSession
+                         ? "Labels line up with planes again."
+                         : "Labels can land on the wrong plane until it\u{2019}s fixed.")
+                        .font(Brand.Font.body)
+                        .foregroundStyle(Brand.Color.textSecondary)
+                        .padding(.top, 6)
+
+                    Figure8Animation()
+                        .frame(height: 120)
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 32)
+                        .opacity(calibratedThisSession ? 0.35 : 1)
+                        .accessibilityHidden(true)
+                    Text("Move your phone in a figure-8 two or three times.")
+                        .font(Brand.Font.cardTitle)
+                        .foregroundStyle(calibratedThisSession
+                                         ? Brand.Color.textSecondary
+                                         : Brand.Color.textPrimary)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 24)
+
+                    readout
+                        .padding(.top, 32)
                 }
-                VStack {
-                    Spacer()
-                    dismissButton
-                        .padding(.horizontal, 22)
-                        .padding(.bottom, 22)
-                }
+                .padding(.horizontal, 22)
+                .padding(.top, 4)
+                .padding(.bottom, 28)
+                .animation(.easeInOut(duration: 0.25), value: calibratedThisSession)
             }
-            .navigationTitle("Compass")
-            .navigationBarTitleDisplayMode(.inline)
+            .background(Brand.Color.bgPrimary.ignoresSafeArea())
             .toolbar {
+                // iOS 26 close button: the same X every sheet uses.
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }
+                    Button(role: .close) { dismiss() }
                 }
             }
         }
+        .sensoryFeedback(.success, trigger: recoveredWhileOpen) { _, recovered in recovered }
         .onChange(of: accuracyIsGood) { _, isGood in
             if isGood, !calibratedThisSession {
                 calibratedThisSession = true
+                recoveredWhileOpen = true
                 // Activation funnel: the user opened the sheet with a bad
                 // compass and moved it back under the good threshold — the
                 // coaching worked. (The onAppear seed below deliberately
@@ -98,144 +120,47 @@ struct CompassCalibrationSheet: View {
         }
     }
 
-    // MARK: - Sections
+    // MARK: - Readout
 
-    private var headlineBlock: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(calibratedThisSession ? "COMPASS · CALIBRATED" : "COMPASS · CALIBRATE")
-                .font(Brand.Font.mono(size: 10, weight: .semibold))
-                .tracking(1.4)
-                .foregroundStyle(calibratedThisSession ? Brand.Color.alertNormal : Brand.Color.alertCaution)
-            Text(calibratedThisSession
-                 ? "You're good to go."
-                 : "Your heading is off by more than ±\(Int(Self.goodAccuracyThreshold))°.")
-                .brandDisplayFont()
-                .foregroundStyle(Brand.Color.textPrimary)
-            Text(calibratedThisSession
-                 ? "Labels will now sit on the right plane."
-                 : "Labels will drift until you recalibrate.")
-                .font(Brand.Font.body)
-                .foregroundStyle(Brand.Color.textSecondary)
-        }
-    }
-
-    /// Live readout: HDG (degrees) and ±° accuracy. Updates in real
-    /// time so the user sees the number change as they move.
-    private var readoutCard: some View {
+    /// The live accuracy, big enough to watch tick down from arm's length,
+    /// with the target beside it. Tint and status follow the live reading,
+    /// not the latch, so it never claims "good" over a bad number.
+    private var readout: some View {
         let tint = accuracyIsGood ? Brand.Color.alertNormal : Brand.Color.alertCaution
-        return HStack(spacing: 20) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("HEADING")
-                    .font(Brand.Font.mono(size: 9, weight: .semibold))
-                    .tracking(1.2)
-                    .foregroundStyle(Brand.Color.textTertiary)
-                Text(headingText)
-                    .font(Brand.Font.mono(size: 28, weight: .heavy))
-                    .foregroundStyle(Brand.Color.textPrimary)
+        return VStack(alignment: .leading, spacing: 4) {
+            Text("ACCURACY")
+                .font(Brand.Font.mono(size: 10, weight: .semibold, relativeTo: .caption2))
+                .tracking(1.2)
+                .foregroundStyle(Brand.Color.textTertiary)
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                Text(accuracyText ?? "NO READING")
+                    .font(Brand.Font.mono(size: accuracyText == nil ? 20 : 34,
+                                          weight: .bold, relativeTo: .title))
                     .monospacedDigit()
-            }
-            Rectangle().fill(Brand.Color.bgPrimary.opacity(0.6)).frame(width: 1, height: 44)
-            VStack(alignment: .leading, spacing: 4) {
-                Text("ACCURACY")
-                    .font(Brand.Font.mono(size: 9, weight: .semibold))
-                    .tracking(1.2)
-                    .foregroundStyle(Brand.Color.textTertiary)
-                Text(accuracyText)
-                    .font(Brand.Font.mono(size: 28, weight: .heavy))
                     .foregroundStyle(tint)
-                    .monospacedDigit()
+                    .contentTransition(.numericText())
+                Spacer(minLength: 0)
+                if accuracyIsGood {
+                    Label("Good", systemImage: "checkmark")
+                        .font(Brand.Font.body.weight(.semibold))
+                        .foregroundStyle(Brand.Color.alertNormal)
+                } else {
+                    Text("Aim for ±\(Int(Self.goodAccuracyThreshold))° or less")
+                        .font(Brand.Font.body)
+                        .foregroundStyle(Brand.Color.textSecondary)
+                }
             }
-            Spacer()
-            statusGlyph
         }
-        .padding(16)
-        .background(Brand.Color.bgElevated, in: .rect(cornerRadius: Brand.Radius.card))
-        .overlay(
-            RoundedRectangle(cornerRadius: Brand.Radius.card)
-                .strokeBorder(tint.opacity(0.4), lineWidth: 1)
-        )
         .animation(.easeInOut(duration: 0.25), value: accuracyIsGood)
+        .animation(.default, value: accuracyText)
         // One element with a live value, so VoiceOver users get the same
-        // coaching feedback the visual ±° tick-down provides.
+        // feedback the visual ±° tick-down provides.
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Compass accuracy")
         .accessibilityValue(
-            "Heading \(headingText), accuracy \(accuracyText)"
-            + (accuracyIsGood ? ", good" : ", needs calibration")
+            (accuracyText ?? "no reading")
+            + (accuracyIsGood ? ", good" : ", aim for \(Int(Self.goodAccuracyThreshold)) degrees or less")
         )
-    }
-
-    private var statusGlyph: some View {
-        Image(systemName: accuracyIsGood
-              ? "checkmark.circle.fill"
-              : "exclamationmark.triangle.fill")
-            .font(.system(size: 22, weight: .bold))
-            .foregroundStyle(accuracyIsGood ? Brand.Color.alertNormal : Brand.Color.alertCaution)
-            // State is already spoken via the readout card's value.
-            .accessibilityHidden(true)
-    }
-
-    private var animationBlock: some View {
-        VStack(spacing: 8) {
-            Text(calibratedThisSession ? "WHEN YOU NEED TO RECALIBRATE" : "TRACE A FIGURE-8")
-                .font(Brand.Font.mono(size: 9, weight: .semibold))
-                .tracking(1.4)
-                .foregroundStyle(Brand.Color.textTertiary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            Figure8Animation()
-                .frame(height: 200)
-                .padding(.vertical, 8)
-                .background(Brand.Color.bgElevated, in: .rect(cornerRadius: Brand.Radius.card))
-                .opacity(calibratedThisSession ? 0.55 : 1)
-        }
-    }
-
-    private var explanationBlock: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            ExplanationRow(
-                glyph: "magnifyingglass",
-                title: "What's wrong",
-                detail: "iPhone compass drift can cause labeling issues."
-            )
-            ExplanationRow(
-                glyph: "infinity",
-                title: "What fixes it",
-                detail: "Move your phone in a smooth figure-8 in the air two or three times."
-            )
-            ExplanationRow(
-                glyph: "checkmark.seal",
-                title: "How you know it worked",
-                detail: "Once fixed, labels will sit correctly."
-            )
-        }
-    }
-
-    private var dismissButton: some View {
-        Button {
-            dismiss()
-        } label: {
-            HStack(spacing: 6) {
-                if calibratedThisSession {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 13, weight: .bold))
-                }
-                Text(calibratedThisSession ? "All good" : "Got it")
-                    .font(Brand.Font.button)
-            }
-            .foregroundStyle(.black.opacity(0.88))
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
-            .background(
-                (calibratedThisSession ? Brand.Color.alertNormal : Brand.Color.cyan),
-                in: .rect(cornerRadius: Brand.Radius.card)
-            )
-            .shadow(color: (calibratedThisSession
-                            ? Brand.Color.alertNormal
-                            : Brand.Color.cyan).opacity(0.30),
-                    radius: 14, y: 6)
-        }
-        .buttonStyle(.plain)
-        .animation(.easeInOut(duration: 0.25), value: calibratedThisSession)
     }
 }
 
@@ -272,7 +197,9 @@ struct Figure8Animation: View {
             let h = size.height
             let centerX = w / 2
             let centerY = h / 2
-            let scale = min(w, h) * 0.36
+            // The lemniscate spans 2×scale wide and 1×scale tall: fill
+            // the frame's height without overrunning its width.
+            let scale = min(w * 0.4, h * 0.8)
             // Trace the underlying figure-8 (lemniscate-ish) as a
             // dashed reference path.
             var ref = Path()
@@ -294,38 +221,6 @@ struct Figure8Animation: View {
             let dot = Path(ellipseIn: CGRect(x: x - 6, y: y - 6, width: 12, height: 12))
             ctx.fill(dot, with: .color(Brand.Color.cyan))
         }
-    }
-}
-
-private struct ExplanationRow: View {
-    let glyph: String
-    let title: String
-    let detail: String
-    /// 14 pt at the default text size, scaling with Dynamic Type next to
-    /// the caption below it (a bare `.system(size: 14)` stayed fixed).
-    /// `@ScaledMetric` because no built-in style is exactly 14 pt.
-    @ScaledMetric(relativeTo: .subheadline) private var titleSize: CGFloat = 14
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: glyph)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Brand.Color.cyan)
-                .frame(width: 28, height: 28)
-                .background(Brand.Color.cyan.opacity(0.12), in: .rect(cornerRadius: Brand.Radius.chip))
-                // The title carries the meaning; keep VoiceOver from
-                // reading the raw SF Symbol name.
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title)
-                    .font(.system(size: titleSize, weight: .semibold))
-                    .foregroundStyle(Brand.Color.textPrimary)
-                Text(detail)
-                    .font(Brand.Font.caption)
-                    .foregroundStyle(Brand.Color.textSecondary)
-            }
-            Spacer(minLength: 0)
-        }
-        .accessibilityElement(children: .combine)
     }
 }
 
