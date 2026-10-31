@@ -1,0 +1,377 @@
+<title>Tailspot Back Controls Audit</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one readable column; wide to-scale strips scroll sideways in their own containers. App mockups stay dark because the app is dark-locked. */
+:root {
+  --bg: #f7f8fa;
+  --panel: #ffffff;
+  --ink: #12161d;
+  --muted: #4b5565;
+  --rule: #d9dee6;
+  --accent: #0a6f8a;
+  --bad: #b42318;
+  --bad-bg: #fde8e6;
+  --warn: #8a5a00;
+  --warn-bg: #fff3d6;
+  --ok: #1d6b3a;
+  --ok-bg: #e3f4e8;
+  /* app palette, from Brand.swift */
+  --app-bg: #0A0E1A;
+  --app-elev: #1A2030;
+  --app-ink: #E8F4FF;
+  --app-ink2: #A0B0C0;
+  --app-ink3: #7F8B98;
+  --app-cyan: #00D4FF;
+  --font-body: "Source Sans 3", -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #11151c; --panel: #181d26; --ink: #eef1f5; --muted: #a8b2c1; --rule: #2c3442;
+  --accent: #5cc8e6; --bad: #ff8a80; --bad-bg: #3a1d1b; --warn: #f2c56b; --warn-bg: #352a12;
+  --ok: #7fd49b; --ok-bg: #16301f; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #11151c; --panel: #181d26; --ink: #eef1f5; --muted: #a8b2c1; --rule: #2c3442;
+  --accent: #5cc8e6; --bad: #ff8a80; --bad-bg: #3a1d1b; --warn: #f2c56b; --warn-bg: #352a12;
+  --ok: #7fd49b; --ok-bg: #16301f; color-scheme: dark; }
+
+body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 17px; line-height: 1.55; }
+.wrap { max-width: 980px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 40px 80px; display: grid; gap: 48px; }
+h1, h2, h3 { text-wrap: balance; line-height: 1.2; margin: 0; }
+h1 { font-size: 34px; font-weight: 700; }
+h2 { font-size: 24px; font-weight: 700; }
+h3 { font-size: 18px; font-weight: 700; }
+p { margin: 0; max-width: 68ch; }
+section { display: grid; gap: 16px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+.lede { font-size: 19px; color: var(--muted); }
+code, .mono { font-family: var(--font-mono); font-size: .86em; }
+blockquote { margin: 0; padding: 12px 16px; border-left: 3px solid var(--accent); background: var(--panel); max-width: 68ch; }
+blockquote p + p { margin-top: 6px; }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+.fact { background: var(--panel); border: 1px solid var(--rule); border-radius: 10px; padding: 14px 16px; }
+.fact b { display: block; font-size: 28px; font-variant-numeric: tabular-nums; }
+.fact span { color: var(--muted); font-size: 15px; }
+.scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+table { border-collapse: collapse; width: 100%; min-width: 760px; font-size: 15px; background: var(--panel); }
+th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; }
+td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.chip { display: inline-block; font-size: 12px; font-weight: 700; padding: 1px 8px; border-radius: 999px; white-space: nowrap; }
+.chip.bad { color: var(--bad); background: var(--bad-bg); }
+.chip.warn { color: var(--warn); background: var(--warn-bg); }
+.chip.ok { color: var(--ok); background: var(--ok-bg); }
+.file { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+
+/* to-scale lineup */
+.lineup { display: flex; gap: 22px; align-items: flex-end; padding: 22px; background: var(--app-bg); border-radius: 12px; min-width: max-content; }
+.ctl { display: grid; justify-items: center; gap: 10px; }
+.ctl small { color: var(--app-ink2); font-size: 12px; text-align: center; max-width: 120px; line-height: 1.3; }
+.disc { display: grid; place-items: center; border-radius: 50%; }
+.disc svg { display: block; }
+.scale-note { font-size: 14px; color: var(--muted); }
+
+/* device strip */
+.toggle { display: inline-flex; border: 1px solid var(--rule); border-radius: 999px; overflow: hidden; background: var(--panel); }
+.toggle button { font: inherit; font-size: 15px; font-weight: 600; padding: 6px 16px; border: 0; background: transparent; color: var(--muted); cursor: pointer; }
+.toggle button[aria-pressed="true"] { background: var(--accent); color: var(--panel); }
+.toggle button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.devices { display: flex; gap: 20px; align-items: flex-end; padding: 8px 2px 4px; min-width: max-content; }
+.device { display: grid; gap: 8px; justify-items: center; }
+.device .name { font-weight: 700; font-size: 15px; }
+.device .dims { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.legend { display: flex; flex-wrap: wrap; gap: 16px; font-size: 14px; color: var(--muted); }
+.legend i { display: inline-block; width: 14px; height: 14px; border-radius: 3px; vertical-align: -2px; margin-right: 6px; }
+
+.rules { display: grid; gap: 14px; }
+.rule { background: var(--panel); border: 1px solid var(--rule); border-radius: 10px; padding: 16px 18px; display: grid; gap: 8px; }
+.rule h3 { display: flex; gap: 10px; align-items: baseline; }
+.rule h3 .n { font-family: var(--font-mono); color: var(--accent); font-size: 15px; }
+.rule ul { margin: 0; padding-left: 20px; }
+.rule li { max-width: 66ch; }
+
+.pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.crop { background: var(--panel); border: 1px solid var(--rule); border-radius: 10px; padding: 14px; display: grid; gap: 10px; justify-items: center; }
+.crop .cap { font-size: 14px; color: var(--muted); text-align: center; }
+
+.questions { display: grid; gap: 12px; padding-left: 20px; margin: 0; }
+.questions li { max-width: 68ch; }
+@media (prefers-reduced-motion: no-preference) { .toggle button { transition: background .15s; } }
+</style>
+
+<div class="wrap">
+
+<header style="display:grid; gap:14px">
+  <div class="eyebrow">Audit · 2026-10-30 · from Gary's tester letter</div>
+  <h1>Getting back to the camera</h1>
+  <p class="lede">Every screen in Tailspot ends by sending you back to the camera, but the button that does it changes shape, size, side and wording from screen to screen. This page lists every exit, draws them to scale, shows how they sit on each iPhone size, and proposes one rule.</p>
+  <blockquote>
+    <p>"Page go-back icons could be more consistent, perhaps universal bigger back arrow."</p>
+    <p>"Pages have Done, tap to continue, a small x, a &lt; and all of these take me back the the live capture page."</p>
+  </blockquote>
+</header>
+
+<section>
+  <h2>What I found</h2>
+  <div class="facts">
+    <div class="fact"><b>18</b><span>exits from a screen, counted in code</span></div>
+    <div class="fact"><b>8</b><span>different looks for "go back"</span></div>
+    <div class="fact"><b>30 pt</b><span>the Hangar X, the smallest and dimmest of them</span></div>
+    <div class="fact"><b>11 pt</b><span>"tap to continue" text on the catch reveal and trophy screens</span></div>
+  </div>
+  <p>Gary is right on all three points. The worst cases are the ones people see most often: the Hangar close button and the "tap to continue" line after every catch. The sides also flip. Profile and Leaderboard close from the top left, while the Hangar, Compass and Wikipedia sheets close from the top right.</p>
+</section>
+
+<section>
+  <h2>Every exit, to scale</h2>
+  <p class="scale-note">Drawn at 2 pixels per iPhone point, on the app's real background colour. The dashed outline is the 44 pt minimum tap area Apple recommends. Most of these already have a 44 pt tap area that is invisible; what people see is the smaller drawn shape.</p>
+  <div class="scroll"><div class="lineup" id="lineup"></div></div>
+</section>
+
+<section>
+  <h2>Inventory</h2>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Screen</th><th>Opened from</th><th>Exit control</th><th>Where</th><th>Drawn size</th><th>Verdict</th></tr></thead>
+    <tbody>
+      <tr><td><b>Hangar</b><div class="file">HangarView.swift:118</div></td><td>Camera</td><td>X, grey on dark grey disc</td><td>Top right</td><td class="num">30 pt disc, 13 pt glyph</td><td><span class="chip bad">Too small, low contrast</span></td></tr>
+      <tr><td>Hangar, empty</td><td>Camera</td><td>"Open AR view" button</td><td>Mid screen</td><td class="num">Full width</td><td><span class="chip ok">Fine</span></td></tr>
+      <tr><td><b>Catch detail</b><div class="file">CatchDetailView.swift:322</div></td><td>Hangar row</td><td>&lt; on blurred disc</td><td>Top left</td><td class="num">36 pt disc, 14 pt glyph</td><td><span class="chip warn">Small</span></td></tr>
+      <tr><td>Catch detail<div class="file">MapScreen.swift:84</div></td><td>Map pin</td><td>X on blurred disc</td><td>Top left</td><td class="num">36 pt disc, 14 pt glyph</td><td><span class="chip warn">Small</span></td></tr>
+      <tr><td>Full-screen photo<div class="file">CatchPhotoViewer.swift:317</div></td><td>Catch detail</td><td>X on blurred disc, or tap photo</td><td>Top left</td><td class="num">36 pt disc, 14 pt glyph</td><td><span class="chip warn">Small</span></td></tr>
+      <tr><td>Sets, set detail<div class="file">HangarChildBar.swift:46</div></td><td>Hangar, Profile</td><td>Bare cyan &lt;, no disc</td><td>Top left</td><td class="num">16 pt glyph</td><td><span class="chip warn">Different style</span></td></tr>
+      <tr><td><b>Profile</b><div class="file">ProfileScreen.swift:149</div></td><td>Camera</td><td>"Done" in system glass</td><td>Top left</td><td class="num">System, about 44 pt tall</td><td><span class="chip warn">Word, not icon</span></td></tr>
+      <tr><td>Settings, Map, Leaderboard, Challenges, Rarity</td><td>Profile</td><td>System &lt; in glass</td><td>Top left</td><td class="num">System, about 44 pt</td><td><span class="chip ok">Good reference</span></td></tr>
+      <tr><td><b>Leaderboard</b><div class="file">PrimarySheet.swift:65</div></td><td>Camera</td><td>"Done" in system glass</td><td>Top left</td><td class="num">System</td><td><span class="chip warn">Word, not icon</span></td></tr>
+      <tr><td>Challenges<div class="file">PrimarySheet.swift:90</div></td><td>Invite link</td><td>"Done" in system glass</td><td>Top left</td><td class="num">System</td><td><span class="chip warn">Word, not icon</span></td></tr>
+      <tr><td>Compass calibration<div class="file">CompassCalibrationSheet.swift:76</div></td><td>Camera</td><td>"Done"</td><td><b>Top right</b></td><td class="num">System</td><td><span class="chip bad">Wrong side</span></td></tr>
+      <tr><td>Wikipedia summary<div class="file">CatchCardBack.swift:682</div></td><td>Card back</td><td>"Done"</td><td><b>Top right</b></td><td class="num">System</td><td><span class="chip bad">Wrong side</span></td></tr>
+      <tr><td>Share, new challenge, join, edit username</td><td>Various</td><td>"Cancel"</td><td>Top left</td><td class="num">System</td><td><span class="chip ok">Keep: Cancel means discard</span></td></tr>
+      <tr><td><b>Catch reveal</b><div class="file">CatchRevealView.swift:1891</div></td><td>After every catch</td><td>"tap to continue" text, or tap anywhere</td><td>Bottom</td><td class="num">11 pt faint mono</td><td><span class="chip bad">Hard to see</span></td></tr>
+      <tr><td>Multi-catch reveal<div class="file">MultiCatchReveal.swift:494</div></td><td>Catching 2 or 3 planes</td><td>"Keep spotting" cyan button</td><td>Bottom</td><td class="num">Full width, about 48 pt</td><td><span class="chip ok">Good reference</span></td></tr>
+      <tr><td><b>Trophy unlocked</b><div class="file">TrophyUnlockView.swift:138</div></td><td>After a catch</td><td>"Tap to continue" text, or tap anywhere</td><td>Bottom</td><td class="num">11 pt grey mono</td><td><span class="chip bad">Hard to see</span></td></tr>
+      <tr><td>Onboarding<div class="file">OnboardingFlow.swift:544</div></td><td>First launch</td><td>"Back" text under the main button</td><td>Bottom</td><td class="num">Caption, 44 pt tap area</td><td><span class="chip ok">Out of scope</span></td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section>
+  <h2>On each iPhone size</h2>
+  <p>iPhone points are close to the same physical size on every model, about 0.16 mm each. So the 30 pt Hangar X is about 5 mm across on an SE and on a Pro Max alike. Making buttons bigger does not need per-device sizes. What changes between phones is how far the top corners are from your thumb.</p>
+  <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap">
+    <div class="toggle" role="group" aria-label="Show current or proposed Hangar top bar">
+      <button id="btn-current" aria-pressed="true">Current</button>
+      <button id="btn-proposed" aria-pressed="false">Proposed</button>
+    </div>
+    <div class="legend">
+      <span><i style="background:rgba(0,212,255,.22)"></i>Rough one-hand reach, right thumb</span>
+      <span><i style="border:2px dashed #ff6b5b"></i>Exit control</span>
+    </div>
+  </div>
+  <div class="scroll"><div class="devices" id="devices"></div></div>
+  <p class="scale-note">Phones drawn at half a pixel per point, showing the Hangar. The reach area is a fixed 330 pt arc from the lower right corner, so it covers less of the bigger phones. It is an approximation, not a measurement. Gary holds the phone with two hands, which helps with reach but not with seeing a small grey X.</p>
+</section>
+
+<section>
+  <h2>Proposed rule</h2>
+  <p>One question decides the control: does this go back one level, or does it put the screen away?</p>
+  <div class="rules">
+    <div class="rule">
+      <h3><span class="n">1</span>Putting a screen away uses an X, top right, 44 pt</h3>
+      <ul>
+        <li>Hangar, Profile, Leaderboard, Challenges, Compass, Wikipedia, catch detail from the Map, and the full-screen photo.</li>
+        <li>An X, not a down arrow. iOS 26 added a "close" button role for read-only sheets, and the system draws it as an X. A down chevron is Apple's sign for collapsing a media player back into its mini player, which isn't what these screens do.</li>
+        <li>Top right, the outermost slot. It's closer to a right thumb on the bigger phones, and Apple's read-only cards (Maps, Weather) close there too. The Hangar, Compass and Wikipedia exits already sit there. Profile, Leaderboard, Challenges, the photo viewer and the Map's catch detail move over.</li>
+        <li>On the system-toolbar screens it's <code>Button(role: .close)</code>, so iOS draws the X and the glass, and VoiceOver reads it as Close.</li>
+        <li>Where an action already sits top right (Share on Profile, the challenges flag on Leaderboard), the X takes the outer slot and the action moves in one place. The Challenges sheet would have three icons up there, so Join and Create should move into the page body.</li>
+      </ul>
+    </div>
+    <div class="rule">
+      <h3><span class="n">2</span>Going back one level uses a left arrow, same disc, same place</h3>
+      <ul>
+        <li>Catch detail and set detail inside the Hangar, and every screen pushed inside Profile.</li>
+        <li>Profile's pushed screens already use the system back button. The Hangar's two custom versions (the bare cyan arrow and the 36 pt blurred disc) change to match it.</li>
+        <li>Back stays top left on every phone. That's where iOS puts it everywhere, and the edge swipe works as the reachable alternative. So there are two places, but each one always means the same thing: left goes back a step, right puts the screen away.</li>
+      </ul>
+    </div>
+    <div class="rule">
+      <h3><span class="n">3</span>Every exit is drawn at 44 pt, not only tapped at 44 pt</h3>
+      <ul>
+        <li>One shared view, something like <code>BackControl(kind: .close | .back)</code>, so the size can't drift again.</li>
+        <li>White glyph at 18 pt semibold instead of grey at 13 pt. It grows with the Dynamic Type setting, up to a cap.</li>
+      </ul>
+    </div>
+    <div class="rule">
+      <h3><span class="n">4</span>After a catch or a trophy, "Continue" becomes readable and the stronger link</h3>
+      <ul>
+        <li>Keep the text line, so the card keeps all its height. No full-width button: it would take about 30 pt from the card and compete with the rarity colour.</li>
+        <li>"tap to continue" becomes "Continue" at about 14 pt, semibold, in the main text colour. Today it's 11 pt in the faintest grey on the screen.</li>
+        <li>"View in Hangar ›" steps down to the secondary text colour, so the common action is the one that stands out.</li>
+        <li>The trophy screen's "Tap to continue" gets the same treatment. Tapping anywhere still works on both.</li>
+        <li>New analytics event <code>reveal_dismissed</code> with <code>method</code> (<code>continue</code>, <code>tap_anywhere</code> or <code>view_in_hangar</code>) and <code>dwell_ms</code>. If people turn out to sit on the reveal unsure what to do, that's the case for a bigger control later.</li>
+      </ul>
+    </div>
+    <div class="rule">
+      <h3><span class="n">5</span>Forms keep "Cancel"</h3>
+      <ul>
+        <li>Share, new challenge, join and edit username. Cancel means "throw this away", which is a different promise from closing a screen, and it's what iOS users expect there.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>The catch reveal on the smallest and largest phones</h2>
+  <p>A full-width button would take about 30 pt more height than the text line, and the card would shrink to make room on an iPhone SE, where it already shrinks to fit. Keeping the text line and making it readable costs no height on any phone, so the card is the same size before and after.</p>
+  <div class="pair" id="reveal-crops"></div>
+</section>
+
+<section>
+  <h2>Decided so far</h2>
+  <ol class="questions">
+    <li><b>Glyph:</b> X for putting a screen away, matching the iOS 26 close role. Left arrow for going back a step.</li>
+    <li><b>Position:</b> X top right (easier to reach), back arrow top left (iOS convention).</li>
+    <li><b>Reveal and trophy exits:</b> a readable "Continue" text link instead of a button, tap-anywhere kept, and a <code>reveal_dismissed</code> event to learn how people leave.</li>
+    <li><b>Release:</b> one release, once the change list below is agreed.</li>
+  </ol>
+</section>
+
+<section>
+  <h2>Change list</h2>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Screen</th><th>Today</th><th>After</th></tr></thead>
+    <tbody>
+      <tr><td>Hangar</td><td>30 pt grey X, top right</td><td>44 pt X, top right</td></tr>
+      <tr><td>Profile</td><td>"Done" top left, Share top right</td><td>X top right (outer), Share next to it</td></tr>
+      <tr><td>Leaderboard sheet</td><td>"Done" top left, flag top right</td><td>X top right (outer), flag next to it</td></tr>
+      <tr><td>Challenges sheet (invite link)</td><td>"Done" top left, # and + top right</td><td>X top right; Join and Create move into the page</td></tr>
+      <tr><td>Compass</td><td>"Done" top right</td><td>X top right</td></tr>
+      <tr><td>Wikipedia summary</td><td>"Done" top right</td><td>X top right</td></tr>
+      <tr><td>Catch detail from the Map</td><td>36 pt X top left; trash and Share top right</td><td>X top right (outer); trash and Share move in</td></tr>
+      <tr><td>Full-screen photo</td><td>36 pt X top left</td><td>44 pt X top right</td></tr>
+      <tr><td>Catch detail from the Hangar</td><td>36 pt back arrow</td><td>44 pt back arrow, top left</td></tr>
+      <tr><td>Sets and set detail</td><td>Bare cyan arrow</td><td>44 pt back arrow, top left</td></tr>
+      <tr><td>Screens pushed inside Profile</td><td>System back arrow</td><td>No change</td></tr>
+      <tr><td>Catch reveal</td><td>11 pt faint "tap to continue"; brighter "View in Hangar ›"</td><td>14 pt "Continue" in the main text colour; "View in Hangar ›" in secondary; tap-anywhere kept; new <code>reveal_dismissed</code> event</td></tr>
+      <tr><td>Trophy unlocked</td><td>11 pt grey "Tap to continue"</td><td>14 pt "Continue" in the main text colour; tap-anywhere and Skip all kept</td></tr>
+      <tr><td>Share, new challenge, join, edit username</td><td>"Cancel" top left</td><td>No change</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+</div>
+
+<script>
+(function () {
+  var S = 2; // px per pt for the lineup
+  function glyph(kind, size, color, weight) {
+    var w = weight || 2.2, s = size;
+    var p = {
+      x: 'M4 4 L16 16 M16 4 L4 16',
+      left: 'M13 3 L6 10 L13 17',
+      down: 'M3 7 L10 14 L17 7'
+    }[kind];
+    return '<svg width="' + s + '" height="' + s + '" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="' + p + '" stroke="' + color + '" stroke-width="' + w + '" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  }
+  function hitWrap(inner, hit) {
+    return '<div style="position:relative; display:grid; place-items:center; width:' + hit * S + 'px; height:' + hit * S + 'px; outline:1.5px dashed rgba(255,107,91,.75); outline-offset:-1px; border-radius:6px">' + inner + '</div>';
+  }
+  var items = [
+    { label: 'Hangar X<br>30 pt disc', html: hitWrap('<div class="disc" style="width:' + 30 * S + 'px;height:' + 30 * S + 'px;background:var(--app-elev)">' + glyph('x', 13 * S * 0.95, 'var(--app-ink2)', 2.4) + '</div>', 44) },
+    { label: 'Detail and photo<br>36 pt blurred disc', html: hitWrap('<div class="disc" style="width:' + 36 * S + 'px;height:' + 36 * S + 'px;background:rgba(255,255,255,.12);box-shadow:inset 0 0 0 2px rgba(255,255,255,.10)">' + glyph('left', 14 * S, 'var(--app-ink)', 2.4) + '</div>', 44) },
+    { label: 'Sets<br>bare cyan arrow', html: hitWrap('<div class="disc" style="width:' + 36 * S + 'px;height:' + 36 * S + 'px">' + glyph('left', 16 * S, 'var(--app-cyan)', 2.4) + '</div>', 44) },
+    { label: 'Profile, Leaders<br>"Done" (system)', html: hitWrap('<div style="height:' + 36 * S + 'px;padding:0 ' + 14 * S + 'px;border-radius:999px;display:grid;place-items:center;background:rgba(255,255,255,.14);color:var(--app-ink);font:600 ' + 17 * S + 'px -apple-system,system-ui,sans-serif">Done</div>', 44).replace('width:88px', 'width:auto;padding:0 6px') },
+    { label: 'Reveal, trophy<br>11 pt text', html: '<div style="font:600 ' + 11 * S + 'px var(--font-mono);letter-spacing:' + 1.2 * S + 'px;color:var(--app-ink3);padding:' + 8 * S + 'px 0">tap to continue</div>' },
+    { label: 'Proposed close<br>44 pt, 18 pt glyph', html: hitWrap('<div class="disc" style="width:' + 44 * S + 'px;height:' + 44 * S + 'px;background:rgba(255,255,255,.16);box-shadow:inset 0 0 0 2px rgba(255,255,255,.14)">' + glyph('x', 16 * S, '#fff', 2.6) + '</div>', 44) },
+    { label: 'Proposed back<br>44 pt, 18 pt glyph', html: hitWrap('<div class="disc" style="width:' + 44 * S + 'px;height:' + 44 * S + 'px;background:rgba(255,255,255,.16);box-shadow:inset 0 0 0 2px rgba(255,255,255,.14)">' + glyph('left', 18 * S, '#fff', 2.6) + '</div>', 44) }
+  ];
+  document.getElementById('lineup').innerHTML = items.map(function (it) {
+    return '<div class="ctl">' + it.html + '<small>' + it.label + '</small></div>';
+  }).join('');
+
+  // ---- device strip ----
+  var devices = [
+    { name: 'iPhone SE', w: 375, h: 667, top: 20, bottom: 0, r: 0 },
+    { name: 'iPhone 13 mini', w: 375, h: 812, top: 50, bottom: 34, r: 44 },
+    { name: 'iPhone 16', w: 393, h: 852, top: 59, bottom: 34, r: 55 },
+    { name: 'iPhone 16 Pro', w: 402, h: 874, top: 62, bottom: 34, r: 55 },
+    { name: 'iPhone 16 Pro Max', w: 440, h: 956, top: 62, bottom: 34, r: 60 }
+  ];
+  var K = 0.5;
+  function phone(d, mode) {
+    var W = d.w, H = d.h, id = 'c' + d.w + d.h;
+    var bar = d.top, barH = 54;
+    var rows = '';
+    for (var i = 0; i < 9; i++) {
+      var y = bar + barH + 56 + i * 76;
+      if (y + 64 > H - d.bottom - 10) break;
+      rows += '<rect x="16" y="' + y + '" width="' + (W - 32) + '" height="64" rx="12" fill="#1A2030"/>' +
+        '<rect x="28" y="' + (y + 14) + '" width="' + (W * 0.35) + '" height="10" rx="5" fill="#A0B0C0" opacity=".55"/>' +
+        '<rect x="28" y="' + (y + 34) + '" width="' + (W * 0.22) + '" height="8" rx="4" fill="#7F8B98" opacity=".45"/>';
+    }
+    // segmented switcher stub
+    var seg = '<rect x="16" y="' + (bar + barH + 10) + '" width="' + (W - 32) + '" height="32" rx="8" fill="#1A2030"/>';
+    var top;
+    if (mode === 'current') {
+      var cx = W - 16 - 15, cy = bar + barH / 2;
+      top = '<text x="46" y="' + (cy + 5) + '" fill="#E8F4FF" font-family="JetBrains Mono, monospace" font-weight="700" font-size="13" letter-spacing="2">TAILSPOT</text>' +
+        '<circle cx="27" cy="' + cy + '" r="10" fill="none" stroke="#00D4FF" stroke-width="2"/>' +
+        '<circle cx="' + cx + '" cy="' + cy + '" r="15" fill="#1A2030"/>' +
+        '<path d="M' + (cx - 5) + ' ' + (cy - 5) + ' L' + (cx + 5) + ' ' + (cy + 5) + ' M' + (cx + 5) + ' ' + (cy - 5) + ' L' + (cx - 5) + ' ' + (cy + 5) + '" stroke="#A0B0C0" stroke-width="2" stroke-linecap="round"/>' +
+        '<rect x="' + (cx - 22) + '" y="' + (cy - 22) + '" width="44" height="44" fill="none" stroke="#ff6b5b" stroke-width="3" stroke-dasharray="6 4" rx="6"/>';
+    } else {
+      var px = W - 16 - 22, py = bar + barH / 2;
+      top = '<circle cx="27" cy="' + py + '" r="10" fill="none" stroke="#00D4FF" stroke-width="2"/>' +
+        '<text x="46" y="' + (py + 5) + '" fill="#E8F4FF" font-family="JetBrains Mono, monospace" font-weight="700" font-size="13" letter-spacing="2">TAILSPOT</text>' +
+        '<circle cx="' + px + '" cy="' + py + '" r="22" fill="rgba(255,255,255,.16)" stroke="rgba(255,255,255,.14)"/>' +
+        '<path d="M' + (px - 6) + ' ' + (py - 6) + ' L' + (px + 6) + ' ' + (py + 6) + ' M' + (px + 6) + ' ' + (py - 6) + ' L' + (px - 6) + ' ' + (py + 6) + '" stroke="#fff" stroke-width="2.6" fill="none" stroke-linecap="round"/>' +
+        '<rect x="' + (px - 24) + '" y="' + (py - 24) + '" width="48" height="48" fill="none" stroke="#ff6b5b" stroke-width="3" stroke-dasharray="6 4" rx="8"/>';
+    }
+    var reach = '<circle cx="' + W + '" cy="' + (H + 20) + '" r="330" fill="rgba(0,212,255,.20)"/>';
+    var status = d.top ? '<text x="' + (W / 2) + '" y="' + (Math.min(d.top, 40) - 6) + '" fill="#A0B0C0" font-size="13" text-anchor="middle" font-family="-apple-system, system-ui, sans-serif">9:41</text>' : '';
+    return '<svg width="' + W * K + '" height="' + H * K + '" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + d.name + ' showing the Hangar">' +
+      '<defs><clipPath id="' + id + '"><rect width="' + W + '" height="' + H + '" rx="' + d.r + '"/></clipPath></defs>' +
+      '<g clip-path="url(#' + id + ')"><rect width="' + W + '" height="' + H + '" fill="#0A0E1A"/>' + status + seg + rows + reach + top + '</g>' +
+      '<rect x="1" y="1" width="' + (W - 2) + '" height="' + (H - 2) + '" rx="' + d.r + '" fill="none" stroke="#5a6475" stroke-width="3"/></svg>';
+  }
+  var mode = 'current';
+  function draw() {
+    document.getElementById('devices').innerHTML = devices.map(function (d) {
+      return '<div class="device">' + phone(d, mode) + '<div class="name">' + d.name + '</div><div class="dims">' + d.w + ' × ' + d.h + ' pt</div></div>';
+    }).join('');
+  }
+  draw();
+  var bc = document.getElementById('btn-current'), bp = document.getElementById('btn-proposed');
+  function set(m) { mode = m; bc.setAttribute('aria-pressed', m === 'current'); bp.setAttribute('aria-pressed', m === 'proposed'); draw(); }
+  bc.addEventListener('click', function () { set('current'); });
+  bp.addEventListener('click', function () { set('proposed'); });
+
+  // ---- reveal bottom crops ----
+  function revealCrop(d, proposed) {
+    var W = d.w, Hc = 190, K2 = 0.75;
+    var y0 = 20;
+    var card = '<rect x="' + (W * 0.1) + '" y="-40" width="' + (W * 0.8) + '" height="140" rx="16" fill="#1A2030" stroke="#2a3346"/>';
+    var cta;
+    if (!proposed) {
+      cta = '<text x="' + (W / 2 - 80) + '" y="' + (y0 + 128) + '" fill="#7F8B98" font-family="JetBrains Mono, monospace" font-size="11" font-weight="600" letter-spacing="1.2" text-anchor="middle">tap to continue</text>' +
+        '<text x="' + (W / 2 + 70) + '" y="' + (y0 + 128) + '" fill="#00D4FF" font-family="JetBrains Mono, monospace" font-size="12" font-weight="700" text-anchor="middle">View in Hangar ›</text>';
+    } else {
+      cta = '<text x="' + (W / 2 - 75) + '" y="' + (y0 + 129) + '" fill="#E8F4FF" font-family="JetBrains Mono, monospace" font-size="14" font-weight="700" letter-spacing="0.6" text-anchor="middle">Continue</text>' +
+        '<text x="' + (W / 2 + 70) + '" y="' + (y0 + 129) + '" fill="#A0B0C0" font-family="JetBrains Mono, monospace" font-size="13" font-weight="600" text-anchor="middle">View in Hangar ›</text>';
+    }
+    var home = d.bottom ? '<rect x="' + (W / 2 - 67) + '" y="' + (Hc - 12) + '" width="134" height="5" rx="2.5" fill="#E8F4FF" opacity=".6"/>' : '';
+    return '<svg width="' + W * K2 + '" height="' + Hc * K2 + '" viewBox="0 0 ' + W + ' ' + Hc + '" style="max-width:100%;height:auto" role="img" aria-label="Bottom of the catch reveal on ' + d.name + '">' +
+      '<rect width="' + W + '" height="' + Hc + '" fill="#0A0E1A" rx="10"/>' + card + cta + home + '</svg>';
+  }
+  var se = devices[0], pm = devices[4];
+  document.getElementById('reveal-crops').innerHTML = [
+    [se, false, 'iPhone SE, current'], [se, true, 'iPhone SE, proposed: same height, readable'],
+    [pm, false, 'iPhone 16 Pro Max, current'], [pm, true, 'iPhone 16 Pro Max, proposed: same height, readable']
+  ].map(function (c) { return '<div class="crop">' + revealCrop(c[0], c[1]) + '<div class="cap">' + c[2] + '</div></div>'; }).join('');
+})();
+</script>

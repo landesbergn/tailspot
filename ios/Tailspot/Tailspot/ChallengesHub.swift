@@ -38,8 +38,14 @@ struct ChallengesHub: View {
     /// (universal_link vs code_entry) without a second flag to keep in step.
     @State private var linkCode: InviteLinkCode?
 
-    init(source: String) {
+    /// Join and Create as toolbar icons (pushed in Profile / Leaders) or as
+    /// buttons at the foot of the list (the invite-link root sheet, whose
+    /// top-right corner belongs to the close X).
+    let actionsInToolbar: Bool
+
+    init(source: String, actionsInToolbar: Bool = true) {
         self.source = source
+        self.actionsInToolbar = actionsInToolbar
     }
 
     var body: some View {
@@ -73,19 +79,21 @@ struct ChallengesHub: View {
         .navigationTitle("Challenges")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button { showJoin = true } label: {
-                    Image(systemName: "number")
+            if actionsInToolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showJoin = true } label: {
+                        Image(systemName: "number")
+                    }
+                    .accessibilityLabel("Join with code")
+                    .disabled(!model.isAvailable)
                 }
-                .accessibilityLabel("Join with code")
-                .disabled(!model.isAvailable)
-            }
-            ToolbarItem(placement: .topBarTrailing) {
-                Button { showCreate = true } label: {
-                    Image(systemName: "plus")
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showCreate = true } label: {
+                        Image(systemName: "plus")
+                    }
+                    .accessibilityLabel("Create challenge")
+                    .disabled(!model.isAvailable)
                 }
-                .accessibilityLabel("Create challenge")
-                .disabled(!model.isAvailable)
             }
         }
         .refreshable { await refresh() }
@@ -298,10 +306,18 @@ struct ChallengesHub: View {
         .glassEffect(ChallengeStyle.glass, in: .rect(cornerRadius: Brand.Radius.card))
     }
 
+    /// Join is always at the foot of the list; Create joins it there when
+    /// the toolbar has no room for its + (the invite-link root sheet).
     private var joinFooter: some View {
-        Button { showJoin = true } label: { secondaryButtonLabel("Join with code") }
-            .buttonStyle(.plain)
-            .padding(.top, 4)
+        VStack(spacing: 10) {
+            if !actionsInToolbar {
+                Button { showCreate = true } label: { secondaryButtonLabel("Create a challenge") }
+                    .buttonStyle(.plain)
+            }
+            Button { showJoin = true } label: { secondaryButtonLabel("Join with code") }
+                .buttonStyle(.plain)
+        }
+        .padding(.top, 4)
     }
 
     private func primaryButtonLabel(_ title: String) -> some View {

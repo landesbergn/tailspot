@@ -40,8 +40,8 @@ nonisolated enum PrimarySheet: String, Identifiable {
 }
 
 /// The Leaderboard as a ROOT sheet. `LeaderboardScreen` was written to be
-/// pushed inside Profile's NavigationStack (which already had a Done
-/// button); presented on its own it needs its own stack and its own Done.
+/// pushed inside Profile's NavigationStack (which already had a close
+/// button); presented on its own it needs its own stack and its own close.
 /// The screen itself is untouched — same title, same window switcher, same
 /// podium — so the two entry points (bar button here, Profile tile there)
 /// render identically.
@@ -59,20 +59,27 @@ struct LeadersSheet: View {
 
     var body: some View {
         NavigationStack {
+            // The screen draws the close X itself, because it also has to
+            // move its challenges flag to the top left to give the X the
+            // corner. (Items from an outer `.toolbar` here would also sort
+            // BEFORE the screen's own, landing the X inside the flag.)
             screen
-                .toolbar {
-                    ToolbarItem(placement: .topBarLeading) {
-                        Button("Done") { dismiss() }
-                    }
-                }
+                .environment(\.rootSheetClose, { dismiss() })
         }
     }
+}
+
+extension EnvironmentValues {
+    /// Closes the root sheet a screen is hosted in, when that screen draws
+    /// its own close button (`LeadersSheet` → `LeaderboardScreen`). nil when
+    /// the screen is pushed inside another stack, which owns the close.
+    @Entry var rootSheetClose: (() -> Void)? = nil
 }
 
 /// The Challenges hub as a ROOT sheet, for invite links. Same shape as
 /// `LeadersSheet` and for the same reason: `ChallengesHub` is written to be
 /// pushed inside someone else's `NavigationStack` (Profile's, Leaders'), so
-/// presented on its own it needs a stack and a Done button. The hub itself
+/// presented on its own it needs a stack and a close button. The hub itself
 /// is untouched — it picks the pending invite code off the model and opens
 /// its own join sheet, exactly as it does for a typed code.
 ///
@@ -84,10 +91,13 @@ struct ChallengesSheet: View {
 
     var body: some View {
         NavigationStack {
-            ChallengesHub(source: ChallengesModel.inviteSource)
+            // As a root sheet the X takes the top-right corner, so the hub
+            // moves Join and Create into the page instead of crowding three
+            // icons up there.
+            ChallengesHub(source: ChallengesModel.inviteSource, actionsInToolbar: false)
                 .toolbar {
-                    ToolbarItem(placement: .topBarLeading) {
-                        Button("Done") { dismiss() }
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button(role: .close) { dismiss() }
                     }
                 }
         }

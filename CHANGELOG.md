@@ -5,6 +5,24 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-10-30 — One way out of every screen (branch `claude/back-controls`)
+
+- From Gary's tester letter: X top right closes any screen back to the camera,
+  chevron top left goes back a level, both 44 pt drawn (`ChromeButton`;
+  native `Button(role: .close)` on system toolbars). "Done" is gone; forms keep "Cancel".
+- Reveal and trophy: readable 14 pt "Continue" instead of faint 11 pt "tap to
+  continue"; new `reveal_dismissed` event (method + dwell).
+- Profile/Leaderboard X needing two or more presses: the camera stop under an
+  open sheet detached the preview layer's session, which left the sheet's
+  toolbar buttons waiting for a second touch. The preview now hides while
+  stopped instead (`CameraPreview.setSessionActive`).
+- `ChromeButton` drew at 58 pt on device: `.buttonStyle(.glass)` pads its
+  label, by a different amount on iOS 26.5 than 26.6+. It is now a fixed
+  44 pt circle with `.glassEffect(.regular.interactive())`, pinned by a
+  layout test; the catch card's top gap is back to 16 pt.
+- Profile's Share moved top-left so the X has the top-right corner alone.
+- Audit and decisions: `design/back-controls-audit.html`.
+
 ## 2026-10-25 — Frame-is-the-catch behind a PostHog flag (branch `feat/frame-catch-flag`, PR #229)
 
 - The new catch rule now ships dark. PostHog boolean flag

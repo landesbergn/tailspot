@@ -294,7 +294,7 @@ struct CatchPhotoViewer: View {
     }
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
+        ZStack(alignment: .topTrailing) {
             Color.black.ignoresSafeArea()
 
             if let image {
@@ -312,20 +312,11 @@ struct CatchPhotoViewer: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
 
-            // X pill — same chrome vocabulary as the detail screen's pills.
-            Button(action: onClose) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Brand.Color.textPrimary)
-                    .frame(width: 36, height: 36)
-                    .background(.ultraThinMaterial, in: .circle)
-                    .overlay(Circle().strokeBorder(.white.opacity(0.10), lineWidth: 1))
-                    .contentShape(Rectangle().inset(by: -4))
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Close")
-            .padding(.top, 8)
-            .padding(.leading, 16)
+            // The shared 44 pt close, top right like every other screen
+            // that goes away (ChromeButton.swift).
+            ChromeButton(.close, action: onClose)
+                .padding(.top, 8)
+                .padding(.trailing, 16)
         }
     }
 }
