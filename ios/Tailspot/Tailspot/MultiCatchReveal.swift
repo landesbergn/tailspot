@@ -40,8 +40,8 @@ struct MultiCatchReveal: View {
     }
 
     let entries: [Entry]
-    /// First entry number in the run — caller computes this. Shown in
-    /// the status pill as a quiet "ENTRY #N" tag at the top.
+    /// First entry number in the run — caller computes this. Appended to
+    /// the banner as "· ENTRY #N" once the last card has landed.
     let lastEntryNumber: Int
     let onDismiss: () -> Void
     let onViewInHangar: () -> Void
@@ -158,10 +158,10 @@ struct MultiCatchReveal: View {
             backdrop.ignoresSafeArea()
 
             VStack(spacing: 14) {
-                statusPill
-                    .opacity(revealedIndex >= 0 ? 1 : 0)
-                    .offset(y: revealedIndex >= 0 || reduceMotion ? 0 : -8)
-
+                // One header (beauty pass 2026-10-31): the separate
+                // "3× MULTI-CATCH · ENTRY #N" pill above this disagreed with
+                // the banner's fresh-only count, so the entry number now
+                // rides on the banner instead.
                 banner
                     .opacity(revealedIndex >= 0 ? 1 : 0)
                     .animation(.easeOut(duration: 0.2), value: freshSoFar)
@@ -270,26 +270,6 @@ struct MultiCatchReveal: View {
         }
     }
 
-    // MARK: - Status pill
-
-    private var statusPill: some View {
-        HStack(spacing: 8) {
-            Circle().fill(Brand.Color.alertAdvisory)
-                .frame(width: 8, height: 8)
-                .shadow(color: Brand.Color.alertAdvisory.opacity(0.6), radius: 4)
-            Text("\(entries.count)× MULTI-CATCH · ENTRY #\(lastEntryNumber)")
-                .font(Brand.Font.mono(size: 11, weight: .bold))
-                .tracking(1.2)
-                .foregroundStyle(Brand.Color.textPrimary)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(Brand.Color.bgPrimary.opacity(0.75), in: .capsule)
-        .overlay(Capsule().strokeBorder(Brand.Color.alertAdvisory.opacity(0.55), lineWidth: 1))
-        // One element — the glowing dot is decorative next to the text.
-        .accessibilityElement(children: .combine)
-    }
-
     // MARK: - Banner (T11)
 
     /// Builds across the stagger. Reads "CATCH ×1" at the first fresh
@@ -306,10 +286,15 @@ struct MultiCatchReveal: View {
         let tint: Color = isMultiLive
             ? Brand.Color.alertAdvisory
             : (soFar.freshCount == 0 ? Brand.Color.alertWarning : Brand.Color.cyan)
+        // The entry number joins once the tally settles (every card landed),
+        // so the label doesn't grow mid-stagger.
+        let settled = revealedIndex >= entries.count - 1
+        let label = Self.bannerLabel(for: soFar)
+            + (settled ? " · ENTRY #\(lastEntryNumber)" : "")
         // Tracking 1.5 (was 2) and a 0.5 floor: "MULTI-CATCH ×N · +M pts"
         // is longer than the old "COMBO ×N +M pts" and has to fit one line
         // on an SE at the largest text sizes.
-        return Text(Self.bannerLabel(for: soFar))
+        return Text(label)
             .font(Brand.Font.mono(size: 14, weight: .bold))
             .tracking(1.5)
             .foregroundStyle(tint)
@@ -357,7 +342,16 @@ struct MultiCatchReveal: View {
                         rotation: .degrees(angle)
                     )
                     if entry.isDuplicate {
+                        // Pinned inside the card's photo well (top-trailing),
+                        // so it never covers the type and operator lines.
+                        // The full card-sized frame is rotated, not the
+                        // stamp alone: rotating around the CARD's centre
+                        // keeps the stamp on the photo as the fan tilts it.
+                        let dims = CatchCardView.CardSize.md.dims
                         alreadyCaughtStampSmall
+                            .padding(.top, 44)
+                            .padding(.trailing, 22)
+                            .frame(width: dims.width, height: dims.height, alignment: .topTrailing)
                             .rotationEffect(.degrees(angle))
                             .allowsHitTesting(false)
                     }
@@ -384,15 +378,17 @@ struct MultiCatchReveal: View {
             .font(Brand.Font.mono(size: 14, weight: .black))
             .tracking(1.5)
             .multilineTextAlignment(.center)
-            .foregroundStyle(Brand.Color.alertWarning)
+            // duplicateRose, not alertWarning red: a re-catch isn't a
+            // warning (Brand.Color.duplicateRose exists for exactly this).
+            .foregroundStyle(Brand.Color.duplicateRose)
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .background(Brand.Color.bgPrimary.opacity(0.85))
             .overlay(
                 Rectangle()
-                    .strokeBorder(Brand.Color.alertWarning, lineWidth: 1.5)
+                    .strokeBorder(Brand.Color.duplicateRose, lineWidth: 1)
             )
-            .rotationEffect(.degrees(-18))
+            .rotationEffect(.degrees(-12))
             .shadow(color: .black.opacity(0.4), radius: 4, x: 0, y: 1)
             // Parity with the full-size stamp: read as a phrase, not as
             // two shouted lines split by the hard wrap.
@@ -432,17 +428,17 @@ struct MultiCatchReveal: View {
                 HStack {
                     Text("Already in Hangar")
                         .font(Brand.Font.caption)
-                        .foregroundStyle(Brand.Color.alertWarning)
+                        .foregroundStyle(Brand.Color.duplicateRose)
                     Spacer()
                     Text("×\(t.duplicateCount)")
                         .font(Brand.Font.mono(size: 12, weight: .bold))
-                        .foregroundStyle(Brand.Color.alertWarning)
+                        .foregroundStyle(Brand.Color.duplicateRose)
                         .monospacedDigit()
                 }
             }
             Divider().background(Brand.Color.textTertiary.opacity(0.3)).padding(.vertical, 2)
             HStack {
-                Text("AWARDED")
+                Text("TOTAL")
                     .font(Brand.Font.mono(size: 10, weight: .bold))
                     .tracking(1)
                     .foregroundStyle(Brand.Color.textTertiary)

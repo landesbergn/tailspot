@@ -75,7 +75,7 @@ struct TopStripLayoutSnapshotTests {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 Spacer()
             }
-            .padding(.top, 12)
+            .padding(.top, L.bannerTopPadding)
             VStack {
                 HStack {
                     Spacer()

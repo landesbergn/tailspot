@@ -138,12 +138,18 @@ struct CatchShareSheet: View {
             VStack(spacing: 14) {
                 carousel
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                pagePicker
-                backdropPicker
-                    .opacity(page == .story && backdrops.count > 1 ? 1 : 0)
-                    .allowsHitTesting(page == .story && backdrops.count > 1)
-                    .accessibilityHidden(page != .story || backdrops.count < 2)
-                actionRow
+                // Only the story page has a backdrop choice; on the other
+                // pages the row is removed (not just hidden) so the chips
+                // sit one even gap above the actions. A hidden story-height
+                // copy reserves the space, so the preview above keeps one
+                // size across swipes and only the controls slide.
+                ZStack(alignment: .bottom) {
+                    controls(showBackdrop: backdrops.count > 1)
+                        .hidden()
+                        .accessibilityHidden(true)
+                    controls(showBackdrop: page == .story && backdrops.count > 1)
+                }
+                .animation(.snappy, value: page)
             }
             .padding(.horizontal, 16)
             .padding(.top, 8)
@@ -247,6 +253,18 @@ struct CatchShareSheet: View {
         storyBackground = CatchShare.storyBackgroundImage(for: plane, backdrop: backdrop)
         images[.story] = CatchShare.storyImage(for: plane, sticker: sticker, backdrop: backdrop)
         savedPages.remove(.story)
+    }
+
+    /// Format chips, the story's backdrop row when shown, and the actions.
+    private func controls(showBackdrop: Bool) -> some View {
+        VStack(spacing: 14) {
+            pagePicker
+            if showBackdrop {
+                backdropPicker
+                    .transition(.opacity)
+            }
+            actionRow
+        }
     }
 
     // MARK: - Preview
@@ -426,7 +444,7 @@ struct CatchShareSheet: View {
         }
         .buttonStyle(.plain)
         .disabled(!ready)
-        .opacity(ready ? 1 : 0.4)
+        .opacity(ready ? 1 : 0.3)
         .accessibilityHint(ready ? "" : "Preparing image")
     }
 
@@ -436,10 +454,13 @@ struct CatchShareSheet: View {
                 switch icon {
                 case .symbol(let name):
                     Image(systemName: name)
-                        .font(.system(size: 19, weight: .semibold))
-                        .foregroundStyle(Brand.Color.bgPrimary)
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundStyle(Brand.Color.textPrimary)
                         .frame(width: 50, height: 50)
-                        .background(Brand.Color.cyan, in: .circle)
+                        // Neutral disc for utility actions, so cyan only
+                        // marks the selected format chip above.
+                        .background(.white.opacity(0.08), in: .circle)
+                        .overlay(Circle().strokeBorder(.white.opacity(0.10), lineWidth: 1))
                 case .instagram:
                     InstagramGlyph()
                         .stroke(.white, lineWidth: 2.3)

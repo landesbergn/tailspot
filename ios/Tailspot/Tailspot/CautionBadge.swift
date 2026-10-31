@@ -31,9 +31,10 @@ struct CautionBadge: View {
                 Text("COMPASS OFF \(accuracyText)")
                     .font(Brand.Font.mono(size: 14, weight: .bold))
                     .tracking(1.0)
-                Text("Labels may be wrong — tap to calibrate")
-                    .font(Brand.Font.mono(size: 10, weight: .regular))
-                    .opacity(0.85)
+                // Sentence-case copy that talks to the user is prose, so
+                // it's the system face; the ALL-CAPS title stays mono.
+                Text("Labels may be wrong. Tap to calibrate.")
+                    .font(.system(size: 12, weight: .medium))
             }
         }
         // Dark text/glyph on amber — the classic caution read, and the only
@@ -46,10 +47,12 @@ struct CautionBadge: View {
                     in: RoundedRectangle(cornerRadius: Brand.Radius.row))
         .overlay(
             RoundedRectangle(cornerRadius: Brand.Radius.row)
-                .strokeBorder(Brand.Color.bgSurface.opacity(0.15), lineWidth: 1)
+                .strokeBorder(Brand.Color.bgSurface.opacity(0.25), lineWidth: 1)
         )
-        // Amber glow so it lifts off the live camera behind it.
-        .shadow(color: Brand.Color.alertCaution.opacity(0.5), radius: 12, y: 2)
+        // A small neutral drop shadow to lift it off the live camera. Not
+        // an amber glow: that fogged olive on a day sky, and the solid
+        // amber fill already separates the banner from any background.
+        .shadow(color: .black.opacity(0.3), radius: 6, y: 2)
         .contentShape(RoundedRectangle(cornerRadius: Brand.Radius.row))
     }
 }

@@ -260,8 +260,8 @@ struct MapScreen: View {
                     .foregroundStyle(Brand.Color.cyan)
                     .monospacedDigit()
                 Text("UNIQUE")
-                    .font(Brand.Font.mono(size: 9, weight: .semibold, relativeTo: .caption2))
-                    .tracking(1)
+                    .font(Brand.Font.eyebrow)
+                    .tracking(Brand.Font.eyebrowTracking)
                     .foregroundStyle(Brand.Color.textTertiary)
             }
         }

@@ -7,7 +7,9 @@
 //  completion ring's percentage label can be eyeballed at the sizes a
 //  larger-text user actually runs. Regression for the 2026-09-13 report:
 //  at bigger text settings "100%" wrapped to "100 / %" inside the fixed
-//  44 pt ring. NOT an assertion test: it writes PNGs to
+//  44 pt ring. (Since the 2026-10-31 beauty pass a complete ring draws a
+//  checkmark instead of "100%", so the partial rows carry that check now.)
+//  NOT an assertion test: it writes PNGs to
 //  /private/tmp/tailspot_snaps and passes. Review the PNGs after running.
 //
 

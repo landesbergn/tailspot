@@ -108,8 +108,10 @@ struct TrophyUnlockView: View {
 
             celebratoryHex(event.achievement.iconName, size: 132)
 
+            // The trophy's name is prose (a title, not a readout), so it
+            // takes the display face; mono stays on the NEW TROPHY label.
             Text(event.achievement.title)
-                .font(Brand.Font.mono(size: 24, weight: .heavy))
+                .brandDisplayFont()
                 .foregroundStyle(Brand.Color.textPrimary)
                 .multilineTextAlignment(.center)
                 .minimumScaleFactor(0.7)
@@ -138,8 +140,9 @@ struct TrophyUnlockView: View {
             // Readable, in the main ink (back-controls pass, 2026-10-30):
             // was 11 pt tertiary grey "Tap to continue", easy to miss
             // outdoors. The whole card is still the tap target.
+            // A call to action is prose: system face, not mono.
             Text("Continue")
-                .font(Brand.Font.mono(size: 14, weight: .bold))
+                .font(.subheadline.weight(.semibold))
                 .foregroundStyle(Brand.Color.textPrimary)
             if remaining > 1 {
                 Button {

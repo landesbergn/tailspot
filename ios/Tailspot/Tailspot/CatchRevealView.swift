@@ -211,7 +211,7 @@ enum RP {
     static let ink = Color(hex: 0xE7EEF5)
     static let muted = Color(hex: 0x8DA0B2)
     /// The quietest ink: ALT/SPD/ROUTE labels, ENTRY #,
-    /// the bonus round's SKIP. Lifted from 0x5F7284 (4.01:1 on `bg`, 3.88:1
+    /// a missing stat's "—". Lifted from 0x5F7284 (4.01:1 on `bg`, 3.88:1
     /// on the share card's bgPrimary) to clear the WCAG AA 4.5:1 bar for
     /// small text, same hue (a11y pass, 2026-10-22): 4.74:1 on `bg`, 4.58:1
     /// on bgPrimary, still clearly a step below `muted` (7.4:1).
@@ -586,16 +586,19 @@ func splitUnit(_ s: String?) -> (value: String, unit: String?) {
 }
 
 /// A labelled stat — big monospaced value with a smaller neutral unit suffix.
+/// A missing value draws a quiet "—" at the unit size in the faintest ink
+/// (beauty pass 2026-10-31), not a full-size readout dash.
 func statCell(_ label: String, _ raw: String?, scale: CGFloat, accent: Color) -> some View {
     let parts = splitUnit(raw)
+    let missing = isBlankStat(raw)
     return VStack(alignment: .leading, spacing: 3 * scale) {
         Text(label)
             .font(.system(size: 9.5 * scale, weight: .semibold, design: .monospaced))
             .tracking(1.5).foregroundColor(RP.faint)
         HStack(alignment: .firstTextBaseline, spacing: 4 * scale) {
             Text(parts.value)
-                .font(.system(size: 21 * scale, weight: .semibold, design: .monospaced))
-                .foregroundColor(RP.ink)
+                .font(.system(size: (missing ? 12 : 21) * scale, weight: .semibold, design: .monospaced))
+                .foregroundColor(missing ? RP.faint : RP.ink)
             if let unit = parts.unit {
                 Text(unit)
                     .font(.system(size: 12 * scale, weight: .medium, design: .monospaced))
@@ -606,13 +609,84 @@ func statCell(_ label: String, _ raw: String?, scale: CGFloat, accent: Color) ->
     }
 }
 
+/// True when a pre-formatted stat has nothing to show (nil or empty) —
+/// the same test `splitUnit` uses to fall back to "—".
+func isBlankStat(_ s: String?) -> Bool { s?.isEmpty ?? true }
+
+/// The top stat row both the reveal and `SettledCatchCard` open their data
+/// section with, so the two cards lay out missing data the same way:
+///  - ALT and SPD as two columns (DIST never joins as a cramped third:
+///    with no route it gets the full-width row below).
+///  - ALT and SPD both missing → no row of dashes; DIST takes the left
+///    cell and the right half stays empty.
+/// `.firstTextBaseline` lines the cells up on their labels, so a short
+/// "—" cell doesn't drift off-centre next to a full readout.
+@ViewBuilder
+func statRow(alt: String?, speed: String?, dist: String?,
+             scale: CGFloat, accent: Color) -> some View {
+    let hasAltSpd = !isBlankStat(alt) || !isBlankStat(speed)
+    HStack(alignment: .firstTextBaseline, spacing: 14 * scale) {
+        if hasAltSpd {
+            statCell("ALT", alt, scale: scale, accent: accent)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            statCell("SPD", speed, scale: scale, accent: accent)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+            statCell("DIST", dist, scale: scale, accent: accent)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            // An empty right column, so DIST sits in the left half like ALT.
+            Color.clear.frame(maxWidth: .infinity, maxHeight: 0)
+        }
+    }
+}
+
+/// The city names under a ROUTE cell's codes ("San Francisco → Hong Kong"),
+/// shared by the reveal and `SettledCatchCard`. Nothing when neither name
+/// is known. `ViewThatFits` renders the first child that fits the width
+/// it's offered: both names in full (`fixedSize` stops them truncating),
+/// else the same line with each name tail-truncated ("San Franci…").
+@ViewBuilder
+func routeCityLine(origin: String?, dest: String?, scale: CGFloat) -> some View {
+    if origin != nil || dest != nil {
+        ViewThatFits(in: .horizontal) {
+            routeCityPair(origin: origin, dest: dest, scale: scale)
+                .fixedSize(horizontal: true, vertical: false)
+            routeCityPair(origin: origin, dest: dest, scale: scale)
+        }
+        .font(.system(size: 12 * scale))
+        .foregroundColor(RP.muted)
+        .lineLimit(1)
+        .truncationMode(.tail)
+    }
+}
+
+/// One "Origin → Dest" line. A one-sided route shows just the known name,
+/// with the arrow before a lone destination (matches the code line above).
+private func routeCityPair(origin: String?, dest: String?, scale: CGFloat) -> some View {
+    // The arrow never gives up width; only the names truncate.
+    let arrow = Text("→").foregroundColor(RP.faint).fixedSize()
+    return HStack(spacing: 5 * scale) {
+        if let on = origin {
+            Text(on)
+            if let dn = dest {
+                arrow
+                Text(dn)
+            }
+        } else if let dn = dest {
+            arrow
+            Text(dn)
+        }
+    }
+}
+
 /// The identity row under the split-flap name — tier-accent dot, then
 /// "FLIGHT · CARRIER" in ink (2026-08-12: the rarity WORD moved out of this
 /// row; the tier still shows as the dot's tint and as the ledger's base
 /// line). Shared by the reveal and `SettledCatchCard` so the catch moment
-/// and the Hangar detail render the identical row. Falls back to the rarity
-/// label when the catch has neither a callsign nor a carrier, so the row
-/// never renders as a lone dot.
+/// and the Hangar detail render the identical row. Falls back to
+/// "UNIDENTIFIED FLIGHT" in muted ink when the catch has neither a callsign
+/// nor a carrier, so the row never renders as a lone dot (it used to fall
+/// back to the rarity word, which repeated the ledger line just below).
 func identityRow(callsign: String?, carrier: String?, rarity: Rarity,
                  scale: CGFloat, isDuplicate: Bool = false) -> some View {
     let parts = [callsign, carrier]
@@ -621,9 +695,10 @@ func identityRow(callsign: String?, carrier: String?, rarity: Rarity,
     return HStack(spacing: 7 * scale) {
         Circle().fill(rarity.tint).frame(width: 6 * scale, height: 6 * scale)
         if parts.isEmpty {
-            Text(rarity.label.uppercased())
+            Text("UNIDENTIFIED FLIGHT")
                 .font(.system(size: 11 * scale, weight: .semibold, design: .monospaced))
-                .tracking(3).foregroundStyle(RP.ink)
+                .tracking(1).foregroundStyle(RP.muted)
+                .lineLimit(1).minimumScaleFactor(0.7)
         } else {
             Text(parts.joined(separator: " · "))
                 .font(.system(size: 11 * scale, weight: .semibold, design: .monospaced))
@@ -639,11 +714,14 @@ func identityRow(callsign: String?, carrier: String?, rarity: Rarity,
     }
 }
 
+/// One ledger line. Line-item labels use the card's label voice (mono
+/// semibold, tracked 1.5, like ALT/SPD/ROUTE) in the row's tint; the `big`
+/// TOTAL line stays heavy ink. Every surface calls its total "TOTAL".
 func ledgerRow(_ label: String, _ amount: String, _ color: Color, _ opacity: Double, scale: CGFloat, big: Bool = false) -> some View {
     HStack {
         Text(label)
-            .font(.system(size: (big ? 12 : 11) * scale, weight: big ? .heavy : .regular, design: .monospaced))
-            .tracking(big ? 1.5 : 0)
+            .font(.system(size: (big ? 12 : 10) * scale, weight: big ? .heavy : .semibold, design: .monospaced))
+            .tracking(1.5)
             .foregroundColor(big ? RP.ink : color)
         Spacer()
         Text(amount)
@@ -1775,27 +1853,29 @@ struct CatchRevealView: View {
 
     // ALT / SPD as a two-column top row, then (when there's route data) a
     // rule and a full-width ROUTE row: big ICAO codes with a neutral arrow and
-    // the human-readable city names underneath. No route → DIST joins row one.
+    // the human-readable city names underneath. No route → DIST takes that
+    // full-width second row: never a cramped third column, and the card keeps
+    // one height from the saving shell to the finished catch. With ALT and SPD
+    // both missing there's no row of dashes: DIST stands alone, or (with a
+    // route) takes ALT's cell in row one (`statRow`, shared with
+    // SettledCatchCard).
     //
     // With a bonus round in play, the route slot renders MASKED (the question
     // prompt) while prompting and CROSSFADES to the real route once resolved.
     @ViewBuilder
     private func dataSection(t: Double, scale: CGFloat, accent: Color, render: GuessRender?) -> some View {
         let hasRoute = (livePlane.originIcao ?? livePlane.destIcao) != nil
+        let hasAltSpd = !isBlankStat(livePlane.altText) || !isBlankStat(livePlane.speedText)
+        // No route and nothing for row one: the DIST row below stands alone.
+        let showsRowOne = hasAltSpd || hasRoute
         VStack(alignment: .leading, spacing: 12 * scale) {
-            // ALT / SPD — always two columns with a real gap so wide values
-            // (e.g. "35,433 ft") never butt against the next column.
-            HStack(spacing: 14 * scale) {
-                statCell("ALT", livePlane.altText, scale: scale, accent: accent)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                statCell("SPD", livePlane.speedText, scale: scale, accent: accent)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+            if showsRowOne {
+                statRow(alt: livePlane.altText, speed: livePlane.speedText,
+                        dist: livePlane.distText,
+                        scale: scale, accent: accent)
+                    .opacity(ss(0.6, 0.76, t))
+                Rectangle().fill(RP.rule).frame(height: 1)
             }
-            .opacity(ss(0.6, 0.76, t))
-
-            // The third fact gets its own full-width row: ROUTE when we have
-            // it, otherwise DIST. Never a cramped third column.
-            Rectangle().fill(RP.rule).frame(height: 1)
             Group {
                 if let render {
                     // ZStack crossfade: both layers reserve the slot so its
@@ -1830,17 +1910,17 @@ struct CatchRevealView: View {
         }
     }
 
-    /// The masked ROUTE slot during the bonus round: a gold eyebrow + the
-    /// cyan-mono question, occupying the same slot the real route will crossfade
-    /// into. Styled to match the card's mono labels.
+    /// The masked ROUTE slot during the bonus round: a gold mono eyebrow +
+    /// the question in system prose (it's addressed to the player, not a
+    /// readout), occupying the same slot the real route will crossfade into.
     private func maskedRoutePrompt(question: GuessRoundQuestion, scale: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 4 * scale) {
             Text("BONUS ROUND · +25%")
                 .font(.system(size: 9.5 * scale, weight: .bold, design: .monospaced))
                 .tracking(1.5).foregroundColor(RP.gold)
             Text(question.prompt)
-                .font(.system(size: 15 * scale, weight: .bold, design: .monospaced))
-                .foregroundColor(Brand.Color.cyan)
+                .font(.system(size: 17 * scale, weight: .semibold))
+                .foregroundColor(RP.ink)
                 .fixedSize(horizontal: false, vertical: true)
                 .lineLimit(2).minimumScaleFactor(0.8)
         }
@@ -1870,23 +1950,7 @@ struct CatchRevealView: View {
                 }
             }
             .lineLimit(1).minimumScaleFactor(0.6)
-            if livePlane.originName != nil || livePlane.destName != nil {
-                HStack(spacing: 5 * scale) {
-                    if let on = livePlane.originName {
-                        Text(on)
-                        if let dn = livePlane.destName {
-                            Text("→").foregroundColor(RP.faint)
-                            Text(dn)
-                        }
-                    } else if let dn = livePlane.destName {
-                        Text("→").foregroundColor(RP.faint)
-                        Text(dn)
-                    }
-                }
-                .font(.system(size: 12 * scale))
-                .foregroundColor(RP.muted)
-                .lineLimit(1).minimumScaleFactor(0.6)
-            }
+            routeCityLine(origin: livePlane.originName, dest: livePlane.destName, scale: scale)
         }
     }
 
@@ -1906,20 +1970,27 @@ struct CatchRevealView: View {
             // Control get a dismiss control; the inset contentShape grows the
             // text to a ≥44 pt hit area without moving the layout.
             Button(action: { resolveAsSkipIfNeeded(); reportDismiss(.continue); onDismiss() }) {
+                // Buttons are prose: system text styles, not mono (beauty
+                // pass 2026-10-31), so the exits don't read as readouts.
                 Text("Continue")
-                    .font(.system(size: 14, weight: .bold, design: .monospaced))
-                    .tracking(0.6).foregroundColor(RP.ink)
+                    // 15 pt semibold: prose like the button beside it, one
+                    // weight step up; 17 pt cost the tall-phone reveal its fit.
+                    .font(Brand.Font.body.weight(.semibold))
+                    .foregroundColor(RP.ink)
                     .contentShape(Rectangle().inset(by: -16))
             }
             .buttonStyle(.plain)
             Button(action: { resolveAsSkipIfNeeded(); reportDismiss(.viewInHangar); onViewInHangar() }) {
                 Text("View in Hangar ›")
-                    .font(.system(size: 13, weight: .semibold, design: .monospaced))
-                    .tracking(0.3).foregroundColor(RP.muted)
+                    .font(Brand.Font.body)  // .subheadline, 15
+                    .foregroundColor(RP.muted)
                     .contentShape(Rectangle().inset(by: -16))
             }
             .buttonStyle(.plain)
         }
+        // Prose grows with Dynamic Type, but this row sits under a fixed-size
+        // card: past xxxLarge the two labels ran edge to edge on an SE.
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     }
 
     private func reportDismiss(_ method: RevealDismissAnalytics.Method) {
@@ -1961,8 +2032,8 @@ struct CatchRevealView: View {
     // MARK: - Bonus-round chips
 
     /// The 4 airport chips (staggered pop-in via `render.popClock`) + a quiet
-    /// SKIP. Chip styling matches the onboarding elevated + cyan-hairline look;
-    /// resolving flips the tapped chip green/red and highlights the right answer.
+    /// Skip. Chips are elevated with the card's rule hairline; resolving flips
+    /// the tapped chip green/red and highlights the right answer.
     private func routeBonusChips(render: GuessRender, scale: CGFloat) -> some View {
         VStack(spacing: 8 * scale) {
             ForEach(Array(render.question.options.enumerated()), id: \.element.value) { idx, option in
@@ -1972,14 +2043,13 @@ struct CatchRevealView: View {
                     // Reduce Motion: plain fade, no scale pop.
                     .scaleEffect(reduceMotion ? 1 : 0.82 + 0.18 * pop, anchor: .center)
             }
-            // SKIP retires the instant the player commits. The inset grows
+            // Skip retires the instant the player commits. The inset grows
             // the ~25 pt padded label to a ≥44 pt hit area (HIG minimum)
-            // without changing what's drawn.
+            // without changing what's drawn. A button, so prose (footnote).
             Button(action: skipBonusRound) {
-                Text("SKIP")
-                    .font(.system(size: 11 * scale, weight: .semibold, design: .monospaced))
-                    .tracking(1.5)
-                    .foregroundStyle(RP.faint)
+                Text("Skip")
+                    .font(Brand.Font.cardSubtitle)  // .footnote, 13
+                    .foregroundStyle(RP.muted)
                     .padding(.vertical, 6 * scale)
                     .padding(.horizontal, 18 * scale)
                     .contentShape(Rectangle().inset(by: -10))
@@ -1996,12 +2066,23 @@ struct CatchRevealView: View {
         return Button {
             tapChip(option)
         } label: {
+            // The code is data (mono, in a fixed-width column so the city
+            // names line up chip to chip); the city is a human word (system).
+            let parts = option.displayParts
             HStack(spacing: 8 * scale) {
-                Text(option.display)
-                    .font(.system(size: 14 * scale, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(state.textColor)
+                Text(parts.code)
+                    .font(.system(size: 14 * scale, weight: .bold, design: .monospaced))
+                    .foregroundStyle(state.codeColor)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
+                    .frame(width: 40 * scale, alignment: .leading)
+                if let city = parts.city {
+                    Text(city)
+                        .font(.system(size: 15 * scale))
+                        .foregroundStyle(state.cityColor)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
                 Spacer(minLength: 0)
                 switch state {
                 case .correct:
@@ -2021,9 +2102,9 @@ struct CatchRevealView: View {
             .padding(.horizontal, 14 * scale)
             .padding(.vertical, 11 * scale)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(state.background, in: .rect(cornerRadius: 11 * scale))
+            .background(state.background, in: .rect(cornerRadius: Brand.Radius.row))
             .overlay(
-                RoundedRectangle(cornerRadius: 11 * scale)
+                RoundedRectangle(cornerRadius: Brand.Radius.row)
                     .strokeBorder(state.border, lineWidth: 1)
             )
         }
@@ -2047,15 +2128,21 @@ struct CatchRevealView: View {
         }
         var border: Color {
             switch self {
-            case .idle:    return Brand.Color.cyan.opacity(0.20)
+            case .idle:    return RP.rule
             case .correct: return Brand.Color.alertNormal
             case .wrong:   return Brand.Color.alertWarning
-            case .dimmed:  return Brand.Color.cyan.opacity(0.06)
+            case .dimmed:  return RP.rule.opacity(0.5)
             }
         }
-        var textColor: Color {
+        var codeColor: Color {
             switch self {
-            case .idle, .correct, .wrong: return Brand.Color.textPrimary
+            case .idle, .correct, .wrong: return RP.ink
+            case .dimmed:                 return Brand.Color.textTertiary
+            }
+        }
+        var cityColor: Color {
+            switch self {
+            case .idle, .correct, .wrong: return RP.muted
             case .dimmed:                 return Brand.Color.textTertiary
             }
         }

@@ -381,15 +381,16 @@ struct ProfileScreen: View {
             .accessibilityHint(isHandleClaimed ? "Opens a sheet to change it" : "Opens a sheet to pick one")
             HStack(spacing: 0) {
                 VStack(spacing: 2) {
-                    Text(displayPoints.formatted(.number))
+                    // monoTight: B612 Mono gives the comma a full cell ("4, 210").
+                    Text(Brand.monoTight(displayPoints, size: 32))
                         .font(Brand.Font.mono(size: 32, weight: .heavy, relativeTo: .title2))
                         .foregroundStyle(Brand.Color.cyan)
                         .monospacedDigit()
                         .lineLimit(1)
                         .minimumScaleFactor(0.6)
                     Text("TOTAL POINTS")
-                        .font(Brand.Font.mono(size: 9, weight: .semibold, relativeTo: .caption2))
-                        .tracking(1.2)
+                        .font(Brand.Font.eyebrow)
+                        .tracking(Brand.Font.eyebrowTracking)
                         .foregroundStyle(Brand.Color.textTertiary)
                 }
                 .frame(maxWidth: .infinity)
@@ -406,8 +407,8 @@ struct ProfileScreen: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.6)
                     Text("ALL-TIME RANK")
-                        .font(Brand.Font.mono(size: 9, weight: .semibold, relativeTo: .caption2))
-                        .tracking(1.2)
+                        .font(Brand.Font.eyebrow)
+                        .tracking(Brand.Font.eyebrowTracking)
                         .foregroundStyle(Brand.Color.textTertiary)
                 }
                 .frame(maxWidth: .infinity)
@@ -424,7 +425,7 @@ struct ProfileScreen: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(18)
+        .padding(Self.cardInset)
         .glassEffect(Self.brandGlass, in: .rect(cornerRadius: Brand.Radius.card))
     }
 
@@ -502,8 +503,8 @@ struct ProfileScreen: View {
 
     private func championWinsLabel(_ period: String) -> some View {
         Text("\(period) WINS")
-            .font(Brand.Font.mono(size: 9, weight: .semibold, relativeTo: .caption2))
-            .tracking(1.0)
+            .font(Brand.Font.eyebrow)
+            .tracking(Brand.Font.eyebrowTracking)
             .foregroundStyle(Brand.Color.textTertiary)
             .lineLimit(1)
             .minimumScaleFactor(0.7)
@@ -526,6 +527,9 @@ struct ProfileScreen: View {
     /// `.regular` glass resolves too bright over `bgPrimary` and washes
     /// out the fixed light-on-dark text palette.
     private static let brandGlass: Glass = .regular.tint(Brand.Color.bgElevated.opacity(0.88))
+    /// One inner inset for every Profile card, so the avatar, flame,
+    /// rarity bar and row icons share a single leading edge.
+    private static let cardInset: CGFloat = 16
 
     /// Two faint radial glows under the glass surfaces — pure decoration,
     /// but glass over a flat color has nothing to refract and reads matte.
@@ -558,9 +562,9 @@ struct ProfileScreen: View {
             Rectangle()
                 .fill(Brand.Color.bgPrimary.opacity(0.5))
                 .frame(height: 1)
-                .padding(.horizontal, 18)
+                .padding(.horizontal, Self.cardInset)
             streakRow(streak)
-                .padding(.horizontal, 18)
+                .padding(.horizontal, Self.cardInset)
                 .padding(.vertical, 14)
         }
         .glassEffect(Self.brandGlass, in: .rect(cornerRadius: Brand.Radius.card))
@@ -599,8 +603,8 @@ struct ProfileScreen: View {
                 .foregroundStyle(valueColor)
                 .monospacedDigit()
             Text(label.uppercased())
-                .font(Brand.Font.mono(size: 9, weight: .semibold, relativeTo: .caption2))
-                .tracking(1.2)
+                .font(Brand.Font.eyebrow)
+                .tracking(Brand.Font.eyebrowTracking)
                 .foregroundStyle(Brand.Color.textTertiary)
                 .lineLimit(1)
         }
@@ -764,8 +768,8 @@ struct ProfileScreen: View {
                     .frame(width: 4, height: 36)
                 VStack(alignment: .leading, spacing: 1) {
                     Text("BEST CATCH")
-                        .font(Brand.Font.mono(size: 8, weight: .semibold, relativeTo: .caption2))
-                        .tracking(1.2)
+                        .font(Brand.Font.eyebrow)
+                        .tracking(Brand.Font.eyebrowTracking)
                         .foregroundStyle(Brand.Color.textTertiary)
                     Text(best.name)
                         .font(Brand.Font.cardTitle)
@@ -773,7 +777,7 @@ struct ProfileScreen: View {
                         .lineLimit(1)
                     Text(best.rarity.label)
                         .font(Brand.Font.mono(size: 9, weight: .bold, relativeTo: .caption2))
-                        .tracking(0.8)
+                        .tracking(Brand.Font.eyebrowTracking)
                         .foregroundStyle(best.rarity.tint)
                 }
                 Spacer()
@@ -782,7 +786,7 @@ struct ProfileScreen: View {
                     .foregroundStyle(Brand.Color.textTertiary)
                     .accessibilityHidden(true)
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, Self.cardInset)
             .padding(.vertical, 12)
             .glassEffect(Self.brandGlass, in: .rect(cornerRadius: Brand.Radius.card))
         }
@@ -883,6 +887,8 @@ struct ProfileScreen: View {
             .fill(Brand.Color.bgPrimary.opacity(0.5))
             .frame(height: 1)
             .padding(.leading, 52)
+            // Inset on the right too, matching the stats/streak hairline.
+            .padding(.trailing, Self.cardInset)
     }
 
     private func sectionLink<Dest: View>(label: String, systemImage: String, @ViewBuilder destination: @escaping () -> Dest) -> some View {
@@ -904,7 +910,7 @@ struct ProfileScreen: View {
                     .foregroundStyle(Brand.Color.textTertiary)
                     .accessibilityHidden(true)
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, Self.cardInset)
             .padding(.vertical, 14)
             // The Spacer gap between label and chevron is transparent and
             // therefore not hit-testable by default — make the whole row

@@ -210,6 +210,40 @@ nonisolated enum Brand {
         static var label:        SwiftUI.Font { SwiftUI.Font.caption2.weight(.semibold) }
         static var body:         SwiftUI.Font { .subheadline }
         static var caption:      SwiftUI.Font { .caption }
+
+        /// Mono eyebrow label (BEST CATCH, UNIQUE, stat captions): one size
+        /// and tracking so eyebrows stop drifting between 8/9/10 pt and
+        /// 0.8/1/1.2 tracking on the same screen (beauty pass 2026-10-31).
+        static var eyebrow: SwiftUI.Font { mono(size: 9, weight: .semibold, relativeTo: .caption2) }
+        static let eyebrowTracking: CGFloat = 1.2
+    }
+
+    // MARK: - Mono numbers
+
+    /// A number set in B612 Mono with its grouping/decimal punctuation
+    /// tightened. Monospace gives "," and "." a full digit cell, so
+    /// "4,210" reads as "4, 210" and "1.2.4" as "1. 2. 4". Pulling the
+    /// following character in by 0.3 em after each separator closes the
+    /// gap while keeping the comma (the reader still gets thousands).
+    /// `size` is the point size the Text is drawn at; the kern is computed
+    /// from it, so pass the same value as the font. Apply the font as usual:
+    /// `Text(Brand.monoTight(4210, size: 15)).font(Brand.Font.mono(size: 15))`.
+    static func monoTight(_ string: String, size: CGFloat) -> AttributedString {
+        var out = AttributedString(string)
+        var i = out.startIndex
+        while i < out.endIndex {
+            let next = out.characters.index(after: i)
+            let ch = out.characters[i]
+            if ch == "," || ch == "." {
+                out[i..<next].kern = -0.3 * size
+            }
+            i = next
+        }
+        return out
+    }
+
+    static func monoTight(_ n: Int, size: CGFloat) -> AttributedString {
+        monoTight(n.formatted(.number), size: size)
     }
 }
 

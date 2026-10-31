@@ -79,6 +79,17 @@ struct TrophyRecapView: View {
                     grid(t: t)
                         .padding(.vertical, 16)
                 }
+                // `.mask` keeps only the parts of the view where the mask
+                // shape is opaque: solid black down to the last 28 pt, then
+                // a fade to clear, so the fold dissolves into RP.bg instead
+                // of a hard cut right above the footer.
+                .mask(
+                    VStack(spacing: 0) {
+                        Color.black
+                        LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
+                            .frame(height: 28)
+                    }
+                )
                 .frame(maxHeight: .infinity)
             }
 

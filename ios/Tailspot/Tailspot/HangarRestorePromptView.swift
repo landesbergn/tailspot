@@ -8,10 +8,13 @@
 //  install's Keychain identity turns out to hold catches on the server.
 //
 //  One view, four screens, driven by `HangarRestoreManager.phase`:
-//    offer      "N catches found — restore?"  RESTORE / NOT NOW
+//    offer      "N catches found — restore?"  Restore N catches / Not now
 //    restoring  spinner
-//    done       "N catches restored"          DONE
-//    failed     "couldn't reach Tailspot"     TRY AGAIN / NOT NOW
+//    done       "N catches restored"          Continue
+//    failed     "couldn't reach Tailspot"     Try again / Not now
+//
+//  Type: the eyebrow is the one mono-caps label; headlines are prose
+//  (`.brandDisplayFont()`, sentence case) and buttons use `Brand.Font.button`.
 //
 //  The photo caveat is load-bearing copy: photos were never uploaded, so
 //  they cannot come back — the prompt says so up front (plainly, gently)
@@ -38,18 +41,7 @@ struct HangarRestorePromptView: View {
             )
             .ignoresSafeArea()
 
-            switch manager.phase {
-            case .idle:
-                Color.clear
-            case .offer(let total):
-                offerCard(total: total)
-            case .restoring:
-                restoringCard
-            case .done(let restored):
-                doneCard(restored: restored)
-            case .failed:
-                failedCard
-            }
+            phaseCard
         }
         .accessibilityAddTraits(.isModal)
     }
@@ -57,14 +49,27 @@ struct HangarRestorePromptView: View {
     // MARK: - Screens
 
     @ViewBuilder
+    private var phaseCard: some View {
+        switch manager.phase {
+        case .idle:
+            Color.clear
+        case .offer(let total):
+            offerCard(total: total)
+        case .restoring:
+            restoringCard
+        case .done(let restored):
+            doneCard(restored: restored)
+        case .failed:
+            failedCard
+        }
+    }
+
+    @ViewBuilder
     private func offerCard(total: Int) -> some View {
         VStack(spacing: 18) {
             eyebrow("WELCOME BACK")
             glyph()
-            Text(catchCount(total) + " FOUND")
-                .font(Brand.Font.mono(size: 24, weight: .heavy))
-                .foregroundStyle(Brand.Color.textPrimary)
-                .multilineTextAlignment(.center)
+            headline(catchCount(total) + " found")
             Text("This device's catches are saved with Tailspot. Restore them to your Hangar?")
                 .font(Brand.Font.body)
                 .foregroundStyle(Brand.Color.textSecondary)
@@ -72,16 +77,15 @@ struct HangarRestorePromptView: View {
                 .padding(.horizontal, 40)
             photoCaveat
             VStack(spacing: 14) {
-                primaryButton("RESTORE " + catchCount(total)) {
+                primaryButton("Restore " + catchCount(total)) {
                     Task { await manager.restore(context: context, unlockCenter: unlockCenter) }
                 }
-                quietButton("NOT NOW") { manager.decline() }
+                quietButton("Not now") { manager.decline() }
             }
             .padding(.top, 8)
         }
-        .padding(.vertical, 40)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Welcome back. \(catchCount(total).lowercased()) from this device found on the server. Restore them to your Hangar? Photos can't be recovered.")
+        .accessibilityLabel("Welcome back. \(catchCount(total)) from this device found on the server. Restore them to your Hangar? Photos can't be recovered.")
     }
 
     private var restoringCard: some View {
@@ -93,14 +97,11 @@ struct HangarRestorePromptView: View {
             // placeholder glyph.
             RestoreSweep()
                 .padding(.vertical, 20)
-            Text("RESTORING…")
-                .font(Brand.Font.mono(size: 18, weight: .heavy))
-                .foregroundStyle(Brand.Color.textPrimary)
+            headline("Restoring…")
             Text("Pulling your catches from the tower.")
                 .font(Brand.Font.caption)
                 .foregroundStyle(Brand.Color.textSecondary)
         }
-        .padding(.vertical, 40)
         // One element like the offer/done cards, so VoiceOver reads the
         // state as a sentence instead of eyebrow/sweep/headline fragments.
         .accessibilityElement(children: .combine)
@@ -112,21 +113,17 @@ struct HangarRestorePromptView: View {
         VStack(spacing: 18) {
             eyebrow("HANGAR RESTORED")
             glyph()
-            Text(catchCount(restored) + " RESTORED")
-                .font(Brand.Font.mono(size: 24, weight: .heavy))
-                .foregroundStyle(Brand.Color.textPrimary)
-                .multilineTextAlignment(.center)
+            headline(catchCount(restored) + " restored")
             Text("Your collection is back — points, trophies and all. New catches will fill it with fresh photos.")
                 .font(Brand.Font.body)
                 .foregroundStyle(Brand.Color.textSecondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
-            primaryButton("DONE") { manager.finish() }
+            primaryButton("Continue") { manager.finish() }
                 .padding(.top, 8)
         }
-        .padding(.vertical, 40)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Hangar restored: \(catchCount(restored).lowercased()).")
+        .accessibilityLabel("Hangar restored: \(catchCount(restored)).")
     }
 
     private var failedCard: some View {
@@ -137,23 +134,18 @@ struct HangarRestorePromptView: View {
                 .foregroundStyle(Brand.Color.alertCaution)
                 .padding(.vertical, 8)
                 .accessibilityHidden(true)
-            // No apostrophes in mono headlines: B612 Mono gives the mark a
-            // full fixed-width advance, which reads as "COULDN' T".
-            Text("RESTORE FAILED")
-                .font(Brand.Font.mono(size: 22, weight: .heavy))
-                .foregroundStyle(Brand.Color.textPrimary)
+            headline("Restore failed")
             Text("Couldn't reach Tailspot. Your catches are safe on the server — try again in a moment.")
                 .font(Brand.Font.body)
                 .foregroundStyle(Brand.Color.textSecondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
             VStack(spacing: 14) {
-                primaryButton("TRY AGAIN") { manager.retry() }
-                quietButton("NOT NOW") { manager.decline() }
+                primaryButton("Try again") { manager.retry() }
+                quietButton("Not now") { manager.decline() }
             }
             .padding(.top, 8)
         }
-        .padding(.vertical, 40)
         // One element like the offer/done cards (the buttons surface as
         // custom actions, matching the offer card's behavior).
         .accessibilityElement(children: .combine)
@@ -169,6 +161,17 @@ struct HangarRestorePromptView: View {
             .foregroundStyle(Brand.Color.textTertiary)
             .multilineTextAlignment(.center)
             .padding(.horizontal, 44)
+    }
+
+    /// The phase headline: prose, so the display face in sentence case.
+    /// `fixedSize(vertical:)` lets a long count wrap instead of truncating.
+    private func headline(_ text: String) -> some View {
+        Text(text)
+            .brandDisplayFont()
+            .foregroundStyle(Brand.Color.textPrimary)
+            .multilineTextAlignment(.center)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 24)
     }
 
     private func eyebrow(_ text: String) -> some View {
@@ -195,8 +198,7 @@ struct HangarRestorePromptView: View {
     private func primaryButton(_ title: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
-                .font(Brand.Font.mono(size: 14, weight: .bold))
-                .tracking(1)
+                .font(Brand.Font.button)
                 .foregroundStyle(Brand.Color.bgPrimary)
                 .padding(.horizontal, 28)
                 .padding(.vertical, 13)
@@ -212,8 +214,9 @@ struct HangarRestorePromptView: View {
     private func quietButton(_ title: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
-                .font(Brand.Font.mono(size: 12, weight: .bold))
-                .tracking(1)
+                // A step quieter than the primary's Brand.Font.button, so
+                // "Not now" doesn't read as loud as the main action.
+                .font(Brand.Font.body.weight(.medium))
                 .foregroundStyle(Brand.Color.textSecondary)
                 .padding(.horizontal, 18)
                 .padding(.vertical, 9)
@@ -225,9 +228,9 @@ struct HangarRestorePromptView: View {
         .buttonStyle(.plain)
     }
 
-    /// "1 CATCH" / "62 CATCHES" — the shared count lockup.
+    /// "1 catch" / "62 catches" — the shared count phrase (prose case).
     private func catchCount(_ n: Int) -> String {
-        n == 1 ? "1 CATCH" : "\(n) CATCHES"
+        n == 1 ? "1 catch" : "\(n) catches"
     }
 }
 

@@ -5,6 +5,16 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-10-31 — Beauty pass (branch `claude/beauty-pass-2026-10-31`)
+
+- Seven per-surface design audits from rendered screens, skeptic-verified; ~35
+  craft fixes across the HUD, reveal, Hangar, Profile/Settings, restore,
+  Challenges and share; a before/after visual check per surface, with its
+  regressions fixed or reverted.
+- New Brand helpers: `monoTight` (tight B612 commas/periods) and `Font.eyebrow`.
+- Big swings left for Noah's call (B612 on artboards, onboarding back chevron,
+  create-sheet rebuild, Hangar glyph, 1ST badge). Review doc in `docs/reviews/`.
+
 ## 2026-10-31 — Faster local test runs (branch `claude/test-suite-speed`)
 
 - Snapshot helpers no longer block the main thread: nine `RunLoop.main.run(until:)`

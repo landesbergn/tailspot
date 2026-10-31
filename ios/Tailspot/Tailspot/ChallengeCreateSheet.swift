@@ -348,7 +348,7 @@ struct ChallengeCreateSheet: View {
                         ProgressView().scaleEffect(0.85).tint(Brand.Color.bgPrimary)
                     } else {
                         Text("Create challenge")
-                            .font(Brand.Font.mono(size: 15, weight: .bold, relativeTo: .subheadline))
+                            .font(Brand.Font.button)
                     }
                     Spacer()
                 }

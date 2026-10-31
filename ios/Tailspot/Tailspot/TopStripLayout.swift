@@ -26,6 +26,10 @@ nonisolated enum TopStripLayout {
     /// button, which is the only control on the banner's row.
     static let bannerTrailing: CGFloat = 60
 
+    /// Top inset of the banner stack. Equal to `controlsTopPadding` so the
+    /// banner and the 44 pt account button beside it share a top edge.
+    static let bannerTopPadding: CGFloat = controlsTopPadding
+
     /// The width the banner actually gets on a screen this wide.
     static func bannerWidth(screenWidth: CGFloat) -> CGFloat {
         screenWidth - bannerLeading - bannerTrailing
