@@ -100,15 +100,6 @@ nonisolated enum GuessOptions {
     struct Option: Equatable, Sendable {
         let value: String
         let display: String
-
-        /// `display` split at its first " · " into the airport code and the
-        /// city ("HKG · Hong Kong" → ("HKG", "Hong Kong")), so the chip can
-        /// set the code in mono and the city name in prose. No separator →
-        /// the whole string is the code and `city` is nil.
-        var displayParts: (code: String, city: String?) {
-            guard let r = display.range(of: " · ") else { return (display, nil) }
-            return (String(display[..<r.lowerBound]), String(display[r.upperBound...]))
-        }
     }
 
     /// Which route endpoint the question asks about.

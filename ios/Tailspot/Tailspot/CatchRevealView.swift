@@ -2043,8 +2043,10 @@ struct CatchRevealView: View {
     // MARK: - Bonus-round chips
 
     /// The 4 airport chips (staggered pop-in via `render.popClock`) + a quiet
-    /// Skip. Chips are elevated with the card's rule hairline; resolving flips
-    /// the tapped chip green/red and highlights the right answer.
+    /// Skip. Chip styling matches the onboarding elevated + cyan-hairline look
+    /// (code + city in one mono line; Noah kept it over a split code/city
+    /// chip, 2026-10-31); resolving flips the tapped chip green/red and
+    /// highlights the right answer.
     private func routeBonusChips(render: GuessRender, scale: CGFloat) -> some View {
         VStack(spacing: 8 * scale) {
             ForEach(Array(render.question.options.enumerated()), id: \.element.value) { idx, option in
@@ -2077,23 +2079,12 @@ struct CatchRevealView: View {
         return Button {
             tapChip(option)
         } label: {
-            // The code is data (mono, in a fixed-width column so the city
-            // names line up chip to chip); the city is a human word (system).
-            let parts = option.displayParts
             HStack(spacing: 8 * scale) {
-                Text(parts.code)
-                    .font(.system(size: 14 * scale, weight: .bold, design: .monospaced))
-                    .foregroundStyle(state.codeColor)
+                Text(option.display)
+                    .font(.system(size: 14 * scale, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(state.textColor)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
-                    .frame(width: 40 * scale, alignment: .leading)
-                if let city = parts.city {
-                    Text(city)
-                        .font(.system(size: 15 * scale))
-                        .foregroundStyle(state.cityColor)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                }
                 Spacer(minLength: 0)
                 switch state {
                 case .correct:
@@ -2113,11 +2104,9 @@ struct CatchRevealView: View {
             .padding(.horizontal, 14 * scale)
             .padding(.vertical, 11 * scale)
             .frame(maxWidth: .infinity, alignment: .leading)
-            // Scaled with the rest of the artboard chip (artboard radii stay
-            // computed; Brand.Radius doc).
-            .background(state.background, in: .rect(cornerRadius: Brand.Radius.row * scale))
+            .background(state.background, in: .rect(cornerRadius: 11 * scale))
             .overlay(
-                RoundedRectangle(cornerRadius: Brand.Radius.row * scale)
+                RoundedRectangle(cornerRadius: 11 * scale)
                     .strokeBorder(state.border, lineWidth: 1)
             )
         }
@@ -2141,21 +2130,15 @@ struct CatchRevealView: View {
         }
         var border: Color {
             switch self {
-            case .idle:    return RP.rule
+            case .idle:    return Brand.Color.cyan.opacity(0.20)
             case .correct: return Brand.Color.alertNormal
             case .wrong:   return Brand.Color.alertWarning
-            case .dimmed:  return RP.rule.opacity(0.5)
+            case .dimmed:  return Brand.Color.cyan.opacity(0.06)
             }
         }
-        var codeColor: Color {
+        var textColor: Color {
             switch self {
-            case .idle, .correct, .wrong: return RP.ink
-            case .dimmed:                 return Brand.Color.textTertiary
-            }
-        }
-        var cityColor: Color {
-            switch self {
-            case .idle, .correct, .wrong: return RP.muted
+            case .idle, .correct, .wrong: return Brand.Color.textPrimary
             case .dimmed:                 return Brand.Color.textTertiary
             }
         }

@@ -12,6 +12,8 @@ Git history + PLAN.md §9 remain the authoritative record.
   Challenges and share; a before/after visual check per surface, with its
   regressions fixed or reverted.
 - New Brand helpers: `monoTight` (tight B612 commas/periods) and `Font.eyebrow`.
+- Device pass: Noah preferred the original one-line code + city guess chips;
+  the split chip was reverted.
 - Big swings left for Noah's call (B612 on artboards, onboarding back chevron,
   create-sheet rebuild, Hangar glyph, 1ST badge). Review doc in `docs/reviews/`.
 
