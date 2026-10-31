@@ -5,7 +5,7 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
-## 2026-10-30 — One way out of every screen (branch `claude/back-controls`)
+## 2026-10-30 — One way out of every screen (PR #398)
 
 - From Gary's tester letter: X top right closes any screen back to the camera,
   chevron top left goes back a level, both 44 pt drawn (`ChromeButton`;
