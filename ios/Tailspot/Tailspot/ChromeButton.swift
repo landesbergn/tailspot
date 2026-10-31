@@ -14,9 +14,12 @@
 //  Screens with a system navigation bar use the native iOS 26 close button
 //  (`Button(role: .close)` in the toolbar) instead.
 //
-//  It's a plain SwiftUI `Button` in the system's Liquid Glass button style
-//  (`.buttonStyle(.glass)` + a circle border shape), so it looks and presses
-//  like the toolbar's own glass buttons. The circle is 44 pt DRAWN, not
+//  It's a plain SwiftUI `Button` whose label is a fixed 44 pt circle of
+//  interactive Liquid Glass (`.glassEffect(.regular.interactive())`), so it
+//  looks and presses like the toolbar's own glass buttons. Not
+//  `.buttonStyle(.glass)`: that style pads its label by an amount that
+//  differs between iOS versions (7 pt a side on 26.6, wider on 26.5), so the
+//  button's size drifted with the OS. The circle is 44 pt DRAWN, not
 //  just tapped: Apple's minimum hit target is also the minimum visible size
 //  here, because the tester's problem was seeing the button, not hitting
 //  it. The glyph grows with Dynamic Type (`@ScaledMetric`) up to a cap.
@@ -30,12 +33,6 @@ enum ChromeMetrics {
     static let disc: CGFloat = 44
     static let glyph: CGFloat = 18
     static let glyphMax: CGFloat = 24
-    /// Padding `.buttonStyle(.glass)` adds on each side of its label. The
-    /// label is sized `disc - 2 × glassInset` so the finished button is the
-    /// disc; framing the label at the full disc drew it at 58 pt and crowded
-    /// the catch card (Noah's device pass, 2026-10-30).
-    /// `buttonIsLaidOutAtTheDiscSize` measures the real layout.
-    static let glassInset: CGFloat = 7
 }
 
 struct ChromeButton: View {
@@ -77,15 +74,20 @@ struct ChromeButton: View {
     }
 
     var body: some View {
-        Button(role: role, action: action) {
-            Image(systemName: systemName)
-                .font(.system(size: min(glyph, ChromeMetrics.glyphMax), weight: .semibold))
-                .foregroundStyle(tint)
-                .frame(width: ChromeMetrics.disc - 2 * ChromeMetrics.glassInset,
-                       height: ChromeMetrics.disc - 2 * ChromeMetrics.glassInset)
+        // Its own container: a bare `.glassEffect` hosts its glass in a layer
+        // above the hierarchy that can swallow taps meant for views beneath
+        // it (see ProfileScreen's GlassEffectContainer note, #127).
+        GlassEffectContainer {
+            Button(role: role, action: action) {
+                Image(systemName: systemName)
+                    .font(.system(size: min(glyph, ChromeMetrics.glyphMax), weight: .semibold))
+                    .foregroundStyle(tint)
+                    .frame(width: ChromeMetrics.disc, height: ChromeMetrics.disc)
+                    .contentShape(.circle)
+                    .glassEffect(.regular.interactive(), in: .circle)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(accessibilityLabel)
         }
-        .buttonStyle(.glass)
-        .buttonBorderShape(.circle)
-        .accessibilityLabel(accessibilityLabel)
     }
 }

@@ -28,13 +28,14 @@ struct BackControlsTests {
         // Apple's 44 pt minimum, not just its hit area.
         #expect(ChromeMetrics.disc == 44)
         #expect(ChromeMetrics.glyph < ChromeMetrics.glyphMax)
-        #expect(ChromeMetrics.glyphMax < ChromeMetrics.disc - 2 * ChromeMetrics.glassInset)
+        #expect(ChromeMetrics.glyphMax < ChromeMetrics.disc)
     }
 
     @Test func buttonIsLaidOutAtTheDiscSize() {
-        // Measures the real layout, not the constant: `.buttonStyle(.glass)`
-        // adds its own padding around the label, which drew the first cut
-        // at ~57 pt on device and ate the gap above the catch card.
+        // Measures the real layout, not the constant. The first cut used
+        // `.buttonStyle(.glass)`, whose label padding drew it at 58 pt on
+        // device (eating the gap above the catch card) and at a different
+        // width again on CI's older iOS simulator.
         for button in [ChromeButton(.close) {}, ChromeButton(.back) {},
                        ChromeButton(systemName: "trash", accessibilityLabel: "Delete") {}] {
             let host = UIHostingController(rootView: button)

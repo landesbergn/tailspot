@@ -17,8 +17,9 @@ Git history + PLAN.md §9 remain the authoritative record.
   toolbar buttons waiting for a second touch. The preview now hides while
   stopped instead (`CameraPreview.setSessionActive`).
 - `ChromeButton` drew at 58 pt on device: `.buttonStyle(.glass)` pads its
-  label ~7 pt a side. Label now sized to land at 44 pt, pinned by a layout
-  test; the catch card's top gap is back to 16 pt.
+  label, by a different amount on iOS 26.5 than 26.6+. It is now a fixed
+  44 pt circle with `.glassEffect(.regular.interactive())`, pinned by a
+  layout test; the catch card's top gap is back to 16 pt.
 - Profile's Share moved top-left so the X has the top-right corner alone.
 - Audit and decisions: `design/back-controls-audit.html`.
 
