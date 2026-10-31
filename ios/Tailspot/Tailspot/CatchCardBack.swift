@@ -71,19 +71,29 @@ nonisolated extension CardBackCloseup {
 
 /// `catch_card_turned` — fired each time a card is turned over, either way.
 /// One helper so the detail screen and the reveal send the same shape.
+/// `catch_uuid` + `icao24` (2026-10-31) say which catch was being looked at;
+/// `catch_uuid` matches the same property on `catch_performed`, so the
+/// PostHog catch log can show whether each catch's card was ever turned.
 enum CardTurnAnalytics {
     enum Source: String { case detail, reveal }
 
     /// The event's properties. Pure, so tests pin the shape.
+    /// `catchUuid`/`icao24` are omitted when unknown (the reveal's early
+    /// shell before its row exists), never sent blank.
     nonisolated static func properties(source: Source, flipped: Bool,
                                        closeup: CardBackCloseup,
-                                       hasTypeInfo: Bool) -> [String: AnalyticsValue] {
-        [
+                                       hasTypeInfo: Bool,
+                                       catchUuid: String? = nil,
+                                       icao24: String? = nil) -> [String: AnalyticsValue] {
+        var props: [String: AnalyticsValue] = [
             "source": .string(source.rawValue),
             "side": .string(flipped ? "back" : "front"),
             "closeup": .string(closeup.analyticsValue),
             "has_type_info": .bool(hasTypeInfo),
         ]
+        if let catchUuid, !catchUuid.isEmpty { props["catch_uuid"] = .string(catchUuid) }
+        if let icao24, !icao24.isEmpty { props["icao24"] = .string(icao24) }
+        return props
     }
 
     /// Whether a turn can be reported right away. A turn to the back while
@@ -96,12 +106,17 @@ enum CardTurnAnalytics {
     }
 
     /// Sends the event unless `muted` (the DEBUG simulated reveal).
+    /// `row` is the catch on the card; its uuid is minted if it has none
+    /// (an old row the uploader hasn't reached yet).
     static func capture(source: Source, flipped: Bool, closeup: CardBackCloseup,
-                        hasTypeInfo: Bool, muted: Bool = false) {
+                        hasTypeInfo: Bool, row: Catch?, icao24: String?,
+                        muted: Bool = false) {
         guard !muted else { return }
         Analytics.capture("catch_card_turned",
                           properties(source: source, flipped: flipped,
-                                     closeup: closeup, hasTypeInfo: hasTypeInfo))
+                                     closeup: closeup, hasTypeInfo: hasTypeInfo,
+                                     catchUuid: row?.ensureServerUuid(),
+                                     icao24: row?.icao24 ?? icao24))
     }
 }
 

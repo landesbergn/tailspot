@@ -829,6 +829,9 @@ struct CatchRevealView: View {
     @State private var backTypeInfo: TypeInfo?
     @State private var backHistory: TypeHistory?
     @State private var backRegistration: String?
+    /// The catch row the back was loaded from, so `catch_card_turned` can
+    /// say which catch it was (`catch_uuid`).
+    @State private var backRow: Catch?
     @State private var backPlanespotters: PlanePhoto?
     @State private var backPlanespottersResolved = false
     @State private var backSummary: WikipediaSummary?
@@ -1084,6 +1087,7 @@ struct CatchRevealView: View {
         case .newestByIcao(let icao): row = newestCatch(icao24: icao)
         case .none: row = nil
         }
+        backRow = row
         if let row {
             backRegistration = row.registration
             backTypeInfo = TypeInfoStore.info(for: row)
@@ -1127,6 +1131,10 @@ struct CatchRevealView: View {
         CardTurnAnalytics.capture(source: .reveal, flipped: flipped,
                                   closeup: backModel.closeup,
                                   hasTypeInfo: backTypeInfo != nil,
+                                  // The loader's row once it lands (the early
+                                  // shell can turn before it exists).
+                                  row: loader?.row ?? backRow,
+                                  icao24: livePlane.icao24,
                                   muted: isSimulated)
     }
 

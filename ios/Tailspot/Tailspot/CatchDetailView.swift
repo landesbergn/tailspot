@@ -224,7 +224,8 @@ struct CatchDetailView: View {
         pendingTurnReport = false
         CardTurnAnalytics.capture(source: .detail, flipped: flipped,
                                   closeup: backModel.closeup,
-                                  hasTypeInfo: typeInfo != nil)
+                                  hasTypeInfo: typeInfo != nil,
+                                  row: first, icao24: first.icao24)
     }
 
     private func computeTypeFacts() {

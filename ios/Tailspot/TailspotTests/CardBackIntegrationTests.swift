@@ -64,6 +64,33 @@ nonisolated private enum Fx {
                                "closeup": "loading", "has_type_info": "false"])
     }
 
+    @Test func aTurnSaysWhichCatchItWas() {
+        let p = CardTurnAnalytics.properties(source: .detail, flipped: true,
+                                             closeup: .none, hasTypeInfo: false,
+                                             catchUuid: "C0FFEE00-0000-0000-0000-000000000001",
+                                             icao24: "ac5c1f")
+        #expect(strings(p)["catch_uuid"] == "C0FFEE00-0000-0000-0000-000000000001")
+        #expect(strings(p)["icao24"] == "ac5c1f")
+    }
+
+    @Test func anUnknownCatchIsOmittedNotBlank() {
+        let p = CardTurnAnalytics.properties(source: .reveal, flipped: true,
+                                             closeup: .none, hasTypeInfo: false,
+                                             catchUuid: "", icao24: nil)
+        #expect(p["catch_uuid"] == nil)
+        #expect(p["icao24"] == nil)
+    }
+
+    @MainActor @Test func aCatchUuidIsMintedOnceAndKept() {
+        let row = Catch(icao24: "ac5c1f", callsign: nil, model: nil, manufacturer: nil,
+                        caughtAt: Date(timeIntervalSince1970: 1_783_150_000),
+                        observerLat: 37.87, observerLon: -122.27, slantDistanceMeters: 9_800)
+        #expect(row.serverUuid == nil)
+        let minted = row.ensureServerUuid()
+        #expect(row.serverUuid == minted)
+        #expect(row.ensureServerUuid() == minted)
+    }
+
     @Test func aTurnToTheBackWaitsForTheCloseup() {
         #expect(!CardTurnAnalytics.sendsImmediately(flipped: true, closeup: .loading))
         #expect(CardTurnAnalytics.sendsImmediately(flipped: true, closeup: .none))

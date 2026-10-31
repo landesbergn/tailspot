@@ -2926,6 +2926,9 @@ struct ContentView: View {
                     wasTapped: pressTapped.contains(icao),
                     catchMode: pressCatchMode
                 )
+                // Minted before the save so `catch_performed` and every later
+                // event about this catch carry the same persisted `catch_uuid`.
+                row.ensureServerUuid()
                 modelContext.insert(row)
                 newCatches.append(row)
             }
