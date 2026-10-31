@@ -4,7 +4,7 @@
 //
 //  The collection view ("Hangar") — every catch the user has logged.
 //  Presented as a sheet from ContentView. Hosts the 3-segment shell
-//  (Sets / Recent / Trophies); each segment owns its own body and,
+//  (Sets / Catches / Trophies); each segment owns its own body and,
 //  where applicable, its own delete state. See `SetsBrowser`
 //  (SetsScreen.swift), `HangarRecentView`, `HangarTrophiesView`.
 //
