@@ -56,25 +56,36 @@ struct CompassCalibrationSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    Text(calibratedThisSession ? "Compass fixed" : "Your compass is off")
+                    // Every line that changes on recovery lays out both
+                    // states (`steadyText`), so the flip swaps words and
+                    // colours in place and nothing below it moves.
+                    steadyText("Your compass is off", "Compass fixed")
                         .brandDisplayFont()
                         .foregroundStyle(Brand.Color.textPrimary)
-                    Text(calibratedThisSession
-                         ? "Labels line up with planes again."
-                         : "Labels can land on the wrong plane until it\u{2019}s fixed.")
+                    steadyText("Labels may drift until you recalibrate.",
+                               "Labels line up with planes again.")
                         .font(Brand.Font.body)
                         .foregroundStyle(Brand.Color.textSecondary)
                         .padding(.top, 6)
 
-                    Figure8Animation()
-                        .frame(height: 120)
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, 32)
-                        .opacity(calibratedThisSession ? 0.35 : 1)
-                        .accessibilityHidden(true)
-                    Text(calibratedThisSession
-                         ? "Do this again if the warning comes back."
-                         : "Move your phone in a figure-8 two or three times.")
+                    // The figure-8 gives way to a green check in the same
+                    // frame: the one big "done" signal on the screen.
+                    ZStack {
+                        Figure8Animation()
+                            .opacity(calibratedThisSession ? 0 : 1)
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 72, weight: .semibold))
+                            .foregroundStyle(Brand.Color.alertNormal)
+                            .scaleEffect(calibratedThisSession ? 1 : 0.6)
+                            .opacity(calibratedThisSession ? 1 : 0)
+                    }
+                    .frame(height: 120)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 32)
+                    .accessibilityHidden(true)
+                    steadyText("Move your phone in a figure-8 two or three times.",
+                               "Do this again if the warning comes back.",
+                               alignment: .top)
                         .font(Brand.Font.cardTitle)
                         .foregroundStyle(calibratedThisSession
                                          ? Brand.Color.textSecondary
@@ -89,7 +100,7 @@ struct CompassCalibrationSheet: View {
                 .padding(.horizontal, 22)
                 .padding(.top, 4)
                 .padding(.bottom, 28)
-                .animation(.easeInOut(duration: 0.25), value: calibratedThisSession)
+                .animation(.spring(duration: 0.35, bounce: 0.3), value: calibratedThisSession)
             }
             .background(Brand.Color.bgPrimary.ignoresSafeArea())
             .toolbar {
@@ -122,6 +133,20 @@ struct CompassCalibrationSheet: View {
             // already-good readings arrive (rare but possible), don't
             // pretend they need to recalibrate.
             if accuracyIsGood { calibratedThisSession = true }
+        }
+    }
+
+    /// Both strings laid out in one cell, only the current one visible:
+    /// the cell is as tall as the longer of the two in either state.
+    private func steadyText(_ off: String, _ fixed: String,
+                            alignment: Alignment = .topLeading) -> some View {
+        ZStack(alignment: alignment) {
+            Text(off)
+                .opacity(calibratedThisSession ? 0 : 1)
+                .accessibilityHidden(calibratedThisSession)
+            Text(fixed)
+                .opacity(calibratedThisSession ? 1 : 0)
+                .accessibilityHidden(!calibratedThisSession)
         }
     }
 
@@ -163,14 +188,22 @@ struct CompassCalibrationSheet: View {
         )
     }
 
+    /// NO READING is set smaller than a number, so a hidden "±00°" holds
+    /// the row at the number's height: the first real reading doesn't
+    /// push anything.
     private func accuracyValue(tint: Color) -> some View {
-        Text(accuracyText ?? "NO READING")
-            .font(Brand.Font.mono(size: accuracyText == nil ? 20 : 34,
-                                  weight: .bold, relativeTo: .title))
-            .monospacedDigit()
-            .foregroundStyle(tint)
-            .contentTransition(.numericText())
-            .fixedSize()
+        ZStack(alignment: .leading) {
+            Text("±00°")
+                .font(Brand.Font.mono(size: 34, weight: .bold, relativeTo: .title))
+                .hidden()
+            Text(accuracyText ?? "NO READING")
+                .font(Brand.Font.mono(size: accuracyText == nil ? 20 : 34,
+                                      weight: .bold, relativeTo: .title))
+                .monospacedDigit()
+                .foregroundStyle(tint)
+                .contentTransition(.numericText())
+        }
+        .fixedSize()
     }
 
     @ViewBuilder
