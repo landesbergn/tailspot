@@ -37,7 +37,8 @@ struct CompassCalibrationSheetSnapshotTests {
         ("fixed", 8),
     ]
 
-    private func snapshot(accuracy: Double?, size: CGSize, as name: String) async {
+    private func snapshot(accuracy: Double?, size: CGSize, as name: String,
+                          dynamicType: DynamicTypeSize = .large) async {
         try? FileManager.default.createDirectory(at: Self.snapDir, withIntermediateDirectories: true)
         let location = LocationManager()
         location.heading = accuracy == -1 ? nil : 212
@@ -45,6 +46,7 @@ struct CompassCalibrationSheetSnapshotTests {
         // The sheet's content hosted as the root: a real `.sheet`
         // presentation draws blank offscreen. Height is the device's.
         let root = CompassCalibrationSheet(location: location)
+            .dynamicTypeSize(dynamicType)
             .preferredColorScheme(.dark)
         let bounds = CGRect(origin: .zero, size: size)
         let host = UIHostingController(rootView: root)
@@ -53,7 +55,7 @@ struct CompassCalibrationSheetSnapshotTests {
         window.overrideUserInterfaceStyle = .dark
         window.makeKeyAndVisible()
         // Let layout and the first location reads settle.
-        try? await Task.sleep(for: .seconds(1.2))
+        try? await Task.sleep(for: .seconds(0.4))
         let renderer = UIGraphicsImageRenderer(bounds: bounds)
         let png = renderer.pngData { _ in
             host.view.drawHierarchy(in: bounds, afterScreenUpdates: true)
@@ -68,6 +70,9 @@ struct CompassCalibrationSheetSnapshotTests {
                 await snapshot(accuracy: accuracy, size: size, as: "\(state)_\(device)")
             }
         }
+        // Largest accessibility size on SE: the readout must stack, not clip.
+        await snapshot(accuracy: 40, size: CGSize(width: 375, height: 667), as: "off_se_ax5",
+                       dynamicType: .accessibility5)
         #expect(true)
     }
 }

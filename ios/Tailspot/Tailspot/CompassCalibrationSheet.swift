@@ -72,7 +72,9 @@ struct CompassCalibrationSheet: View {
                         .padding(.top, 32)
                         .opacity(calibratedThisSession ? 0.35 : 1)
                         .accessibilityHidden(true)
-                    Text("Move your phone in a figure-8 two or three times.")
+                    Text(calibratedThisSession
+                         ? "Do this again if the warning comes back."
+                         : "Move your phone in a figure-8 two or three times.")
                         .font(Brand.Font.cardTitle)
                         .foregroundStyle(calibratedThisSession
                                          ? Brand.Color.textSecondary
@@ -102,6 +104,9 @@ struct CompassCalibrationSheet: View {
             if isGood, !calibratedThisSession {
                 calibratedThisSession = true
                 recoveredWhileOpen = true
+                // The haptic's VoiceOver counterpart: the head flips, but
+                // focus is rarely on it mid-figure-8.
+                AccessibilityNotification.Announcement("Compass fixed").post()
                 // Activation funnel: the user opened the sheet with a bad
                 // compass and moved it back under the good threshold — the
                 // coaching worked. (The onAppear seed below deliberately
@@ -132,22 +137,17 @@ struct CompassCalibrationSheet: View {
                 .font(Brand.Font.mono(size: 10, weight: .semibold, relativeTo: .caption2))
                 .tracking(1.2)
                 .foregroundStyle(Brand.Color.textTertiary)
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text(accuracyText ?? "NO READING")
-                    .font(Brand.Font.mono(size: accuracyText == nil ? 20 : 34,
-                                          weight: .bold, relativeTo: .title))
-                    .monospacedDigit()
-                    .foregroundStyle(tint)
-                    .contentTransition(.numericText())
-                Spacer(minLength: 0)
-                if accuracyIsGood {
-                    Label("Good", systemImage: "checkmark")
-                        .font(Brand.Font.body.weight(.semibold))
-                        .foregroundStyle(Brand.Color.alertNormal)
-                } else {
-                    Text("Aim for ±\(Int(Self.goodAccuracyThreshold))° or less")
-                        .font(Brand.Font.body)
-                        .foregroundStyle(Brand.Color.textSecondary)
+            // Side by side when it fits; stacked at large text sizes, where
+            // the scaled value and the hint can't share an SE's width.
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                    accuracyValue(tint: tint)
+                    Spacer(minLength: 0)
+                    accuracyStatus
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    accuracyValue(tint: tint)
+                    accuracyStatus
                 }
             }
         }
@@ -161,6 +161,29 @@ struct CompassCalibrationSheet: View {
             (accuracyText ?? "no reading")
             + (accuracyIsGood ? ", good" : ", aim for \(Int(Self.goodAccuracyThreshold)) degrees or less")
         )
+    }
+
+    private func accuracyValue(tint: Color) -> some View {
+        Text(accuracyText ?? "NO READING")
+            .font(Brand.Font.mono(size: accuracyText == nil ? 20 : 34,
+                                  weight: .bold, relativeTo: .title))
+            .monospacedDigit()
+            .foregroundStyle(tint)
+            .contentTransition(.numericText())
+            .fixedSize()
+    }
+
+    @ViewBuilder
+    private var accuracyStatus: some View {
+        if accuracyIsGood {
+            Label("Good", systemImage: "checkmark")
+                .font(Brand.Font.body.weight(.semibold))
+                .foregroundStyle(Brand.Color.alertNormal)
+        } else {
+            Text("Aim for ±\(Int(Self.goodAccuracyThreshold))° or less")
+                .font(Brand.Font.body)
+                .foregroundStyle(Brand.Color.textSecondary)
+        }
     }
 }
 
