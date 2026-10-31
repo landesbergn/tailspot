@@ -9,7 +9,9 @@ Git history + PLAN.md §9 remain the authoritative record.
 
 - Snapshot helpers no longer block the main thread: nine `RunLoop.main.run(until:)`
   settle spins became `await Task.sleep` of the same length. Local in-process
-  time, best of four: 154.7 s → 117.2 s.
+  time, best of four: 154.7 s → 117.2 s. The four suites that write the handle
+  into `UserDefaults.standard` nest under one `.serialized` parent so their
+  awaits can't interleave.
 - LargeHangarBudgetTests measures its 10k full `Trophies.inputs` pass once for the
   three checks that compare against it.
 - CI comment corrected: with `-parallel-testing-enabled NO` Swift Testing runs
