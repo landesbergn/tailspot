@@ -5,6 +5,17 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-10-31 — Level-up discovery: Naked Eye (branch `claude/spotting-discovery`)
+
+- Level-up vision: four bets from a strategy/data/code/screens workflow
+  (`docs/plans/2026-10-31-level-up-vision.html`).
+- Noah's direction: the game is seeing then catching, not being told where;
+  no sound kit; Inbound shelved. Sky-hint mocks (`docs/plans/sky-hints/`)
+  rejected as not a game.
+- Reward spotting: Naked Eye recommended (`docs/plans/naked-eye/`): unlabelled
+  presses resolve after the shutter, spot points by apparent size, an eye-chart
+  rank. Real SwiftUI renders over a real catch. Awaiting Noah's pick.
+
 ## 2026-10-31 — Faster local test runs (branch `claude/test-suite-speed`)
 
 - Snapshot helpers no longer block the main thread: nine `RunLoop.main.run(until:)`
