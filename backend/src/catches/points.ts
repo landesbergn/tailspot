@@ -70,7 +70,10 @@ export const UNKNOWN_RARITY_POINTS = 10;
  *       Learjet 23/24 and Jet Commander uncommon → rare. Same order.
  *   9 — full catalog tier review (2026-10-25): exceptional civilian fleets,
  *       military/heritage omissions, turboprop parity and cargo-aware tiers.
- *       Reload `typecodes` BEFORE rescore; review the dry-run score delta.
+ *       Reload `typecodes` BEFORE DEPLOYING this server, not just before the
+ *       rescore: a catch uploaded in a deploy→ingest gap is scored with the
+ *       old tiers but stamped 9, and the default rescore (`scoringVersion <
+ *       CURRENT`) never revisits it. Then rescore; review the dry-run delta.
  */
 export const CURRENT_SCORING_VERSION = 9;
 

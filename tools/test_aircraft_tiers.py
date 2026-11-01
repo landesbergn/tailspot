@@ -59,7 +59,9 @@ class AircraftTierTests(unittest.TestCase):
         self.assertEqual(CAT['R722']['rarity'], 'epic')
 
     def test_catalog_shape_and_preserved_unknown_floor(self):
-        self.assertEqual(len(CAT), 2613)
+        # A floor, not an exact count: a DOC 8643 refresh may add or drop
+        # designators legitimately; a near-empty catalog is the real failure.
+        self.assertGreater(len(CAT), 2500)
         for code, entry in CAT.items():
             with self.subTest(code=code):
                 self.assertIn(entry['rarity'], GEN['RARITY_POINTS'])
