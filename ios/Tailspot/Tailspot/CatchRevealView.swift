@@ -1101,7 +1101,7 @@ struct CatchRevealView: View {
                                 shareText: shareText,
                                 shareMessage: CatchShare.shareMessage(shareText: shareText),
                                 hasCatchPhoto: hasCatchPhoto,
-                                source: .reveal,
+                                source: shareSource,
                                 analyticsMuted: isSimulated)
             }
             // Under VoiceOver a resolved round's chips stay up (see
@@ -1136,9 +1136,14 @@ struct CatchRevealView: View {
             voiceOver: voiceOverEnabled)
     }
 
+    /// A page of a multi-catch run still reports as the multi reveal.
+    private var shareSource: CatchShareAnalytics.Source {
+        sequence == nil ? .reveal : .multiReveal
+    }
+
     private func openShare() {
         guard shareAvailable else { return }
-        CatchShareAnalytics(plane: livePlane, hasCatchPhoto: hasCatchPhoto, source: .reveal,
+        CatchShareAnalytics(plane: livePlane, hasCatchPhoto: hasCatchPhoto, source: shareSource,
                             muted: isSimulated)
             .sheetOpened()
         showShareSheet = true

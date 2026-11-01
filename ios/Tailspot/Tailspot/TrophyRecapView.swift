@@ -202,7 +202,9 @@ struct TrophyRecapView: View {
 
     private func clamp(_ x: Double) -> Double { min(1, max(0, x)) }
 
-    /// Smoothstep of `x` between `a` and `b` — 0 before, 1 after.
+    /// Smoothstep of `x` between `a` and `b` — 0 before, 1 after. Kept
+    /// local (not the module `ss`) for its `b > a` guard: a late row's
+    /// window can collapse to zero width at t = 1.
     private func ss(_ a: Double, _ b: Double, _ x: Double) -> Double {
         guard b > a else { return x >= b ? 1 : 0 }
         let u = clamp((x - a) / (b - a))

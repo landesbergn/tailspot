@@ -70,7 +70,7 @@ struct MultiCatchReveal: View {
 
     private var onSummary: Bool { currentPage >= entries.count }
 
-    // MARK: - Points (running totals based on revealedIndex)
+    // MARK: - Points (the run's totals)
 
     /// What the run is worth, counting only fresh tails. Each fresh card
     /// earns exactly what it would on its own (base + first-of-type); there
@@ -136,7 +136,7 @@ struct MultiCatchReveal: View {
     }
 
     /// One-sentence VoiceOver summary of the whole multi-catch, posted when
-    /// the last card lands (mirrors the receipt's math).
+    /// the summary card appears (mirrors the ledger's math).
     static func announcement(for t: Tally) -> String {
         var parts = ["\(t.freshCount) planes caught"]
         if t.duplicateCount > 0 { parts.append("\(t.duplicateCount) already in hangar") }
@@ -190,7 +190,7 @@ struct MultiCatchReveal: View {
         return CatchRevealView(
             plane: entry.plane,
             entryNumber: Self.entryNumbers(entries, lastEntryNumber: lastEntryNumber)[i],
-            onDismiss: { advance() },
+            onDismiss: { advance(from: i) },
             // Before the last plane the second exit skips to the total; on
             // the last plane it is the real View in Hangar.
             onViewInHangar: sequence.isLast ? onViewInHangar : { goToSummary() },
@@ -199,7 +199,10 @@ struct MultiCatchReveal: View {
         )
     }
 
-    private func advance() {
+    /// Keyed to the page that asked, so a second tap on the outgoing page
+    /// during its slide-out can't skip the next plane.
+    private func advance(from i: Int) {
+        guard i == page else { return }
         page += 1
         playChime(for: page)
     }

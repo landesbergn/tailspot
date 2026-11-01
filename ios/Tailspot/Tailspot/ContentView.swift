@@ -1056,9 +1056,9 @@ struct ContentView: View {
             )
             .presentationBackground(.clear)
         }
-        // Multi-catch reveal — N≥2 catch cards staggered in with a
-        // chime+haptic per fresh card, MULTI-CATCH banner climbing across
-        // the reveal, ALREADY CAUGHT stamps inline on duplicates.
+        // Multi-catch reveal — N≥2 planes play the single reveal in turn
+        // (chime+haptic per fresh plane), then a summary card with the
+        // run's ledger; duplicates show their own already-caught reveal.
         // T11 routes every (fresh+dup) total ≥ 2 through here from
         // `presentReveal`.
         .fullScreenCover(item: $pendingMultiReveal) { multi in
