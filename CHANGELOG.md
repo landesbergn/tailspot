@@ -17,10 +17,6 @@ Git history + PLAN.md §9 remain the authoritative record.
 - Multi-catch rebuilt: each plane plays the real single-catch reveal in turn
   (progress strip, chime ladder), then a summary card in the reveal's style.
   The magenta fan of tilted holo cards is gone.
-- Level-up vision (`docs/plans/2026-10-31-level-up-vision.html`): four ranked
-  bets from a strategy/data/code/screens workflow. Noah's steer: seeing then
-  catching, not being told where; no sound kit. Hint concepts mocked on real
-  sky photos in `docs/plans/sky-hints/`; awaiting Noah's pick.
 - Big swings left for Noah's call (B612 on artboards, onboarding back chevron,
   create-sheet rebuild, Hangar glyph, 1ST badge). Review doc in `docs/reviews/`.
 
