@@ -182,7 +182,7 @@ struct SetsRarityConsistencyTests {
         ("ga-r44",     "R44",  Rarity.uncommon),    // was .rare
         // Heritage (typecoded)
         ("h-dc3",      "DC3",  Rarity.rare),         // vintage classic → rare
-        ("h-sofia",    "B74S", Rarity.rare),         // was .legendary
+        ("h-sofia",    "B74S", Rarity.legendary),    // exceptional surviving 747SP fleet
     ] as [(String, String, Rarity)])
     func setEntry_rarityMatchesTable(_ entryID: String, _ typecode: String, _ expected: Rarity) {
         // Find the entry in the catalog.

@@ -5,6 +5,13 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-10-25 — Full catalog tier decision pass (local, unshipped)
+
+- Reviewed all 2,613 catalog rows: 309 tier changes and 187 category corrections across 348 entries. BelugaXL and Dreamlifter are Legendary; A300-600 becomes Rare and 727-200 Epic. Retained unsupported candidates conservatively; live catch-frequency calibration remains unavailable.
+- Fixed overly broad airliner prefixes and military-role omissions; removed dead typecode overrides. Generator and bundled catalog agree. Scoring version 9 requires reference ingest before rescore; production untouched.
+- Offline checks: 5 passed. Backend typecheck passed; 610 tests passed, one loopback socket test blocked by sandbox EPERM. iOS tests blocked during PostHog package resolution by unavailable network/DNS.
+- Full decisions and limitations: [tier audit](docs/reviews/2026-10-25-tier-audit.md).
+
 ## 2026-10-31 — Beauty pass (branch `claude/beauty-pass-2026-10-31`)
 
 - Seven per-surface design audits from rendered screens, skeptic-verified; ~35

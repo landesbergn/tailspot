@@ -68,8 +68,11 @@ export const UNKNOWN_RARITY_POINTS = 10;
  *       reload `typecodes`, then rescore.
  *   8 — classic jets (2026-10-11): T-33 rare → epic; Sabreliner (SBR1, SBR2),
  *       Learjet 23/24 and Jet Commander uncommon → rare. Same order.
+ *   9 — full catalog tier review (2026-10-25): exceptional civilian fleets,
+ *       military/heritage omissions, turboprop parity and cargo-aware tiers.
+ *       Reload `typecodes` BEFORE rescore; review the dry-run score delta.
  */
-export const CURRENT_SCORING_VERSION = 8;
+export const CURRENT_SCORING_VERSION = 9;
 
 /** Type guard for a known rarity tier string. */
 function isRarity(value: string | null | undefined): value is Rarity {
