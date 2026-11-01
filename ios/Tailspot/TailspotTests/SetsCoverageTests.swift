@@ -304,6 +304,8 @@ struct SetsCoverageTests {
         ("BUSH", "Rainbow Skyreach", "BushCat"),
         ("C337", "Cessna", "337 Super Skymaster"),
         ("SLH4", "Sling Aircraft", "4 High Wing"),
+        // Public catalog coverage addition validated 2026-11-01.
+        ("GLF2", "Gulfstream", "II"),
     ]
 
     private func mk(_ row: (String, String, String)) -> Catch {
@@ -463,6 +465,7 @@ struct SetsCoverageTests {
             (("BUSH", "Rainbow Skyreach", "BushCat"), "fam-sport-classics", "fsc-bushcat"),
             (("C337", "Cessna", "337 Super Skymaster"), "fam-cessna", "fc337"),
             (("SLH4", "Sling Aircraft", "4 High Wing"), "fam-sport-classics", "fsc-sling-high-wing"),
+            (("GLF2", "Gulfstream", "II"), "fam-gulfstream", "fg-ii"),
         ]
 
         for (row, setID, entryID) in assignments {
@@ -713,6 +716,12 @@ struct SetsCoverageTests {
             #expect(!CardSets.matches(key: CardSets.matchKey(for: adjacentAvroRJ), entry: avroRJ85Entry),
                     "An adjacent Avro RJ variant must not fill the RJ85 slot")
         }
+
+        let gulfstreamIIEntry = CardSets.families.first { $0.id == "fam-gulfstream" }!
+            .entries.first { $0.id == "fg-ii" }!
+        let gulfstreamIV = mk(("GLF4", "Gulfstream", "IV"))
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: gulfstreamIV), entry: gulfstreamIIEntry),
+                "A Gulfstream IV must not fill the Gulfstream II slot")
 
         let bushCatEntry = sportSet.entries.first { $0.id == "fsc-bushcat" }!
         #expect(!CardSets.matches(key: CardSets.matchKey(for: mk(("BMAN", "Aak", "Bushman"))),
