@@ -165,8 +165,7 @@ class CatchUploader {
     /// Assigns the row's `serverUuid` if it has none (the uploader would do
     /// the same on its first attempt), so the hold has a stable key.
     static func holdForGuess(_ row: Catch, context: ModelContext) {
-        if row.serverUuid == nil { row.serverUuid = UUID().uuidString }
-        guard let key = row.serverUuid else { return }
+        let key = row.ensureServerUuid()
         guessHolds.hold(key)
         Log.ui.info("CatchUploader: holding \(row.icao24, privacy: .public) for its route guess")
         Task {
@@ -283,11 +282,9 @@ class CatchUploader {
             // after that the model has simply left its context.
             if Self.isGone(catchRow) { continue }
             let icao = catchRow.icao24
-            // Assign a stable UUID for this catch if it doesn't have one yet.
-            if catchRow.serverUuid == nil {
-                catchRow.serverUuid = UUID().uuidString
-            }
-            guard let uuid = catchRow.serverUuid else { continue }
+            // Assign a stable UUID for this catch if it doesn't have one yet
+            // (new catches already got one at the catch moment).
+            let uuid = catchRow.ensureServerUuid()
 
             // The pose the phone held at shutter press, read back out of the
             // row's capture-diagnostics blob. Rows written before the app
