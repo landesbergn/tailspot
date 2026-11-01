@@ -267,6 +267,18 @@ nonisolated enum SteeringPill {
         }
     }
 
+    /// SF Symbol for the pill's leading arrow, so the one instruction
+    /// (which way to move) has a shape and isn't only the middle third of
+    /// a flat string.
+    static func glyph(_ hint: SteeringHint) -> String {
+        switch hint.direction {
+        case .left: "arrow.left"
+        case .right: "arrow.right"
+        case .behind: "arrow.uturn.backward"
+        case .ahead: hint.elevationDeltaDeg >= 0 ? "arrow.up" : "arrow.down"
+        }
+    }
+
     /// "PLANE IN RANGE · TURN LEFT · 4 KM" — mono ALL-CAPS, the empty-sky
     /// pill's own register. Spaces inside each segment are non-breaking, so
     /// when the pill wraps at accessibility type sizes it breaks at a " · "

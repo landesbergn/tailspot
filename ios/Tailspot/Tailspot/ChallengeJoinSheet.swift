@@ -200,36 +200,40 @@ struct ChallengeJoinSheet: View {
     private func preview(_ p: ChallengeInvitePreview, terminal: Phase.Terminal?) -> some View {
         let c = p.challenge
         return VStack(alignment: .leading, spacing: 16) {
-            VStack(alignment: .leading, spacing: 10) {
-                Text(c.name)
-                    .brandDisplayFont()
-                    .foregroundStyle(Brand.Color.textPrimary)
-                Text("@\(c.creatorHandle) invited you")
-                    .font(Brand.Font.body)
-                    .foregroundStyle(Brand.Color.textSecondary)
-                detailRow("WINDOW", ChallengeCopy.windowLine(startsAt: c.startsAt, endsAt: c.endsAt))
-                detailRow("LENGTH", ChallengeCopy.durationLabel(c.durationPreset))
+            VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(c.name)
+                        .brandDisplayFont()
+                        .foregroundStyle(Brand.Color.textPrimary)
+                    Text("@\(c.creatorHandle) invited you")
+                        .font(Brand.Font.body)
+                        .foregroundStyle(Brand.Color.textSecondary)
+                }
+                // Length rides on the window line instead of its own row.
+                detailRow("WINDOW", "\(ChallengeCopy.windowLine(startsAt: c.startsAt, endsAt: c.endsAt)) · \(ChallengeCopy.durationLabel(c.durationPreset))")
                 detailRow(c.status == .upcoming ? "STARTS" : "TIME LEFT",
                           c.status == .upcoming
                             ? ChallengeCopy.relativeMoment(c.startsAt, now: model.now())
                             : ChallengeTiming.timeRemainingCopy(until: c.endsAt, now: model.now()).capitalized)
-                detailRow("WHO'S IN", p.participants.isEmpty
+                detailRow("SPOTTERS", p.participants.isEmpty
                           ? "Nobody yet"
                           : "\(p.participants.map { "@\($0)" }.joined(separator: ", ")) (\(p.participants.count) of \(c.maxParticipants))")
+                if terminal == nil {
+                    // The rules are a footnote to this card, not a card of
+                    // their own, so the window is stated once.
+                    Rectangle()
+                        .fill(Brand.Color.bgPrimary.opacity(0.5))
+                        .frame(height: 1)
+                    Text(ChallengeCopy.ruleCard)
+                        .font(Brand.Font.caption)
+                        .foregroundStyle(Brand.Color.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             // Full width: the card used to hug its longest line.
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(18)
             .glassEffect(ChallengeStyle.glass, in: .rect(cornerRadius: Brand.Radius.card))
-
-            if terminal == nil {
-                Text(ChallengeCopy.ruleCard(startsAt: c.startsAt, endsAt: c.endsAt))
-                    .font(Brand.Font.body)
-                    .foregroundStyle(Brand.Color.textSecondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(16)
-                    .background(Brand.Color.bgElevated.opacity(0.75), in: .rect(cornerRadius: Brand.Radius.card))
-            }
 
             if p.needsHandle && !claimedInline && terminal == nil {
                 handleClaim
@@ -246,7 +250,7 @@ struct ChallengeJoinSheet: View {
     }
 
     private func detailRow(_ label: String, _ value: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 4) {
             Text(label)
                 .font(Brand.Font.mono(size: 9, weight: .semibold, relativeTo: .caption2))
                 .tracking(1.1)
@@ -293,7 +297,7 @@ struct ChallengeJoinSheet: View {
                         ProgressView().scaleEffect(0.85).tint(Brand.Color.bgPrimary)
                     } else {
                         Text("Join")
-                            .font(Brand.Font.mono(size: 15, weight: .bold, relativeTo: .subheadline))
+                            .font(Brand.Font.button)
                     }
                     Spacer()
                 }
@@ -342,7 +346,7 @@ struct ChallengeJoinSheet: View {
 
     private func primaryLabel(_ title: String, enabled: Bool) -> some View {
         Text(title)
-            .font(Brand.Font.mono(size: 15, weight: .bold, relativeTo: .subheadline))
+            .font(Brand.Font.button)
             .foregroundStyle(enabled ? Brand.Color.bgPrimary : Brand.Color.textTertiary)
             .frame(maxWidth: .infinity)
             .frame(minHeight: 46)

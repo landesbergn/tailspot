@@ -179,7 +179,9 @@ struct TailCard: View {
             // primary ink). Recent feed only, and only when a name
             // resolves.
             if showPoints, let model {
-                HStack(spacing: 7) {
+                // Baseline-aligned so the sparkle trails the FIRST line of
+                // a wrapped name instead of floating between the two.
+                HStack(alignment: .firstTextBaseline, spacing: 7) {
                     // Up to two lines, with a touch of shrink before
                     // the ellipsis: about 8% of catches have names past
                     // one line ("Bombardier BD-100 Challenger 350",
@@ -209,6 +211,13 @@ struct TailCard: View {
                                     Brand.Color.ledgerGold.opacity(0.35), lineWidth: 1
                                 )
                             )
+                            // `alignmentGuide` says which point of this view
+                            // lines up with the text's first baseline: a
+                            // spot 4 pt below the disc's center, which
+                            // centers the disc on the line's x-height.
+                            .alignmentGuide(.firstTextBaseline) { d in
+                                d[VerticalAlignment.center] + 4
+                            }
                     }
                 }
             }

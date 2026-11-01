@@ -565,7 +565,11 @@ struct OnboardingFlow: View {
     }
 
     private var primaryButton: some View {
-        Button {
+        // Inactive = the handle step before a valid handle is typed. It
+        // reads as a quiet elevated slab with a dim label, not a faded
+        // cyan one (cyan at 60% over navy looked broken, not waiting).
+        let inactive = step == 2 && !handleIsValid
+        return Button {
             advance()
         } label: {
             HStack {
@@ -579,13 +583,17 @@ struct OnboardingFlow: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
-            .foregroundStyle(.black.opacity(0.88))
-            .background(Brand.Color.cyan, in: .rect(cornerRadius: Brand.Radius.card))
-            .shadow(color: Brand.Color.cyan.opacity(0.30), radius: 16, y: 6)
+            .foregroundStyle(inactive ? Brand.Color.textSecondary : .black.opacity(0.88))
+            // Buttons sit on the `row` radius (Brand.Radius doc); no glow.
+            .background(inactive ? Brand.Color.bgElevated : Brand.Color.cyan,
+                        in: .rect(cornerRadius: Brand.Radius.row))
+            // A hairline edge so the inactive slab still reads as a button.
+            .overlay(RoundedRectangle(cornerRadius: Brand.Radius.row)
+                .strokeBorder(Brand.Color.textPrimary.opacity(inactive ? 0.10 : 0), lineWidth: 1))
         }
         .buttonStyle(.plain)
-        .disabled(step == 2 && !handleIsValid)
-        .opacity((step == 2 && !handleIsValid) ? 0.6 : 1)
+        .disabled(inactive)
+        .animation(.easeOut(duration: 0.15), value: handleIsValid)
     }
 
     private var primaryButtonTitle: String {

@@ -231,9 +231,16 @@ struct ChallengesHub: View {
         if !model.hasLoadedList {
             loading
         } else if let error = model.listError, model.open.isEmpty, model.history.isEmpty {
-            notice(title: "Couldn't load your challenges", body: ChallengeCopy.message(for: error))
-            Button { Task { await refresh() } } label: { primaryButtonLabel("Try again") }
-                .buttonStyle(.plain)
+            // Retry lives inside the notice card, like the empty state's
+            // actions, and is secondary so it doesn't shout over the problem.
+            VStack(alignment: .leading, spacing: 18) {
+                noticeText(title: "Couldn't load your challenges", body: ChallengeCopy.message(for: error))
+                Button { Task { await refresh() } } label: { secondaryButtonLabel("Try again") }
+                    .buttonStyle(.plain)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(18)
+            .glassEffect(ChallengeStyle.glass, in: .rect(cornerRadius: Brand.Radius.card))
         } else if model.open.isEmpty && model.history.isEmpty {
             emptyState
         } else {
@@ -270,6 +277,14 @@ struct ChallengesHub: View {
     }
 
     private func notice(title: String, body: String) -> some View {
+        noticeText(title: title, body: body)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(18)
+            .glassEffect(ChallengeStyle.glass, in: .rect(cornerRadius: Brand.Radius.card))
+    }
+
+    /// The heading + body pair inside a notice card, without the card.
+    private func noticeText(title: String, body: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
                 .font(Brand.Font.cardTitle)
@@ -278,9 +293,6 @@ struct ChallengesHub: View {
                 .font(Brand.Font.body)
                 .foregroundStyle(Brand.Color.textSecondary)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(18)
-        .glassEffect(ChallengeStyle.glass, in: .rect(cornerRadius: Brand.Radius.card))
     }
 
     // MARK: - Empty state
@@ -431,9 +443,13 @@ struct ChallengesHub: View {
             ChallengeDetailScreen(id: s.id)
         } label: {
             HStack(spacing: 12) {
+                // A circle, like the placement discs on the other rows, so
+                // the leading column keeps one shape.
                 ZStack {
-                    RoundedRectangle(cornerRadius: Brand.Radius.chip)
-                        .fill(Brand.Color.cyan.opacity(0.13))
+                    Circle()
+                        .fill(Brand.Color.cyan.opacity(0.16))
+                    Circle()
+                        .strokeBorder(Brand.Color.cyan.opacity(0.5), lineWidth: 1)
                     Image(systemName: "clock")
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(Brand.Color.cyan)

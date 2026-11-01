@@ -67,9 +67,9 @@ struct CatchShareCard: View {
                 Image(systemName: "checkmark.seal.fill")
                     .font(.system(size: 11))
                     .foregroundStyle(Brand.Color.cyan)
-                Text(CatchShare.footerText)
+                CatchShare.footerLabel(tracking: 1.5, size: 10)
                     .font(Brand.Font.mono(size: 10, weight: .semibold))
-                    .tracking(1.5)
+                    .accessibilityLabel(CatchShare.footerText)
                     // Tertiary grey disappears on a bright sky backdrop.
                     .foregroundStyle(opaque ? Brand.Color.textTertiary : Brand.Color.textSecondary)
             }
@@ -104,7 +104,19 @@ enum CatchShare {
     /// and Save send the image with no text, so without the address in the
     /// pixels a catch seen on Instagram (or a re-posted save) has no way
     /// back to the app. Lowercase because that's how people type a URL.
-    static let footerText = "CAUGHT ON TAILSPOT · tailspot.app"
+    static let footerText = footerLead + footerURL
+    static let footerLead = "CAUGHT ON TAILSPOT · "
+    static let footerURL = "tailspot.app"
+
+    /// The footer as drawn: the caps half tracked out, the lowercase URL
+    /// left at normal spacing (letterspaced lowercase reads as gappy
+    /// "t a i l s p o t"). Interpolating one `Text` inside another keeps
+    /// each part's own styling in a single line of text.
+    static func footerLabel(tracking: CGFloat, size: CGFloat) -> Text {
+        // `monoTight` pulls the ".com"-style dot's empty half-cell in, so
+        // the URL reads "tailspot.app", not "tailspot. app".
+        Text("\(Text(footerLead).tracking(tracking))\(Text(Brand.monoTight(footerURL, size: size)))")
+    }
 
     /// Share-sheet preview title ("Caught UAL2476 · Boeing 737-900 on
     /// Tailspot"), also the first line of `shareMessage`. Shared by the
@@ -362,9 +374,9 @@ struct CatchShareCompactCard: View {
             Image(systemName: "checkmark.seal.fill")
                 .font(.system(size: 10))
                 .foregroundStyle(Brand.Color.cyan)
-            Text(CatchShare.footerText)
+            CatchShare.footerLabel(tracking: 1.5, size: 9)
                 .font(Brand.Font.mono(size: 9, weight: .semibold))
-                .tracking(1.5)
+                .accessibilityLabel(CatchShare.footerText)
                 .foregroundStyle(Brand.Color.textTertiary)
         }
     }
@@ -441,10 +453,17 @@ struct CatchShareCompactCard: View {
                     Text("ROUTE")
                         .font(.system(size: 9.5 * scale, weight: .semibold, design: .monospaced))
                         .tracking(1.5).foregroundColor(RP.faint)
-                    Text(route)
-                        .font(.system(size: 21 * scale, weight: .semibold, design: .monospaced))
-                        .foregroundColor(RP.ink)
-                        .lineLimit(1).minimumScaleFactor(0.5)
+                    // Codes in ink, a smaller muted arrow between them, so
+                    // "SUU → PHIK" reads as two airports like the story card.
+                    // One Text (interpolated parts), not an HStack, so the
+                    // whole route shrinks as a unit instead of each code
+                    // scaling or truncating on its own.
+                    Text("\(Text(plane.originIcao ?? ""))\(Text("\u{2009}→\u{2009}").font(.system(size: 15 * scale, weight: .regular, design: .monospaced)).foregroundColor(RP.muted).baselineOffset(1.5 * scale))\(Text(plane.destIcao ?? ""))")
+                    .font(.system(size: 21 * scale, weight: .semibold, design: .monospaced))
+                    .foregroundColor(RP.ink)
+                    .lineLimit(1).minimumScaleFactor(0.7)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(Text(route))
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             } else {

@@ -93,6 +93,9 @@ struct SetsScreen: View {
 struct SetCompletionCard: View {   // internal: rendered by SetsRingSnapshotTests
     let set: CardSet
     let progress: (caught: Int, total: Int)
+    /// The trailing chevron says "tap for detail". The empty Hangar's sets
+    /// preview reuses this card as a non-tappable teaser, so it hides it.
+    var showsChevron: Bool = true
 
     var body: some View {
         let frac = progress.total == 0 ? 0 : Double(progress.caught) / Double(progress.total)
@@ -101,18 +104,12 @@ struct SetCompletionCard: View {   // internal: rendered by SetsRingSnapshotTest
             CompletionRing(progress: frac, tint: Brand.Color.cyan, lineWidth: 5, diameter: 44)
 
             VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
-                    Text(set.title)
-                        .font(Brand.Font.cardTitle)
-                        .foregroundStyle(Brand.Color.textPrimary)
-                        .lineLimit(1)
-                    if complete {
-                        Image(systemName: "checkmark.seal.fill")
-                            .font(.system(size: 13))
-                            .foregroundStyle(Brand.Color.alertNormal)
-                            .accessibilityHidden(true)
-                    }
-                }
+                // No separate "complete" badge: the ring's checkmark
+                // already carries that state (one mark per fact).
+                Text(set.title)
+                    .font(Brand.Font.cardTitle)
+                    .foregroundStyle(Brand.Color.textPrimary)
+                    .lineLimit(1)
                 Text("\(progress.caught) of \(progress.total) variants")
                     .font(Brand.Font.mono(size: 11, weight: .semibold, relativeTo: .caption2))
                     .foregroundStyle(Brand.Color.textTertiary)
@@ -121,10 +118,12 @@ struct SetCompletionCard: View {   // internal: rendered by SetsRingSnapshotTest
 
             Spacer(minLength: 4)
 
-            Image(systemName: "chevron.right")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(Brand.Color.textTertiary.opacity(0.6))
-                .accessibilityHidden(true)
+            if showsChevron {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Brand.Color.textTertiary.opacity(0.6))
+                    .accessibilityHidden(true)
+            }
         }
         // Same card chrome as TailCard so the Sets browser and the Recent
         // feed read as one design language.
@@ -373,7 +372,7 @@ private extension Rarity {
 
 // MARK: - Reusable progress views
 
-/// Circular completion ring with a centered percentage.
+/// Circular completion ring with a centered percentage (a checkmark at 100%).
 struct CompletionRing: View {
     let progress: Double          // 0…1
     var tint: Color = Brand.Color.cyan
@@ -407,15 +406,25 @@ struct CompletionRing: View {
                 .trim(from: 0, to: max(0.0001, min(1, progress)))
                 .stroke(tint, style: .init(lineWidth: lineWidth, lineCap: .round))
                 .rotationEffect(.degrees(-90))
-            Text("\(Int((progress * 100).rounded()))%")
-                .font(Brand.Font.mono(fixedSize: (lineWidth >= 8 ? 18 : 13) * ringScale,
-                                      weight: .heavy))
-                .foregroundStyle(Brand.Color.textPrimary)
-                .monospacedDigit()
-                // Backstop only (Bold Text swaps in a wider face): never
-                // wrap the percentage, shrink it instead.
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
+            if progress >= 1 {
+                // A full ring gets a checkmark instead of "100%": four
+                // characters crammed the ring's inner edge, and the check
+                // is the one complete-state mark (no extra badge beside it).
+                Image(systemName: "checkmark")
+                    .font(.system(size: (lineWidth >= 8 ? 20 : 15) * ringScale, weight: .bold))
+                    .foregroundStyle(tint)
+                    .accessibilityLabel("100 percent")
+            } else {
+                Text("\(Int((progress * 100).rounded()))%")
+                    .font(Brand.Font.mono(fixedSize: (lineWidth >= 8 ? 18 : 13) * ringScale,
+                                          weight: .heavy))
+                    .foregroundStyle(Brand.Color.textPrimary)
+                    .monospacedDigit()
+                    // Backstop only (Bold Text swaps in a wider face): never
+                    // wrap the percentage, shrink it instead.
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+            }
         }
         .frame(width: diameter * ringScale, height: diameter * ringScale)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: progress)

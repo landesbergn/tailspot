@@ -132,7 +132,17 @@ struct CompassCalibrationSheet: View {
             // Seed the latch — if the user opens the sheet when
             // already-good readings arrive (rare but possible), don't
             // pretend they need to recalibrate.
-            if accuracyIsGood { calibratedThisSession = true }
+            // Seeded WITHOUT animation: arriving already-good isn't a
+            // recovery to celebrate, and animating the flip on the first
+            // frame sprang the instruction in from a half-laid-out column
+            // over the readout. A Transaction is the per-change animation
+            // context; `disablesAnimations` turns off the `.animation(_:value:)`
+            // modifier above for just this one write.
+            if accuracyIsGood {
+                var seed = Transaction()
+                seed.disablesAnimations = true
+                withTransaction(seed) { calibratedThisSession = true }
+            }
         }
     }
 
@@ -140,14 +150,23 @@ struct CompassCalibrationSheet: View {
     /// the cell is as tall as the longer of the two in either state.
     private func steadyText(_ off: String, _ fixed: String,
                             alignment: Alignment = .topLeading) -> some View {
+        // Each Text claims the full width and its natural height
+        // (`fixedSize(horizontal: false, vertical: true)` = wrap to the
+        // width, never truncate or squeeze), so neither state can collapse
+        // into a narrow column and spill over the readout below.
         ZStack(alignment: alignment) {
             Text(off)
+                .frame(maxWidth: .infinity, alignment: alignment)
+                .fixedSize(horizontal: false, vertical: true)
                 .opacity(calibratedThisSession ? 0 : 1)
                 .accessibilityHidden(calibratedThisSession)
             Text(fixed)
+                .frame(maxWidth: .infinity, alignment: alignment)
+                .fixedSize(horizontal: false, vertical: true)
                 .opacity(calibratedThisSession ? 1 : 0)
                 .accessibilityHidden(!calibratedThisSession)
         }
+        .frame(maxWidth: .infinity, alignment: alignment)
     }
 
     // MARK: - Readout

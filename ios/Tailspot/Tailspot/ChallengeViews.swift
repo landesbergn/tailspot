@@ -270,10 +270,9 @@ nonisolated enum ChallengeCopy {
         return "Race me on Tailspot — \(name), \(durationLabel(preset)) \(when)."
     }
 
-    /// The join sheet's rule card.
-    static func ruleCard(startsAt: Date, endsAt: Date, calendar: Calendar = .current) -> String {
-        "Everything you catch between \(dayAndTime(startsAt, calendar: calendar)) and \(dayAndTime(endsAt, calendar: calendar)) counts, including planes you already caught since it started. Standard Tailspot points. Only your handle, points and catch models are shared."
-    }
+    /// The join sheet's rules footnote. It sits under the WINDOW row in the
+    /// same card, so it says "this window" instead of repeating the times.
+    static let ruleCard = "Everything you catch in this window counts, including planes you already caught since it started. Standard Tailspot points. Only your handle, points and catch models are shared."
 
     /// Plain sentences for every error a screen can show.
     static func message(for error: ChallengesError) -> String {

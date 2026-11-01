@@ -55,7 +55,7 @@ struct HandleClaimCard: View {
             }
             Button { Task { await claim() } } label: {
                 Text("Claim handle")
-                    .font(Brand.Font.mono(size: 13, weight: .bold, relativeTo: .footnote))
+                    .font(Brand.Font.button)
                     .foregroundStyle(isValid ? Brand.Color.cyan : Brand.Color.textTertiary)
                     .frame(minHeight: 44)
                     .contentShape(Rectangle())

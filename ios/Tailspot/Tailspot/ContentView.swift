@@ -681,8 +681,8 @@ struct ContentView: View {
                     // Keep the loud compass banner off the screen edges
                     // without narrowing the notice/toast region below it.
                     // Asymmetric since the account button took the top
-                    // right corner (2026-09-15): the badge is ~307 pt wide
-                    // at default type (B612 Mono subtitle), so a symmetric
+                    // right corner (2026-09-15): the badge was ~307 pt wide
+                    // at default type with its old mono subtitle, so a symmetric
                     // 60 would wrap it on every phone, and a symmetric 16
                     // slides it 13 pt under the button. 16 + 60 leaves
                     // 317 pt: fits on a 393 pt screen, clears the button,
@@ -691,16 +691,18 @@ struct ContentView: View {
                     // test reads the same ones this view lays out with.
                     .padding(.leading, TopStripLayout.bannerLeading)
                     .padding(.trailing, TopStripLayout.bannerTrailing)
-                    // Preserve the notices' old 60 pt resting offset when no
-                    // compass/zoom affordance is showing: 12 outer padding +
-                    // 40 reserved here + 8 stack spacing = 60. When an
-                    // affordance is taller, its measured height wins.
-                    .frame(minHeight: 40, alignment: .top)
+                    // Preserve the notices' 60 pt resting offset when no
+                    // compass/zoom affordance is showing: 8 outer padding
+                    // (shared with the account button, so the banner's top
+                    // lines up with it) + 44 reserved here + 8 stack
+                    // spacing = 60. When an affordance is taller, its
+                    // measured height wins.
+                    .frame(minHeight: 44, alignment: .top)
 
                     topToastBanner
                     Spacer()
                 }
-                .padding(.top, 12)
+                .padding(.top, TopStripLayout.bannerTopPadding)
                 .animation(.easeInOut(duration: 0.2), value: isHeadingAccuracyBad)
                 .animation(.easeInOut(duration: 0.2), value: zoom > 1.01)
                 // One-shot warning haptic the moment the compass latches
@@ -1054,9 +1056,9 @@ struct ContentView: View {
             )
             .presentationBackground(.clear)
         }
-        // Multi-catch reveal — N≥2 catch cards staggered in with a
-        // chime+haptic per fresh card, MULTI-CATCH banner climbing across
-        // the reveal, ALREADY CAUGHT stamps inline on duplicates.
+        // Multi-catch reveal — N≥2 planes play the single reveal in turn
+        // (chime+haptic per fresh plane), then a summary card with the
+        // run's ledger; duplicates show their own already-caught reveal.
         // T11 routes every (fresh+dup) total ≥ 2 through here from
         // `presentReveal`.
         .fullScreenCover(item: $pendingMultiReveal) { multi in
@@ -3719,14 +3721,19 @@ struct ContentView: View {
         } label: {
             ZStack(alignment: .topTrailing) {
                 ZStack {
+                    // Disabled is styled on its own rather than dimming the
+                    // whole button to 40%: a thin grey ring and a grey but
+                    // legible CAPTURE. Cyan is kept for when a press would
+                    // actually catch something.
                     Circle()
                         .fill(Brand.Color.bgPrimary.opacity(0.7))
                         .frame(width: 72, height: 72)
                     Circle()
-                        .strokeBorder(Brand.Color.cyan, lineWidth: 2.5)
+                        .strokeBorder(isEnabled ? Brand.Color.cyan : Brand.Color.textTertiary,
+                                      lineWidth: isEnabled ? 2.5 : 1.5)
                         .frame(width: 72, height: 72)
                     Circle()
-                        .fill(Brand.Color.cyan.opacity(0.15))
+                        .fill(Brand.Color.cyan.opacity(isEnabled ? 0.15 : 0))
                         .frame(width: 60, height: 60)
                     // Capturing state: `captureInFlight` was previously a
                     // pure re-entry latch that nothing rendered — now the
@@ -3740,7 +3747,7 @@ struct ContentView: View {
                         Text("CAPTURE")
                             .font(Brand.Font.mono(size: 10, weight: .bold))
                             .tracking(0.6)
-                            .foregroundStyle(Brand.Color.cyan)
+                            .foregroundStyle(isEnabled ? Brand.Color.cyan : Brand.Color.textTertiary)
                     }
                 }
                 if isMulti {
@@ -3758,7 +3765,7 @@ struct ContentView: View {
                         .offset(x: 4, y: -4)
                 }
             }
-            .opacity(isEnabled ? 1.0 : 0.4)
+            .animation(.easeInOut(duration: 0.15), value: isEnabled)
         }
         .buttonStyle(.plain)
         .disabled(!isEnabled)
@@ -3912,7 +3919,8 @@ struct ContentView: View {
                 HUDStatusPill(
                     text: SteeringPill.text(hint, unit: UnitPreferences.shared.distance),
                     tint: Brand.Color.cyan,
-                    pulsing: true
+                    pulsing: true,
+                    glyph: SteeringPill.glyph(hint)
                 )
             )
         }
@@ -5539,13 +5547,28 @@ struct HUDStatusPill: View {
     let text: String
     let tint: Color
     let pulsing: Bool
+    /// SF Symbol that replaces the breathing dot when the pill is giving
+    /// an instruction (the steering pill's arrow). nil = the passive dot.
+    var glyph: String? = nil
 
     var body: some View {
         HStack(spacing: 8) {
-            Circle()
-                .fill(tint)
-                .frame(width: 6, height: 6)
-                .modifier(EmptyPulse(active: pulsing))
+            if let glyph {
+                // A pointing arrow, steady (no pulse): the direction is the
+                // instruction, and the text already says it for VoiceOver.
+                Image(systemName: glyph)
+                    // Sized off the same scaled mono font as the label, so
+                    // the arrow grows with Dynamic Type instead of shrinking
+                    // beside two lines of large text.
+                    .font(Brand.Font.mono(size: 11, weight: .bold))
+                    .foregroundStyle(tint)
+                    .accessibilityHidden(true)
+            } else {
+                Circle()
+                    .fill(tint)
+                    .frame(width: 6, height: 6)
+                    .modifier(EmptyPulse(active: pulsing))
+            }
             Text(text)
                 .font(Brand.Font.mono(size: 10, weight: .bold))
                 .tracking(1.2)
@@ -5556,7 +5579,13 @@ struct HUDStatusPill: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
-        .background(Brand.Color.bgPrimary.opacity(0.55), in: .capsule)
+        // 0.75 fill + hairline, matching the bottom-bar chips: at 0.55 the
+        // pill composited to a flat grey smear on a bright day sky.
+        .background(Brand.Color.bgPrimary.opacity(0.75), in: .capsule)
+        .overlay(
+            Capsule()
+                .strokeBorder(Brand.Color.textPrimary.opacity(0.08), lineWidth: 1)
+        )
     }
 }
 

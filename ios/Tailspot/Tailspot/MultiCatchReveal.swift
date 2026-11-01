@@ -2,37 +2,41 @@
 //  MultiCatchReveal.swift
 //  Tailspot
 //
-//  The hype-peak full-screen reveal that fires when the user catches
-//  ≥2 planes in a single frame (T11). Cards stagger in one-at-a-time
-//  (~250 ms apart); each non-duplicate landing fires a haptic + chime
-//  via `RevealAudio.tap(step:)`. A banner builds across the reveal:
+//  The reveal for a press that caught ≥2 planes in one frame (T11).
 //
-//    "CATCH ×1"  →  "MULTI-CATCH ×2 · +N pts"  →  "MULTI-CATCH ×3 · +M pts"
+//  THE RUN (2026-10-31 redesign). Each plane gets the real single-catch
+//  reveal (`CatchRevealView`, in `sequence` mode), one after another, then
+//  a summary card in the same reveal vocabulary (RP palette, split-flap
+//  head, rarity frame, score ledger). It replaced a tilted fan of mini
+//  cards under a magenta MULTI-CATCH banner, which Noah called "an
+//  eye-sore that feels disjointed from the rest of the app": a multi-catch
+//  looked like a different game from a single catch. Now it reads as the
+//  same moment, more than once — a crescendo, not a new screen type.
 //
-//  Only fresh (non-duplicate) tails count toward the banner and the
-//  awarded points. Duplicates appear inline with an `ALREADY CAUGHT`
-//  stamp (reused styling from `CardReveal` T10) and earn nothing.
+//    plane 1 reveal → "Next plane" → plane 2 reveal → … → "See the total"
+//    → summary (each plane, its tier and points; the ledger; Continue /
+//    View in Hangar)
 //
-//  NO COMBO MULTIPLIER (2026-10-23). This view used to multiply the run
-//  by ×1.5–×3.0 ("COMBO ×1.5" on the receipt), but the server never
-//  awarded a combo (no scoring version has one), so the leaderboard
-//  showed fewer points than the reveal promised. The points shown are
-//  now exactly what each catch earns on its own: base + FIRST OF TYPE
-//  (via `ScoringBonuses`, the same source as the single reveal's
-//  ledger). "MULTI-CATCH ×N" stays as a celebration, not a multiplier.
-//  Nothing local ever stored the combo: points are re-derived from the
-//  rarity base wherever they're totalled, so there's no data to fix.
+//  A stories-style progress strip at the top says where you are in the
+//  run. Each fresh plane's page plays one rung of the ascending chime
+//  ladder (`RevealAudio`), so the run climbs as it goes; duplicates play
+//  the single reveal's ALREADY CAUGHT state and stay silent. "Skip to
+//  total" jumps straight to the summary from any plane.
 //
-//  Single-catch reveal (`CardReveal.swift`) handles the N=1 case;
-//  this view assumes `entries.count >= 2`.
+//  NO COMBO MULTIPLIER (2026-10-23): the points shown are exactly what each
+//  catch earns on its own, base + FIRST OF TYPE via `ScoringBonuses`, the
+//  same source as the single reveal's ledger (the server never awarded a
+//  combo). Duplicates earn nothing.
+//
+//  Single-catch reveals go straight to `CatchRevealView`; this view
+//  assumes `entries.count >= 2`.
 //
 
 import SwiftUI
 
 struct MultiCatchReveal: View {
-    /// Pairing of a card payload with a duplicate flag. Duplicates
-    /// render inline with the ALREADY CAUGHT stamp and earn nothing
-    /// (no points, no chime).
+    /// Pairing of a card payload with a duplicate flag. Duplicates play the
+    /// single reveal's ALREADY CAUGHT state and earn nothing.
     struct Entry: Identifiable, Equatable {
         let id = UUID()
         let plane: CardPlane
@@ -40,40 +44,33 @@ struct MultiCatchReveal: View {
     }
 
     let entries: [Entry]
-    /// First entry number in the run — caller computes this. Shown in
-    /// the status pill as a quiet "ENTRY #N" tag at the top.
+    /// The Hangar's unique-catch count after this run (the caller computes
+    /// it); the run's last fresh plane is this entry number.
     let lastEntryNumber: Int
     let onDismiss: () -> Void
     let onViewInHangar: () -> Void
 
-    /// Reduce Motion: cards keep the one-at-a-time cadence (the haptic +
-    /// chime ladder rides it) but land as plain fades — no spring, no
-    /// slide/scale entrances.
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// 0..<entries.count as the stagger advances. -1 = pre-stagger.
-    @State private var landedIndex: Int = -1
+    /// 0..<entries.count = that plane's reveal; entries.count = the summary.
+    @State private var page = 0
+    /// Clock anchor for the summary's split-flap head and row stagger.
+    @State private var summaryStart: Date?
+    /// Pauses the summary's TimelineView once its clock has clamped.
+    @State private var summaryAnimationDone = false
 
     #if DEBUG
-    /// Snapshot seam: ImageRenderer never runs `.task`, so `landedIndex` would
-    /// stay at -1 (an empty screen). true renders the final, all-landed frame.
-    var _snapshotAllLanded = false
-    private var revealedIndex: Int { _snapshotAllLanded ? entries.count - 1 : landedIndex }
+    /// Snapshot seam: ImageRenderer can't tap through the run, so this
+    /// renders a given page directly (entries.count = the summary, settled).
+    var _snapshotPage: Int? = nil
+    private var currentPage: Int { _snapshotPage ?? page }
     #else
-    private var revealedIndex: Int { landedIndex }
+    private var currentPage: Int { page }
     #endif
 
-    /// Time between successive card lands. 0.25 s matches spec § 3.3.
-    private static let staggerInterval: TimeInterval = 0.25
-    /// Cap the fan to 5 cards visually even if more entries arrive
-    /// (defensive — `performCatch` already gates at ≤5 from the AR
-    /// zone, but the math should still degrade gracefully).
-    private static let maxFan = 5
+    private var onSummary: Bool { currentPage >= entries.count }
 
-    /// The share sheet for `shareSubject`.
-    @State private var showShareSheet = false
-
-    // MARK: - Points (running totals based on revealedIndex)
+    // MARK: - Points (the run's totals)
 
     /// What the run is worth, counting only fresh tails. Each fresh card
     /// earns exactly what it would on its own (base + first-of-type); there
@@ -117,123 +114,29 @@ struct MultiCatchReveal: View {
         }
     }
 
-    /// The card the Share button sends: the rarest fresh catch of the run
-    /// (the first one on a tie), else the rarest card overall when every
-    /// card was already caught. The fan has no single "current" card, so
-    /// the best catch is the one worth showing off.
-    static func shareSubject(_ entries: [Entry]) -> Entry? {
-        let fresh = entries.filter { !$0.isDuplicate }
-        let pool = fresh.isEmpty ? entries : fresh
-        return pool.reduce(nil) { best, e in
-            guard let best else { return e }
-            return e.plane.rarity.basePoints > best.plane.rarity.basePoints ? e : best
+    /// The entry number each plane's reveal shows: fresh planes count up to
+    /// `lastEntryNumber` in run order; a duplicate shows the current count,
+    /// like the single duplicate reveal.
+    static func entryNumbers(_ entries: [Entry], lastEntryNumber: Int) -> [Int] {
+        let fresh = entries.filter { !$0.isDuplicate }.count
+        var next = lastEntryNumber - fresh + 1
+        return entries.map { e in
+            if e.isDuplicate { return lastEntryNumber }
+            defer { next += 1 }
+            return next
         }
     }
 
-    /// Banner text for the tally of the cards landed so far.
-    static func bannerLabel(for t: Tally) -> String {
-        switch t.freshCount {
-        // Edge case: a dup revealed first. Quiet placeholder so the banner
-        // slot doesn't pop later.
-        case 0: return "ALREADY CAUGHT"
-        case 1: return "CATCH ×1"
-        default: return "MULTI-CATCH ×\(t.freshCount) · +\(t.awarded) pts"
-        }
-    }
-
-    /// Up-to-`revealedIndex` slice — what the user can see right now.
-    private var visibleEntries: ArraySlice<Entry> {
-        guard revealedIndex >= 0 else { return entries.prefix(0) }
-        return entries.prefix(revealedIndex + 1)
-    }
-
-    /// Count of fresh (non-duplicate) cards revealed so far.
-    private var freshSoFar: Int {
-        visibleEntries.filter { !$0.isDuplicate }.count
-    }
-
-    var body: some View {
-        ZStack {
-            Brand.Color.bgPrimary.ignoresSafeArea()
-            backdrop.ignoresSafeArea()
-
-            VStack(spacing: 14) {
-                statusPill
-                    .opacity(revealedIndex >= 0 ? 1 : 0)
-                    .offset(y: revealedIndex >= 0 || reduceMotion ? 0 : -8)
-
-                banner
-                    .opacity(revealedIndex >= 0 ? 1 : 0)
-                    .animation(.easeOut(duration: 0.2), value: freshSoFar)
-
-                Spacer(minLength: 0)
-
-                fan
-
-                Spacer(minLength: 0)
-
-                // Receipt + dismiss button reveal only after the last
-                // card has landed so the eye stays on the cards
-                // during stagger.
-                if revealedIndex >= entries.count - 1 {
-                    receipt
-                        .transition(reduceMotion
-                            ? .opacity
-                            : .opacity.combined(with: .move(edge: .bottom)))
-                    buttons
-                        .transition(reduceMotion
-                            ? .opacity
-                            : .opacity.combined(with: .move(edge: .bottom)))
-                }
-            }
-            .padding(.top, 64)
-            .padding(.horizontal, 20)
-            .padding(.bottom, 28)
-            .animation(reduceMotion
-                ? .easeOut(duration: 0.25)
-                : .spring(response: 0.45, dampingFraction: 0.78),
-                       value: revealedIndex)
-        }
-        .background(.black)
-        .task {
-            // Initial settle frame before the stagger so the backdrop
-            // can paint without the first card popping in mid-fade.
-            try? await Task.sleep(for: .milliseconds(120))
-            for i in 0..<entries.count {
-                landedIndex = i
-                let entry = entries[i]
-                // Haptic + chime only for fresh tails. Duplicates land
-                // silently so the chime ladder reads as the new-catch
-                // count.
-                if !entry.isDuplicate {
-                    // Use the count of fresh cards landed so far as
-                    // the chime step — so the chime ladder ascends
-                    // 1→2→3 even if a dup sits between two fresh.
-                    let freshStep = entries.prefix(i + 1)
-                        .filter { !$0.isDuplicate }.count - 1
-                    RevealAudio.tap(step: max(0, freshStep))
-                }
-                try? await Task.sleep(for: .seconds(Self.staggerInterval))
-            }
-            // The stagger + receipt carry no accessible narration of their
-            // own, so the result is announced once the run completes.
-            AccessibilityNotification.Announcement(Self.announcement(for: Self.tally(entries))).post()
-        }
-        .sheet(isPresented: $showShareSheet) {
-            if let subject = Self.shareSubject(entries) {
-                let plane = subject.plane
-                let text = CatchShare.shareText(for: plane)
-                CatchShareSheet(plane: plane,
-                                shareText: text,
-                                shareMessage: CatchShare.shareMessage(shareText: text),
-                                hasCatchPhoto: plane.photoURL?.isFileURL == true,
-                                source: .multiReveal)
-            }
-        }
+    /// The step of the chime ladder a page plays: the count of fresh planes
+    /// up to and including it, minus one, so the ladder climbs 1→2→3 even
+    /// with a duplicate between two fresh planes. nil for a duplicate.
+    static func chimeStep(_ entries: [Entry], page: Int) -> Int? {
+        guard entries.indices.contains(page), !entries[page].isDuplicate else { return nil }
+        return entries.prefix(page + 1).filter { !$0.isDuplicate }.count - 1
     }
 
     /// One-sentence VoiceOver summary of the whole multi-catch, posted when
-    /// the last card lands (mirrors the receipt's math).
+    /// the summary card appears (mirrors the ledger's math).
     static func announcement(for t: Tally) -> String {
         var parts = ["\(t.freshCount) planes caught"]
         if t.duplicateCount > 0 { parts.append("\(t.duplicateCount) already in hangar") }
@@ -242,324 +145,303 @@ struct MultiCatchReveal: View {
         return parts.joined(separator: ", ")
     }
 
-    // MARK: - Backdrop
+    // MARK: - Body
 
-    /// Magenta-heavy backdrop — multi-catch is the "advisory" /
-    /// special-moment color in the FAA-aligned palette.
-    private var backdrop: some View {
-        ZStack {
-            RadialGradient(
-                gradient: Gradient(colors: [
-                    Brand.Color.alertAdvisory.opacity(0.30), .clear,
-                ]),
-                center: UnitPoint(x: 0.5, y: 0.42),
-                startRadius: 0,
-                endRadius: 420
-            )
-            .blendMode(.screen)
-            // Subtle cyan undertone to keep the brand voice intact.
-            RadialGradient(
-                gradient: Gradient(colors: [
-                    Brand.Color.cyan.opacity(0.10), .clear,
-                ]),
-                center: UnitPoint(x: 0.5, y: 0.75),
-                startRadius: 0,
-                endRadius: 320
-            )
-            .blendMode(.screen)
-        }
-    }
+    var body: some View {
+        ZStack(alignment: .top) {
+            RP.bg.ignoresSafeArea()
 
-    // MARK: - Status pill
-
-    private var statusPill: some View {
-        HStack(spacing: 8) {
-            Circle().fill(Brand.Color.alertAdvisory)
-                .frame(width: 8, height: 8)
-                .shadow(color: Brand.Color.alertAdvisory.opacity(0.6), radius: 4)
-            Text("\(entries.count)× MULTI-CATCH · ENTRY #\(lastEntryNumber)")
-                .font(Brand.Font.mono(size: 11, weight: .bold))
-                .tracking(1.2)
-                .foregroundStyle(Brand.Color.textPrimary)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(Brand.Color.bgPrimary.opacity(0.75), in: .capsule)
-        .overlay(Capsule().strokeBorder(Brand.Color.alertAdvisory.opacity(0.55), lineWidth: 1))
-        // One element — the glowing dot is decorative next to the text.
-        .accessibilityElement(children: .combine)
-    }
-
-    // MARK: - Banner (T11)
-
-    /// Builds across the stagger. Reads "CATCH ×1" at the first fresh
-    /// tail; flips to "MULTI-CATCH ×N · +M pts" once a second fresh tail
-    /// lands. Duplicate-only states (e.g., first card revealed is a dup)
-    /// read as "ALREADY CAUGHT" until a fresh tail arrives.
-    ///
-    /// Plain `some View` getter (no `@ViewBuilder`) because we need
-    /// the `let` declarations + explicit `return` — the builder DSL
-    /// would treat the `return` as disabling itself and warn.
-    private var banner: some View {
-        let soFar = Self.tally(visibleEntries)
-        let isMultiLive = soFar.freshCount >= 2
-        let tint: Color = isMultiLive
-            ? Brand.Color.alertAdvisory
-            : (soFar.freshCount == 0 ? Brand.Color.alertWarning : Brand.Color.cyan)
-        // Tracking 1.5 (was 2) and a 0.5 floor: "MULTI-CATCH ×N · +M pts"
-        // is longer than the old "COMBO ×N +M pts" and has to fit one line
-        // on an SE at the largest text sizes.
-        return Text(Self.bannerLabel(for: soFar))
-            .font(Brand.Font.mono(size: 14, weight: .bold))
-            .tracking(1.5)
-            .foregroundStyle(tint)
-            .monospacedDigit()
-            .lineLimit(1)
-            .minimumScaleFactor(0.5)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 6)
-            .background(tint.opacity(0.16), in: .capsule)
-            .overlay(Capsule().strokeBorder(tint.opacity(0.55), lineWidth: 1))
-            .scaleEffect(isMultiLive && !reduceMotion ? 1.02 : 1.0)
-    }
-
-    // MARK: - Fan
-
-    private var fan: some View {
-        // Lay out up to `maxFan` cards arranged on an arc. Use
-        // medium card size (220×308) so up to 5 fit comfortably on
-        // an iPhone-width sheet.
-        let count = min(entries.count, Self.maxFan)
-        // Total spread in degrees; widens with count but caps so
-        // edge cards stay readable.
-        let totalSpread: Double = {
-            switch count {
-            case ..<2: return 0
-            case 2:    return 16
-            case 3:    return 30
-            case 4:    return 44
-            default:   return 56
-            }
-        }()
-        let step = count <= 1 ? 0 : totalSpread / Double(count - 1)
-        let halfCount = Double(count) / 2.0
-        return ZStack {
-            ForEach(Array(entries.prefix(count).enumerated()), id: \.element.id) { i, entry in
-                let angle = -totalSpread/2 + step * Double(i)
-                let visible = i <= revealedIndex
-                // Offset cards horizontally from center; symmetric.
-                let xOffset = (Double(i) - halfCount + 0.5) * 28
-                ZStack {
-                    CatchCardView(
-                        plane: entry.plane,
-                        size: .md,
-                        holoIntensity: entry.isDuplicate ? 0.25 : 0.65,
-                        rotation: .degrees(angle)
-                    )
-                    if entry.isDuplicate {
-                        alreadyCaughtStampSmall
-                            .rotationEffect(.degrees(angle))
-                            .allowsHitTesting(false)
-                    }
-                }
-                .offset(x: CGFloat(xOffset), y: visible || reduceMotion ? 0 : 40)
-                .zIndex(Double(i))
-                .opacity(visible ? 1 : 0)
-                .scaleEffect(visible || reduceMotion ? 1 : 0.6)
-                .animation(reduceMotion
-                    ? .easeOut(duration: 0.25)
-                    : .spring(response: 0.45, dampingFraction: 0.7),
-                           value: revealedIndex)
-            }
-        }
-        .frame(height: 320)
-    }
-
-    /// Smaller version of CardReveal's diagonal ALREADY CAUGHT stamp.
-    /// Intentionally inlined (rather than imported) so MultiCatchReveal
-    /// stays self-contained — see T10 comment in CardReveal.swift for
-    /// the full-size source.
-    private var alreadyCaughtStampSmall: some View {
-        Text("ALREADY\nCAUGHT")
-            .font(Brand.Font.mono(size: 14, weight: .black))
-            .tracking(1.5)
-            .multilineTextAlignment(.center)
-            .foregroundStyle(Brand.Color.alertWarning)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(Brand.Color.bgPrimary.opacity(0.85))
-            .overlay(
-                Rectangle()
-                    .strokeBorder(Brand.Color.alertWarning, lineWidth: 1.5)
-            )
-            .rotationEffect(.degrees(-18))
-            .shadow(color: .black.opacity(0.4), radius: 4, x: 0, y: 1)
-            // Parity with the full-size stamp: read as a phrase, not as
-            // two shouted lines split by the hard wrap.
-            .accessibilityLabel("Already caught")
-    }
-
-    // MARK: - Receipt (final state)
-
-    private var receipt: some View {
-        let t = Self.tally(entries)
-        return VStack(spacing: 6) {
-            HStack {
-                Text("Base")
-                    .font(Brand.Font.caption)
-                    .foregroundStyle(Brand.Color.textSecondary)
-                Spacer()
-                Text("\(t.basePoints) pt")
-                    .font(Brand.Font.mono(size: 12, weight: .bold))
-                    .foregroundStyle(Brand.Color.textPrimary)
-                    .monospacedDigit()
-            }
-            // Same bonus, same gold, as the single reveal's FIRST OF TYPE
-            // ledger line.
-            if t.firstOfTypePoints > 0 {
-                HStack {
-                    Text("First of type")
-                        .font(Brand.Font.caption)
-                        .foregroundStyle(RP.gold)
-                    Spacer()
-                    Text("+\(t.firstOfTypePoints) pt")
-                        .font(Brand.Font.mono(size: 12, weight: .bold))
-                        .foregroundStyle(RP.gold)
-                        .monospacedDigit()
+            Group {
+                if onSummary {
+                    summary
+                        .transition(pageTransition)
+                } else {
+                    planePage(currentPage)
+                        // Room for the progress strip above, so it never sits
+                        // on the card's top edge on a short phone.
+                        .safeAreaInset(edge: .top, spacing: 0) {
+                            Color.clear.frame(height: Self.stripHeight)
+                        }
+                        // A fresh identity per page restarts the reveal's
+                        // clocks, so every plane gets its full moment.
+                        .id(currentPage)
+                        .transition(pageTransition)
                 }
             }
-            if t.duplicateCount > 0 {
-                HStack {
-                    Text("Already in Hangar")
-                        .font(Brand.Font.caption)
-                        .foregroundStyle(Brand.Color.alertWarning)
-                    Spacer()
-                    Text("×\(t.duplicateCount)")
-                        .font(Brand.Font.mono(size: 12, weight: .bold))
-                        .foregroundStyle(Brand.Color.alertWarning)
-                        .monospacedDigit()
-                }
-            }
-            Divider().background(Brand.Color.textTertiary.opacity(0.3)).padding(.vertical, 2)
-            HStack {
-                Text("AWARDED")
-                    .font(Brand.Font.mono(size: 10, weight: .bold))
-                    .tracking(1)
-                    .foregroundStyle(Brand.Color.textTertiary)
-                Spacer()
-                Text("+\(t.awarded.formatted(.number)) pt")
-                    .font(Brand.Font.mono(size: 22, weight: .heavy))
-                    .foregroundStyle(Brand.Color.cyan)
-                    .monospacedDigit()
-            }
+
+            progressStrip
         }
-        .padding(14)
-        .background(Brand.Color.bgElevated, in: .rect(cornerRadius: Brand.Radius.card))
-        .overlay(
-            RoundedRectangle(cornerRadius: Brand.Radius.card)
-                .strokeBorder(Brand.Color.alertAdvisory.opacity(0.30), lineWidth: 1)
+        .animation(reduceMotion ? .easeOut(duration: 0.25)
+                                : .spring(response: 0.45, dampingFraction: 0.86),
+                   value: currentPage)
+        .onAppear { playChime(for: 0) }
+    }
+
+    private var pageTransition: AnyTransition {
+        reduceMotion
+            ? .opacity
+            : .asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity),
+                          removal: .move(edge: .leading).combined(with: .opacity))
+    }
+
+    private func planePage(_ i: Int) -> some View {
+        let entry = entries[i]
+        let sequence = CatchRevealView.RevealSequence(index: i, count: entries.count)
+        return CatchRevealView(
+            plane: entry.plane,
+            entryNumber: Self.entryNumbers(entries, lastEntryNumber: lastEntryNumber)[i],
+            onDismiss: { advance(from: i) },
+            // Before the last plane the second exit skips to the total; on
+            // the last plane it is the real View in Hangar.
+            onViewInHangar: sequence.isLast ? onViewInHangar : { goToSummary() },
+            isDuplicate: entry.isDuplicate,
+            sequence: sequence
         )
-        .frame(maxWidth: 360)
-        // The ledger reads as one receipt, not eight loose fragments.
-        .accessibilityElement(children: .combine)
     }
 
-    // MARK: - Buttons
+    /// Keyed to the page that asked, so a second tap on the outgoing page
+    /// during its slide-out can't skip the next plane.
+    private func advance(from i: Int) {
+        guard i == page else { return }
+        page += 1
+        playChime(for: page)
+    }
 
-    private var buttons: some View {
-        VStack(spacing: 10) {
-            // View in Hangar and Share split the secondary row, so Share
-            // costs no extra height on a screen that's already full.
-            HStack(spacing: 10) {
-                Button(action: onViewInHangar) {
-                    secondaryLabel("View in Hangar")
+    private func goToSummary() {
+        page = entries.count
+    }
+
+    private func playChime(for page: Int) {
+        #if DEBUG
+        if _snapshotPage != nil { return }
+        #endif
+        if let step = Self.chimeStep(entries, page: page) {
+            RevealAudio.tap(step: step)
+        }
+    }
+
+    // MARK: - Progress strip
+
+    /// The strip's top padding + bar + a gap below it.
+    private static let stripHeight: CGFloat = 6 + 3 + 8
+
+    /// Stories-style segments: one per plane, lit up to the current one.
+    /// Gone on the summary, where the run is complete.
+    private var progressStrip: some View {
+        HStack(spacing: 4) {
+            ForEach(entries.indices, id: \.self) { i in
+                Capsule()
+                    .fill(RP.ink.opacity(i <= currentPage ? 0.85 : 0.18))
+                    .frame(height: 3)
+            }
+        }
+        .padding(.horizontal, 24)
+        .padding(.top, 6)
+        .opacity(onSummary ? 0 : 1)
+        .allowsHitTesting(false)
+        .accessibilityElement()
+        .accessibilityLabel("Plane \(min(currentPage, entries.count - 1) + 1) of \(entries.count)")
+        .accessibilityHidden(onSummary)
+    }
+
+    // MARK: - Summary
+
+    /// The rarest fresh plane's tier frames the summary (the run's best
+    /// catch); every plane already caught → the rarest overall.
+    private var headlineRarity: Rarity {
+        let fresh = entries.filter { !$0.isDuplicate }
+        let pool = fresh.isEmpty ? entries : fresh
+        return pool.map(\.plane.rarity).max { $0.basePoints < $1.basePoints } ?? .common
+    }
+
+    private var summary: some View {
+        GeometryReader { geo in
+            let width = min(geo.size.width - 28, 420)
+            let scale = width / 300
+            // Centred when it fits; scrolls when it can't (a five-plane run
+            // on an SE). ViewThatFits rather than an always-on ScrollView,
+            // which also keeps the snapshot harness able to draw it
+            // (ImageRenderer leaves ScrollView content blank).
+            ViewThatFits(in: .vertical) {
+                summaryColumn(width: width, scale: scale)
+                    .frame(maxWidth: .infinity, minHeight: geo.size.height)
+                ScrollView {
+                    summaryColumn(width: width, scale: scale)
+                        .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.plain)
-                if let subject = Self.shareSubject(entries) {
-                    Button {
-                        CatchShareAnalytics(plane: subject.plane,
-                                            hasCatchPhoto: subject.plane.photoURL?.isFileURL == true,
-                                            source: .multiReveal)
-                            .sheetOpened()
-                        showShareSheet = true
-                    } label: {
-                        secondaryLabel(Self.shareTitle(for: subject.plane))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(Self.shareAccessibilityLabel(for: subject.plane))
+            }
+        }
+        .onAppear {
+            if summaryStart == nil { summaryStart = Date() }
+            AccessibilityNotification.Announcement(Self.announcement(for: Self.tally(entries))).post()
+        }
+        .task {
+            try? await Task.sleep(for: .seconds(1.5))
+            summaryAnimationDone = true
+        }
+    }
+
+    private func summaryColumn(width: CGFloat, scale: CGFloat) -> some View {
+        VStack(spacing: 0) {
+            Spacer(minLength: 12)
+            TimelineView(.animation(paused: summaryAnimationDone || settledSummary)) { ctx in
+                let t = settledSummary ? 1 : summaryStart.map { revClamp(ctx.date.timeIntervalSince($0) / 1.4) } ?? 0
+                summaryCard(t: t, scale: scale)
+                    .frame(width: width)
+            }
+            Spacer(minLength: 12)
+            summaryCTAs
+                .padding(.top, 24)
+                .padding(.bottom, 28)
+        }
+    }
+
+    private var settledSummary: Bool {
+        #if DEBUG
+        if _snapshotPage != nil { return true }
+        #endif
+        return reduceMotion
+    }
+
+    private func summaryCard(t: Double, scale: CGFloat) -> some View {
+        let tally = Self.tally(entries)
+        let accent = headlineRarity.tint
+        let head = "\(entries.count) PLANES"
+        let cw = 20 * scale
+        return VStack(alignment: .leading, spacing: 12 * scale) {
+            HStack {
+                Text("MULTI-CATCH")
+                    .font(.system(size: 10 * scale, weight: .heavy, design: .monospaced))
+                    .tracking(2)
+                    .foregroundColor(accent)
+                Spacer()
+                Text("ENTRY #\(lastEntryNumber)")
+                    .font(.system(size: 10 * scale, weight: .semibold, design: .monospaced))
+                    .tracking(1.5)
+                    .foregroundColor(RP.faint)
+            }
+            FlapRow(text: head, t: t, startT: 0.0, spanT: 0.45,
+                    fs: min(22 * scale, cw * 0.86), cw: cw, gap: 2.5 * scale,
+                    reduceMotion: reduceMotion, color: RP.ink)
+            Text("One frame.")
+                .font(.system(size: 15 * scale))
+                .foregroundColor(RP.muted)
+
+            Rectangle().fill(RP.rule).frame(height: 1)
+
+            VStack(spacing: 10 * scale) {
+                ForEach(Array(entries.enumerated()), id: \.element.id) { i, e in
+                    let n = Double(max(1, entries.count))
+                    summaryRow(e, scale: scale)
+                        .opacity(ss(0.3 + 0.3 * Double(i) / n, 0.45 + 0.3 * Double(i) / n, t))
                 }
             }
 
+            Rectangle().fill(RP.rule).frame(height: 1)
+
+            VStack(spacing: 8 * scale) {
+                ledgerRow("BASE", "+\(tally.basePoints)", RP.muted, 1, scale: scale)
+                if tally.firstOfTypePoints > 0 {
+                    ledgerRow("FIRST OF TYPE", "+\(tally.firstOfTypePoints)", RP.gold, 1, scale: scale)
+                }
+                if tally.duplicateCount > 0 {
+                    ledgerRow("ALREADY CAUGHT", "×\(tally.duplicateCount)",
+                              Brand.Color.duplicateRose, 1, scale: scale)
+                }
+                Rectangle().fill(RP.rule).frame(height: 1)
+                ledgerRow("TOTAL", "+\(Int((Double(tally.awarded) * ss(0.7, 1.0, t)).rounded()))",
+                          accent, 1, scale: scale, big: true)
+            }
+            .opacity(ss(0.6, 0.8, t))
+        }
+        .padding(20 * scale)
+        .modifier(CatchRarityFrame(rarity: headlineRarity, scale: scale))
+        .accessibilityElement(children: .combine)
+    }
+
+    /// One plane of the run: its catch photo, name, callsign and tier, and
+    /// what it earned (or ALREADY CAUGHT).
+    private func summaryRow(_ e: Entry, scale: CGFloat) -> some View {
+        let p = e.plane
+        let earned = e.isDuplicate ? 0
+            : p.rarity.basePoints + (p.isFirstOfType ? ScoringBonuses.firstOfTypeBonus(base: p.rarity.basePoints) : 0)
+        return HStack(spacing: 12 * scale) {
+            thumb(p, scale: scale)
+                .frame(width: 44 * scale, height: 44 * scale)
+                .clipShape(RoundedRectangle(cornerRadius: 8 * scale))
+                .overlay(RoundedRectangle(cornerRadius: 8 * scale).strokeBorder(RP.rule, lineWidth: 1))
+                .opacity(e.isDuplicate ? 0.55 : 1)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 3 * scale) {
+                Text(p.model ?? CatchShare.identifier(for: p) ?? "Unidentified aircraft")
+                    .font(.system(size: 15 * scale, weight: .semibold))
+                    .foregroundColor(e.isDuplicate ? RP.muted : RP.ink)
+                    .lineLimit(1).minimumScaleFactor(0.7)
+                HStack(spacing: 6 * scale) {
+                    if let cs = CatchShare.identifier(for: p) {
+                        Text(cs).foregroundColor(RP.muted)
+                    }
+                    Text(p.rarity.label).foregroundColor(p.rarity.tint)
+                }
+                .font(.system(size: 10 * scale, weight: .semibold, design: .monospaced))
+                .tracking(1)
+                .lineLimit(1)
+            }
+            Spacer(minLength: 8 * scale)
+            if e.isDuplicate {
+                // Short, so it never truncates beside a long model name; the
+                // ledger below spells out ALREADY CAUGHT.
+                Text("IN HANGAR")
+                    .font(.system(size: 9 * scale, weight: .bold, design: .monospaced))
+                    .tracking(1)
+                    .lineLimit(1)
+                    .fixedSize()
+                    .foregroundColor(Brand.Color.duplicateRose)
+            } else {
+                Text("+\(earned)")
+                    .font(.system(size: 16 * scale, weight: .bold, design: .monospaced))
+                    .monospacedDigit()
+                    .foregroundColor(RP.ink)
+            }
+        }
+    }
+
+    /// The plane's catch photo, or (no photo yet) a tier-tinted tile with a
+    /// plane glyph: the reveal's full-size sky placeholder crops to a
+    /// meaningless corner at thumbnail size.
+    @ViewBuilder
+    private func thumb(_ p: CardPlane, scale: CGFloat) -> some View {
+        if p.photoURL != nil {
+            RevealPhoto(url: p.photoURL, focus: p.photoFocus)
+        } else {
+            ZStack {
+                RP.flapFace
+                p.rarity.tint.opacity(0.10)
+                Image(systemName: "airplane")
+                    .font(.system(size: 17 * scale, weight: .semibold))
+                    .foregroundStyle(p.rarity.tint.opacity(0.8))
+            }
+        }
+    }
+
+    /// The same quiet exits as the single reveal's CTA row.
+    private var summaryCTAs: some View {
+        HStack(spacing: 22) {
             Button(action: onDismiss) {
-                Text("Keep spotting")
-                    .font(.callout.weight(.bold))
-                    .foregroundStyle(.black.opacity(0.85))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(Brand.Color.cyan, in: .rect(cornerRadius: Brand.Radius.row))
-                    .shadow(color: Brand.Color.cyan.opacity(0.35), radius: 14, y: 6)
+                Text("Continue")
+                    .font(Brand.Font.body.weight(.semibold))
+                    .foregroundColor(RP.ink)
+                    .contentShape(Rectangle().inset(by: -16))
+            }
+            .buttonStyle(.plain)
+            Button(action: onViewInHangar) {
+                Text("View in Hangar ›")
+                    .font(Brand.Font.body)
+                    .foregroundColor(RP.muted)
+                    .contentShape(Rectangle().inset(by: -16))
             }
             .buttonStyle(.plain)
         }
-        .frame(maxWidth: 360)
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     }
-
-    /// "Share UAL248": names the card that goes out, since the fan has
-    /// several.
-    /// Callsign, else hex id (`CatchShare.identifier`, the share copy's rule).
-    static func shareTitle(for plane: CardPlane) -> String {
-        guard let id = CatchShare.identifier(for: plane) else { return "Share" }
-        return "Share \(id)"
-    }
-
-    /// VoiceOver label: the visible title first, so Voice Control's "tap
-    /// Share UAL248" still matches, then the model for context.
-    static func shareAccessibilityLabel(for plane: CardPlane) -> String {
-        let title = shareTitle(for: plane)
-        guard let model = plane.model?.trimmingCharacters(in: .whitespaces), !model.isEmpty else {
-            return title == "Share" ? "Share best catch" : title
-        }
-        return "\(title), \(model)"
-    }
-
-    /// Built-in text styles (.subheadline = 15 pt at the default size) so
-    /// the buttons scale with Dynamic Type; one line, shrinking before it
-    /// truncates, since two share a row.
-    private func secondaryLabel(_ title: String) -> some View {
-        Text(title)
-            .font(.subheadline.weight(.semibold))
-            .foregroundStyle(Brand.Color.textPrimary)
-            .lineLimit(1)
-            .minimumScaleFactor(0.7)
-            .padding(.horizontal, 8)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
-            .background(Brand.Color.bgElevated.opacity(0.85), in: .rect(cornerRadius: Brand.Radius.row))
-    }
-}
-
-#Preview("Multi (3 fresh)") {
-    MultiCatchReveal(
-        entries: [
-            .init(plane: .init(callsign: "UAL248", model: "Boeing 787-9", carrier: "United", rarity: .rare, type: .wide), isDuplicate: false),
-            .init(plane: .init(callsign: "DAL2104", model: "Airbus A320", carrier: "Delta", rarity: .common, type: .narrow), isDuplicate: false),
-            .init(plane: .init(callsign: "ASA1276", model: "Boeing 737 MAX", carrier: "Alaska", rarity: .uncommon, type: .narrow), isDuplicate: false),
-        ],
-        lastEntryNumber: 48,
-        onDismiss: {},
-        onViewInHangar: {}
-    )
-}
-
-#Preview("Multi (2 fresh + 1 dup)") {
-    MultiCatchReveal(
-        entries: [
-            .init(plane: .init(callsign: "UAL248", model: "Boeing 787-9", carrier: "United", rarity: .rare, type: .wide), isDuplicate: false),
-            .init(plane: .init(callsign: "DAL2104", model: "Airbus A320", carrier: "Delta", rarity: .common, type: .narrow), isDuplicate: true),
-            .init(plane: .init(callsign: "ASA1276", model: "Boeing 737 MAX", carrier: "Alaska", rarity: .uncommon, type: .narrow), isDuplicate: false),
-        ],
-        lastEntryNumber: 49,
-        onDismiss: {},
-        onViewInHangar: {}
-    )
 }

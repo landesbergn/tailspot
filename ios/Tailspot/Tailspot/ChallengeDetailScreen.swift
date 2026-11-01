@@ -353,7 +353,9 @@ struct ChallengeDetailScreen: View {
     }
 
     private func metricValue(_ value: String, color: Color) -> some View {
-        Text(value)
+        // monoTight pulls the digit after a "," in so "1,120" doesn't read
+        // as "1, 120" in B612 Mono (its comma takes a full character cell).
+        Text(Brand.monoTight(value, size: 23))
             .font(Brand.Font.mono(size: 23, weight: .bold, relativeTo: .title3))
             .foregroundStyle(color)
             .monospacedDigit()
@@ -376,7 +378,7 @@ struct ChallengeDetailScreen: View {
         let decided = d.challenge.isDecided && !winners.isEmpty
         return VStack(spacing: 10) {
             if decided {
-                HStack(spacing: 10) {
+                HStack(spacing: 8) {
                     Image(systemName: "laurel.leading")
                         .font(.system(size: 22, weight: .semibold))
                         .foregroundStyle(Brand.Color.podiumGold)
@@ -408,7 +410,6 @@ struct ChallengeDetailScreen: View {
         }
         .frame(maxWidth: .infinity)
         .padding(18)
-        .background(Brand.Color.podiumGold.opacity(decided ? 0.08 : 0.0), in: .rect(cornerRadius: Brand.Radius.card))
         .glassEffect(ChallengeStyle.glass, in: .rect(cornerRadius: Brand.Radius.card))
         .overlay {
             RoundedRectangle(cornerRadius: Brand.Radius.card)
@@ -431,7 +432,7 @@ struct ChallengeDetailScreen: View {
 
     private func standings(_ d: ChallengeDetail) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            ChallengeSectionLabel(title: status == .finished ? "FINAL STANDINGS" : (status == .upcoming ? "WHO'S IN" : "STANDINGS"))
+            ChallengeSectionLabel(title: status == .finished ? "FINAL STANDINGS" : (status == .upcoming ? "SPOTTERS" : "STANDINGS"))
             if status == .upcoming && !d.standings.isEmpty {
                 // Nobody has scored yet, so no placements: everyone would
                 // read "T-1st", which is nonsense before the start. Just the
@@ -496,7 +497,7 @@ struct ChallengeDetailScreen: View {
                             .foregroundStyle(Brand.Color.textTertiary)
                     }
                     Spacer()
-                    Text(row.points.formatted(.number))
+                    Text(Brand.monoTight(row.points, size: 14))
                         .font(Brand.Font.mono(size: 14, weight: .bold, relativeTo: .subheadline))
                         .foregroundStyle(isMe ? Brand.Color.cyan : Brand.Color.textPrimary)
                         .monospacedDigit()

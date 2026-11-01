@@ -77,8 +77,22 @@ struct TrophyRecapView: View {
             } else {
                 ScrollView {
                     grid(t: t)
-                        .padding(.vertical, 16)
+                        .padding(.top, 16)
+                        // 28 = the fade below: scrolled to the end, the last
+                        // row clears the fade instead of sitting in it.
+                        .padding(.bottom, 28)
                 }
+                // `.mask` keeps only the parts of the view where the mask
+                // shape is opaque: solid black down to the last 28 pt, then
+                // a fade to clear, so the fold dissolves into RP.bg instead
+                // of a hard cut right above the footer.
+                .mask(
+                    VStack(spacing: 0) {
+                        Color.black
+                        LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
+                            .frame(height: 28)
+                    }
+                )
                 .frame(maxHeight: .infinity)
             }
 
@@ -188,7 +202,9 @@ struct TrophyRecapView: View {
 
     private func clamp(_ x: Double) -> Double { min(1, max(0, x)) }
 
-    /// Smoothstep of `x` between `a` and `b` — 0 before, 1 after.
+    /// Smoothstep of `x` between `a` and `b` — 0 before, 1 after. Kept
+    /// local (not the module `ss`) for its `b > a` guard: a late row's
+    /// window can collapse to zero width at t = 1.
     private func ss(_ a: Double, _ b: Double, _ x: Double) -> Double {
         guard b > a else { return x >= b ? 1 : 0 }
         let u = clamp((x - a) / (b - a))

@@ -58,6 +58,11 @@ struct HandleEditSheet: View {
 
     private var trimmed: String { draft.trimmingCharacters(in: .whitespacesAndNewlines) }
 
+    /// The Save/Claim button, styled by the toolbar depending on `canSave`.
+    private var confirmButton: some View {
+        Button(isClaimed ? "Save" : "Claim") { Task { await save() } }
+    }
+
     /// Save turns on only for a valid handle that differs from the current one.
     /// A case-only change ("Noah" → "noah") counts: the server allows it.
     var canSave: Bool {
@@ -130,10 +135,22 @@ struct HandleEditSheet: View {
                         .disabled(isSaving)
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(isClaimed ? "Save" : "Claim") { Task { await save() } }
-                        .buttonStyle(.glassProminent)
-                        .tint(Brand.Color.cyan)
-                        .disabled(!canSave)
+                    // Two branches, not `canSave ? .glassProminent : .glass`:
+                    // those are different ButtonStyle types, so a ternary
+                    // won't type-check. Disabled reads as quiet glass like
+                    // Cancel; only a valid handle lights the cyan button.
+                    if canSave {
+                        confirmButton
+                            .buttonStyle(.glassProminent)
+                            .tint(Brand.Color.cyan)
+                    } else {
+                        // Default toolbar style: iOS 26 already draws the
+                        // item's glass, so a .glass style here nested a
+                        // capsule inside a capsule.
+                        confirmButton
+                            .foregroundStyle(Brand.Color.textTertiary)
+                            .disabled(true)
+                    }
                 }
             }
         }

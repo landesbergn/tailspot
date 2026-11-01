@@ -378,7 +378,7 @@ struct LeaderboardScreen: View {
                             .font(Brand.Font.mono(size: 9, weight: .semibold, relativeTo: .caption2))
                             .tracking(1.2)
                             .foregroundStyle(Brand.Color.podiumGold)
-                        Text("\(Text(ChampionBanner.names(champions)).foregroundStyle(Brand.Color.textPrimary))\(Text(" · \(champions[0].points.formatted(.number)) PTS").foregroundStyle(Brand.Color.podiumGold))")
+                        Text("\(Text(ChampionBanner.names(champions)).foregroundStyle(Brand.Color.textPrimary))\(Text(Brand.monoTight(" · \(champions[0].points.formatted(.number)) PTS", size: 13)).foregroundStyle(Brand.Color.podiumGold))")
                             .font(Brand.Font.mono(size: 13, weight: .bold, relativeTo: .footnote))
                     }
                     Spacer()
@@ -495,7 +495,8 @@ struct LeaderboardScreen: View {
                     .font(Brand.Font.mono(size: 10, weight: .bold, relativeTo: .caption2))
                     .foregroundStyle(Brand.Color.textPrimary)
                     .lineLimit(1)
-                Text("\(entry.points.formatted(.number))")
+                // monoTight closes the full-cell gap B612 Mono leaves after the comma.
+                Text(Brand.monoTight(entry.points, size: 13))
                     .font(Brand.Font.mono(size: 13, weight: .heavy, relativeTo: .footnote))
                     .foregroundStyle(tint)
                     .monospacedDigit()
@@ -562,7 +563,7 @@ struct LeaderboardScreen: View {
             }
             Spacer(minLength: 8)
             VStack(alignment: .trailing, spacing: 1) {
-                Text("\(entry.points.formatted(.number))")
+                Text(Brand.monoTight(entry.points, size: 13))
                     .font(Brand.Font.mono(size: 13, weight: .bold, relativeTo: .footnote))
                     .foregroundStyle(isMe ? Brand.Color.cyan : Brand.Color.textPrimary)
                     .monospacedDigit()

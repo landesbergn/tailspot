@@ -55,6 +55,7 @@ struct SettingsScreen: View {
     @State private var feedbackToast: String? = nil
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     /// Optional: Settings renders in snapshot harnesses and previews with no
     /// Challenges model in the environment. `@Environment(Type.self)` with an
     /// optional type is Observation's "inject it if it's there" form.
@@ -188,14 +189,27 @@ struct SettingsScreen: View {
                           url: URL(string: "https://tailspot.app/terms.html")!)
                 legalLink(label: "Attributions",
                           url: URL(string: "https://tailspot.app/attributions.html")!)
-
-                LabeledContent("Live aircraft data", value: "adsb.lol · adsb.fi")
-                LabeledContent("Photos", value: "Planespotters.net · Wikimedia Commons")
-                // The card backs (2026-10-25): Wikipedia summaries + Wikidata specs.
-                LabeledContent("Aircraft info", value: "Wikipedia · Wikidata")
-
             } header: {
                 Text("ABOUT")
+                    .font(Brand.Font.mono(size: 10, weight: .semibold, relativeTo: .caption2))
+                    .tracking(1.2)
+                    .foregroundStyle(Brand.Color.textTertiary)
+                    .textCase(nil)
+            }
+            .listRowBackground(Brand.Color.bgElevated)
+
+            // MARK: DATA SOURCES
+
+            // Static credits get their own group so they don't sit among
+            // the tappable ↗ rows above looking like links. Label over
+            // value, so a long value never wraps under its label.
+            Section {
+                creditRow("Live aircraft data", value: "adsb.lol · adsb.fi")
+                creditRow("Photos", value: "Planespotters.net · Wikimedia Commons")
+                // The card backs (2026-10-25): Wikipedia summaries + Wikidata specs.
+                creditRow("Aircraft info", value: "Wikipedia · Wikidata")
+            } header: {
+                Text("DATA SOURCES")
                     .font(Brand.Font.mono(size: 10, weight: .semibold, relativeTo: .caption2))
                     .tracking(1.2)
                     .foregroundStyle(Brand.Color.textTertiary)
@@ -390,11 +404,28 @@ struct SettingsScreen: View {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
-            // Segments size to their longest label; cap the control so the
-            // row title keeps its space on narrow phones.
-            .frame(maxWidth: U.allCases.count > 2 ? 190 : 130)
+            // One width for every unit picker, so all three controls share a
+            // left edge instead of stepping between 130 and 190 pt. At the
+            // accessibility text sizes it becomes a cap again, so the
+            // pickers give the (now much larger) row title room.
+            .frame(width: dynamicTypeSize.isAccessibilitySize ? nil : 190)
+            .frame(maxWidth: 190)
             .accessibilityLabel(accessibilityLabel)
         }
+    }
+
+    /// A static credit: label on top, source underneath in secondary.
+    private func creditRow(_ label: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(Brand.Font.body)
+                .foregroundStyle(Brand.Color.textPrimary)
+            Text(value)
+                .font(Brand.Font.caption)
+                .foregroundStyle(Brand.Color.textSecondary)
+        }
+        // VoiceOver reads it as one element ("Photos, Planespotters.net …").
+        .accessibilityElement(children: .combine)
     }
 
     private func unitSymbol<U>(_ unit: U) -> String {
@@ -495,7 +526,9 @@ struct SettingsScreen: View {
         } label: {
             HStack(spacing: 0) {
                 Spacer(minLength: 0)
-                Text(Bundle.main.tailspotVersionLine)
+                // monoTight closes B612 Mono's full-cell gap after each
+                // period ("1. 2. 4" -> "1.2.4").
+                Text(Brand.monoTight(Bundle.main.tailspotVersionLine, size: 11))
                     .font(Brand.Font.mono(size: 11, weight: .regular, relativeTo: .caption2))
                     .foregroundStyle(Brand.Color.textTertiary)
                 // Full textTertiary, no extra opacity — tertiary × 0.6 fell

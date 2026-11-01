@@ -382,6 +382,11 @@ struct CatchCardBack: View {
                 }
             }
             .padding(.horizontal, hPad)
+            // Bottom inset matches the photo's 18pt top inset, so the
+            // credit row never sits on the frame's bottom stroke. When the
+            // face is short, the Wikipedia extract (lowest priority) gives
+            // up lines instead.
+            .padding(.bottom, 18 * scale)
 
             Spacer(minLength: 0)
         }
@@ -621,7 +626,8 @@ struct CatchCardBack: View {
                     .font(.system(size: 12.5 * scale))
                     .foregroundStyle(RP.ink.opacity(0.88))
                     .lineSpacing(1.5 * scale)
-                    .lineLimit(5)
+                    // Four lines fits the front's height; MORE opens the rest.
+                    .lineLimit(4)
                     .truncationMode(.tail)
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .leading)

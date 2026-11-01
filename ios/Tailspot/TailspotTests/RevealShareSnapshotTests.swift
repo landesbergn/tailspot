@@ -78,9 +78,11 @@ struct RevealShareSnapshotTests {
                                rarity: .uncommon, type: .narrow), isDuplicate: true),
         ]
         for (tag, dts) in Self.sizes {
+            // The run's summary page, settled (each plane's page is the
+            // single reveal, covered by the reveal snapshots above).
             var multi = MultiCatchReveal(entries: entries, lastEntryNumber: 48,
                                          onDismiss: {}, onViewInHangar: {})
-            multi._snapshotAllLanded = true
+            multi._snapshotPage = entries.count
             write(multi.frame(width: 393, height: 852).dynamicTypeSize(dts),
                   "multi_2fresh_1dup_\(tag)")
             write(multi.frame(width: 375, height: 667).dynamicTypeSize(dts),

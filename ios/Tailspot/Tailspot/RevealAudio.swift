@@ -29,7 +29,7 @@ enum RevealAudio {
     }
 
     /// Convenience: play a medium haptic tap simultaneously with the
-    /// chime — used by MultiCatchReveal's card landing.
+    /// chime — used when a multi-catch run turns to a fresh plane.
     @MainActor
     static func tap(step: Int, intensity: UIImpactFeedbackGenerator.FeedbackStyle = .medium) {
         playChime(step: step)

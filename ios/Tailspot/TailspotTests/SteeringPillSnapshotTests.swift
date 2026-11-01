@@ -25,7 +25,8 @@ struct SteeringPillSnapshotTests {
 
     private func steering(_ direction: SteeringDirection, meters: Double, unit: DistanceUnit = .kilometers) -> HUDStatusPill {
         let hint = SteeringHint(icao24: "abc123", direction: direction, elevationDeltaDeg: 10, distanceMeters: meters)
-        return HUDStatusPill(text: SteeringPill.text(hint, unit: unit), tint: Brand.Color.cyan, pulsing: false)
+        return HUDStatusPill(text: SteeringPill.text(hint, unit: unit), tint: Brand.Color.cyan, pulsing: false,
+                             glyph: SteeringPill.glyph(hint))
     }
 
     /// A phone-sized camera stand-in with the pill where `statusPillOverlay`

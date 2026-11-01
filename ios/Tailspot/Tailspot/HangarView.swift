@@ -187,7 +187,7 @@ struct HangarView: View {
         VStack(alignment: .leading, spacing: 10) {
             ZStack {
                 Circle().fill(Brand.Color.cyan.opacity(0.12))
-                Image(systemName: "magnifyingglass")
+                Image(systemName: "binoculars")
                     .font(.system(size: 28, weight: .regular))
                     .foregroundStyle(Brand.Color.cyan)
             }
@@ -226,42 +226,22 @@ struct HangarView: View {
                 .foregroundStyle(Brand.Color.textTertiary)
             VStack(spacing: 8) {
                 ForEach(Self.previewFamilies) { set in
-                    setPreviewRow(set)
+                    // The same card the Sets tab shows, at 0 caught, so a
+                    // first-timer's preview matches what they get after one
+                    // catch. No chevron: these rows aren't tappable.
+                    SetCompletionCard(
+                        set: set,
+                        progress: (caught: 0, total: set.entries.count),
+                        showsChevron: false
+                    )
+                    // Re-group as one element with the shorter preview
+                    // label; the card's own "0 percent complete" adds
+                    // nothing before the first catch.
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("\(set.title), 0 of \(set.entries.count) variants")
                 }
             }
         }
-    }
-
-    private func setPreviewRow(_ set: CardSet) -> some View {
-        HStack(spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: Brand.Radius.chip).fill(set.type.tint.opacity(0.20))
-                Text(set.type.glyph)
-                    .font(Brand.Font.mono(size: 14, weight: .bold))
-                    .foregroundStyle(set.type.tint)
-            }
-            .frame(width: 30, height: 36)
-            .accessibilityHidden(true)
-            // Title over count, the same stack the Sets tab's
-            // SetCompletionCard uses. A trailing count column squeezed the
-            // title into a narrow wrap at large Dynamic Type sizes.
-            VStack(alignment: .leading, spacing: 2) {
-                Text(set.title)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Brand.Color.textPrimary)
-                Text("0 of \(set.entries.count) variants")
-                    .font(Brand.Font.mono(size: 11, weight: .semibold, relativeTo: .caption2))
-                    .foregroundStyle(Brand.Color.textTertiary)
-                    .monospacedDigit()
-            }
-            Spacer(minLength: 4)
-        }
-        .padding(12)
-        .background(Brand.Color.bgElevated, in: .rect(cornerRadius: Brand.Radius.row))
-        // One coherent VoiceOver element per row — otherwise the glyph
-        // character, title and count read as disconnected fragments.
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(set.title), 0 of \(set.entries.count) variants")
     }
 
     /// Ids of the families the empty state previews: three airliner

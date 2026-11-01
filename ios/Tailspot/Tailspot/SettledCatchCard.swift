@@ -5,7 +5,8 @@
 //  The reveal card AT REST — Direction B ("the settled reveal", Noah's pick
 //  2026-07-05): whatever the catch moment showed is exactly what the Hangar
 //  detail screen frames later. Same photo hero, split-flap name (settled,
-//  never animating), tier line, ALT/SPD + full-width ROUTE data section,
+//  never animating), tier line, ALT/SPD + full-width ROUTE data section
+//  (ALT/SPD/DIST on one row when there's no route),
 //  and the score ledger — built from the SAME atoms the reveal animates
 //  (RP palette, FlapRow at t=1, statCell/ledgerRow, RevealPhoto), so the
 //  two screens cannot drift apart in vocabulary.
@@ -146,7 +147,7 @@ struct SettledCatchCard: View {
                         ledgerRow("FIRST OF TYPE", "+\(bonus)", RP.gold, 1, scale: scale)
                     }
                     Rectangle().fill(RP.rule).frame(height: 1)
-                    ledgerRow("EARNED", "+\(base + bonus)", accent, 1, scale: scale, big: true)
+                    ledgerRow("TOTAL", "+\(base + bonus)", accent, 1, scale: scale, big: true)
                 }
             }
             .padding(.horizontal, hPad)
@@ -192,20 +193,21 @@ struct SettledCatchCard: View {
     }
 
     // ALT / SPD two-column row, then a rule and the full-width ROUTE row
-    // (display codes — IATA preferred upstream — neutral arrow, city subline);
-    // no route → DIST takes the full-width slot. The reveal's dataSection
-    // shape, settled.
+    // (display codes — IATA preferred upstream — neutral arrow, city subline).
+    // No route → DIST takes the full-width second row (never a cramped third
+    // column; same layout as the reveal's dataSection). ALT and SPD both
+    // missing → no row of dashes: DIST stands alone, or with a route takes
+    // ALT's cell in row one (`statRow`, shared with the reveal).
     @ViewBuilder
     private func dataSection(scale: CGFloat, accent: Color) -> some View {
         let hasRoute = (plane.originIcao ?? plane.destIcao) != nil
+        let hasAltSpd = !isBlankStat(plane.altText) || !isBlankStat(plane.speedText)
         VStack(alignment: .leading, spacing: 12 * scale) {
-            HStack(spacing: 14 * scale) {
-                statCell("ALT", plane.altText, scale: scale, accent: accent)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                statCell("SPD", plane.speedText, scale: scale, accent: accent)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+            if hasAltSpd || hasRoute {
+                statRow(alt: plane.altText, speed: plane.speedText, dist: plane.distText,
+                        scale: scale, accent: accent)
+                Rectangle().fill(RP.rule).frame(height: 1)
             }
-            Rectangle().fill(RP.rule).frame(height: 1)
             if hasRoute {
                 routeCell(scale: scale, accent: accent)
             } else {
@@ -234,23 +236,7 @@ struct SettledCatchCard: View {
                 }
             }
             .lineLimit(1).minimumScaleFactor(0.6)
-            if plane.originName != nil || plane.destName != nil {
-                HStack(spacing: 5 * scale) {
-                    if let on = plane.originName {
-                        Text(on)
-                        if let dn = plane.destName {
-                            Text("→").foregroundColor(RP.faint)
-                            Text(dn)
-                        }
-                    } else if let dn = plane.destName {
-                        Text("→").foregroundColor(RP.faint)
-                        Text(dn)
-                    }
-                }
-                .font(.system(size: 12 * scale))
-                .foregroundColor(RP.muted)
-                .lineLimit(1).minimumScaleFactor(0.6)
-            }
+            routeCityLine(origin: plane.originName, dest: plane.destName, scale: scale)
         }
     }
 }
