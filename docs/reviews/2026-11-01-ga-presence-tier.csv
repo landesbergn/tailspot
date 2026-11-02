@@ -1,0 +1,1189 @@
+typecode,make,model,tier_before,tier_after,caught_airframes,us_registered
+A140,Antonov,An-140,common,epic,0,5
+A223,Oskbes-Mai,MAI-223 Kityonok,common,epic,0,2
+A500,Adam,A-500,common,epic,0,5
+A504,Avro,504,common,epic,0,2
+A890,Aviatika,MAI-890,common,epic,0,1
+AB95,Aero Boero,AB-95,common,epic,0,3
+AC4,Light Wing,AC-4,common,epic,0,6
+AC52,Aero,Commander 520,common,epic,0,1
+ACED,Powell,P-70 Acey Deucy,common,epic,0,4
+ACSR,Victa,Aircruiser,common,epic,0,1
+ADVN,Adventure Air,Adventurer,common,epic,0,1
+AE45,Let,Aero 45,common,epic,0,7
+AEA1,American Eagle,A-1,common,epic,0,5
+AFOX,Halley,Apollo Fox,common,epic,0,9
+AG10,Caiga,AG-100,common,epic,0,7
+AG60,Caiga,AG-600 Kunlong,common,epic,0,9
+AGSH,Aero Gare,Sea Hawker,common,epic,0,5
+AIRD,Beagle-Auster,A-109 Airedale,common,epic,0,9
+ALPI,Auster,J-5Q Alpine,common,epic,0,4
+AM3,Aerfer-Aermacchi,AM-3,common,epic,0,4
+AN28,Pzl-Mielec,An-28,common,epic,0,9
+AN30,Antonov,An-30,common,epic,0,2
+AN70,Antonov,An-70,common,epic,0,1
+ANDR,Millioud,Andromède,common,epic,0,1
+ANGL,Angel,44 Angel,common,epic,0,5
+ANKA,Tai,Anka,common,epic,0,8
+AP20,Aeroprakt,A-20,common,epic,0,5
+AP24,Aeroprakt,A-24 Viking,common,epic,0,1
+AP26,Aeroprakt,A-26 Twin Vista,common,epic,0,2
+AP36,Aeroprakt,A-36 Vulcan,common,epic,0,1
+APM4,Issoire,APM-40 Simba,common,epic,0,2
+APUP,Aeropup,Aeropup,common,epic,0,4
+ARES,Rutan,151 Ares,common,epic,0,1
+ARVA,IAI,101 Arava,common,epic,0,1
+ARWF,Arrow,F Sport,common,epic,0,8
+AS14,Schleicher,ASK-14,common,epic,0,9
+AS2T,Ffa,AS-202-32TP Turbine Bravo,common,epic,0,1
+ASO4,Asso Aerei,4 Whisky,common,epic,0,3
+ASO5,Asso Aerei,5 Champion,common,epic,0,8
+AT2P,Air Tractor,AT-250,common,epic,0,1
+AT5P,Air Tractor,AT-501,common,epic,0,4
+AUJ2,Auster,J-2 Arrow,common,epic,0,6
+AUJ4,Auster,J-4 Archer,common,epic,0,6
+AUS4,Taylorcraft,G,common,epic,0,4
+AUS7,Auster,Q,common,epic,0,1
+AUS9,Auster,B5,common,epic,0,8
+AVIN,Avro,594 Avian,common,epic,0,2
+AXE,Skyfly,Axe,common,epic,0,1
+B103,Beriev,Be-103 Bekas,common,epic,0,1
+B18T,Beechcraft,18 Turbo,common,epic,0,1
+B23,Douglas,B-23 Dragon,common,epic,0,3
+BARC,Buethe,Barracuda,common,epic,0,5
+BD5J,Alturair,BD-5J Micro,common,epic,0,5
+BE22,Beechcraft,220 Denali,common,epic,0,3
+BE70,Beechcraft,70 Queen Air,common,epic,0,6
+BEA5,Avipro,Bearhawk 5,common,epic,0,7
+BETA,Rollason,Beta,common,epic,0,2
+BF19,Podesva,Bf-109G-2,common,epic,0,1
+BFIT,Bristol,F-2B Fighter,common,epic,0,2
+BISC,Bilsam,Sky Cruiser,common,epic,0,7
+BL11,Bleriot,11,common,epic,0,6
+BL19,Aviabellanca,19 Skyrocket,common,epic,0,3
+BLSA,Avipro,Bearhawk LSA,common,epic,0,2
+BMAN,Aak,Bushman,common,epic,0,1
+BO40,Boeing,40,common,epic,0,1
+BOOM,Rutan,202 Boomerang,common,epic,0,1
+BPUM,Bdc Aero,Puma,common,epic,0,6
+BR60,Brumby,600,common,epic,0,5
+BR61,Brumby,610 Evolution,common,epic,0,8
+BR8,Brm Aero,Bristell B8,common,epic,0,1
+BSWN,Dronamics,Black Swan,common,epic,0,1
+BU20,Aircraft Hydro-Forming,Bushmaster 2000,common,epic,0,1
+BU81,Zlin,C-6,common,epic,0,9
+C06T,Cessna,206,common,epic,0,4
+C21T,Riley,Turbine Eagle 421,common,epic,0,2
+C365,Ekw,C-3605,common,epic,0,4
+C82,Fairchild,C-82 Packet,common,epic,0,1
+CA19,Commonwealth,CA-13 Boomerang,common,epic,0,5
+CA41,Corvus,CA-41 Racer,common,epic,0,3
+CA6,Aerocomp,CA-6 Comp Air 6,common,epic,0,4
+CA61,Cvjetkovic,CA-61 Mini Ace,common,epic,0,2
+CA65,Cvjetkovic,CA-65 Skyfly,common,epic,0,4
+CA7T,Aerocomp,CA-7T Comp Air 7T,common,epic,0,1
+CA8,Aerocomp,CA-8 Comp Air 8,common,epic,0,1
+CABN,Paramount,Cabinaire,common,epic,0,1
+CAD4,Class,Bush Caddy L-160,common,epic,0,2
+CAR,Aerocar,Aerocar,common,epic,0,4
+CAW,Cessna,AW,common,epic,0,6
+CD2,Claudius Dornier,CD-2 Seastar,common,epic,0,3
+CDW1,Chilton,DW-1,common,epic,0,4
+CEL5,Otto,Celera 500L,common,epic,0,1
+CENT,Found,100 Centennial,common,epic,0,1
+CH10,Zenair,CH-100 Mono-Z,common,epic,0,6
+CH15,Zenair,CH-150 Acro-Z,common,epic,0,2
+CH3,Chrislea,CH-3 Skyjeep,common,epic,0,1
+CH40,Champion,402 Lancer,common,epic,0,8
+CH50,Zenair,CH-50 Mini-Z,common,epic,0,1
+CH62,Zenair,CH-620 Gemini,common,epic,0,1
+CHIC,Podesva,Chico,common,epic,0,1
+CHP2,Belite,CH-2A Chipper 2,common,epic,0,1
+CLA,Callair,A-2,common,epic,0,9
+CLB1,Aero Commander,B-1 Ag Commander,common,epic,0,1
+CN12,Circa,Nieuport 12-7/8,common,epic,0,3
+COOT,Aerocar,Coot,common,epic,0,9
+CP13,Piel,CP-1310 Super Emeraude,common,epic,0,7
+CP21,Mudry,CAP-21,common,epic,0,9
+CP22,Akrotech Europe,CAP-222,common,epic,0,1
+CP75,Piel,CP-70 Béryl,common,epic,0,5
+CP80,Piel,CP-80 Zéphir,common,epic,0,2
+CP90,Piel,CP-90 Pinocchio 2,common,epic,0,1
+CPUP,Culp,Sopwith Pup,common,epic,0,1
+CR10,Dyn'aero,CR-100,common,epic,0,5
+CTLN,Fly Synthesis,Catalina,common,epic,1,1
+CUDA,Lancair,NLA-275 Barracuda,common,epic,0,2
+CULP,Culp,Special,common,epic,0,3
+CX5,Thatcher,CX-5,common,epic,0,6
+D1,Derringer,New Derringer,common,epic,0,6
+D24,Albaviation,D-24 MagicONE,common,epic,0,1
+D28D,Dornier,128-2 Skyservant,common,epic,0,3
+D28T,Dornier,128-6 Turbo Skyservant,common,epic,0,1
+D4,Auster,D-4,common,epic,0,1
+D5TU,Druine,D-5 Turbi,common,epic,0,6
+D6,Auster,D-6,common,epic,0,1
+D8,Fokker,D-8 Replica,common,epic,0,3
+DA5,Davis,DA-5,common,epic,0,1
+DAL1,Spezio,DAL-1 Tuholer,common,epic,0,3
+DH80,De Havilland,DH-80 Puss Moth,common,epic,0,4
+DH84,De Havilland Australia,DH-84 Dragon,common,epic,0,3
+DH85,De Havilland,DH-85 Leopard Moth,common,epic,0,9
+DH88,De Havilland,DH-88 Comet Replica,common,epic,0,3
+DH90,De Havilland,DH-90 Dragonfly,common,epic,0,2
+DH94,De Havilland,DH-94 Moth Minor,common,epic,0,7
+DHA3,De Havilland Australia,DHA-3 Drover,common,epic,0,4
+DIES,Pennec-Lucas,Dieselis,common,epic,0,1
+DRTG,Culver,Dart G,common,epic,0,1
+DT45,Diamond,DART-450,common,epic,0,2
+DTA1,Verhees,D-1 Delta,common,epic,0,1
+DUR5,Durand,Mk5,common,epic,0,3
+DV2,Dova,DV-2 Infinity,common,epic,0,1
+DWD2,Dewoitine,D-26,common,epic,0,2
+E230,Extra,EA-230,common,epic,0,7
+E350,Cessna,E350,common,epic,0,1
+E500,Extra,EA-500,common,epic,0,7
+EAEA,Grosso,Easy Eagle,common,epic,0,1
+EC6,Croses,EC-6 Criquet,common,epic,0,2
+EDGT,Zivko,Edge 540 T,common,epic,0,7
+EFUS,Magnus,MG-11 eFusion,common,epic,0,1
+EGRT,Grob,D-500 Egrett 2,common,epic,0,5
+ELST,Putzer,Elster,common,epic,0,4
+EM11,Marganski,EM-11 Orka,common,epic,0,1
+EP9,Edgar Percival,EP-9,common,epic,0,2
+EPER,Epervier,Epervier,common,epic,0,1
+ERAC,Dickey,E-Racer,common,epic,0,2
+ES13,Clifford Aeroworks,Spad 13 80%,common,epic,0,1
+EV55,Evektor,EV-55 Outback,common,epic,0,2
+EX5T,Aea,Explorer 500T,common,epic,0,1
+EZFL,Aerocomp,E-Z Flyer,common,epic,0,5
+F30,Golden Avio,F-30 Brio,common,epic,0,2
+F3F,Grumman,F3F Replica,common,epic,0,4
+F600,Siai-Marchetti,SF-600 Canguro,common,epic,0,1
+FA01,Fläming Air,FA-01 Saphir,common,epic,0,1
+FA02,Fläming Air,FA-02 Smaragd VLA,common,epic,0,1
+FA04,Fläming Air,FA-04 Peregrine,common,epic,0,3
+FALM,Miles,M-3 Falcon Major,common,epic,0,2
+FANL,Rhein,FL-1 Fanliner,common,epic,0,1
+FANT,Rhein,Fantrainer,common,epic,0,3
+FB1B,Bowers,Fly Baby 1B,common,epic,0,2
+FB5,Euro-Fly,FB-5 Star Light,common,epic,0,3
+FDMC,Flight Design,MC,common,epic,0,6
+FE51,Fighter Escort Wings,P-51,common,epic,0,6
+FEST,Aerostar,01 Festival,common,epic,0,6
+FLAM,Dassault,MD-311 Flamant,common,epic,0,1
+FLIZ,Flitzer,Z-1 Flitzer,common,epic,0,1
+FLSH,Euro-Fly,Flash,common,epic,0,1
+FLSS,Flyer,NG,common,epic,0,4
+FN33,Nardi,FN-333 Riviera,common,epic,0,3
+FORT,Fleet,60 Fort,common,epic,0,2
+FOXT,Team Tango,Gavilán,common,epic,0,4
+FRBD,Northrop Grumman,H-03 Firebird,common,epic,0,3
+FS51,Falconar,SAL P-51D Mustang,common,epic,0,1
+FX1,Innovaviation,FX-1,common,epic,0,3
+G21T,Mckinnon,G-21E Turbo Goose,common,epic,0,3
+G2GL,Soko,G-2 Galeb,common,epic,0,5
+G46,Fiat,G-46,common,epic,0,3
+G73T,Frakes,G-73T Turbo Mallard,common,epic,0,3
+G800,Grinvalds,G-801 Orion,common,epic,0,1
+G96,Grumman,TF Trader,common,epic,0,6
+GA10,Gippsaero,GA-10,common,epic,0,1
+GABR,Blackshape,BS-115 Gabriel,common,epic,0,2
+GDUK,Ellison-Mahon,Gweduck,common,epic,0,1
+GEMI,Miles,M-65 Gemini,common,epic,0,3
+GLAD,Gloster,Gladiator,common,epic,0,1
+GOOS,Quikkit,Glass Goose,common,epic,0,2
+GP1,Jihlavan,Skyleader GP One,common,epic,0,1
+GPRO,Genevation,GenPro,common,epic,0,1
+GRIF,Canada Air Rv,Griffin,common,epic,0,3
+H202,Hb-Aircraft,HB-202 Fledger,common,epic,0,1
+H40,Hoffmann,H-40,common,epic,0,1
+HAHU,Sindlinger,HH-1 Hawker Hurricane,common,epic,0,6
+HANS,Nal,Hansa,common,epic,0,1
+HB21,Brditschka,HB-21 Hobbyliner,common,epic,0,2
+HB23,Brditschka,HB-23 Scanliner,common,epic,0,7
+HEAD,Stewart,JD-1 Headwind,common,epic,0,1
+HI27,Hirth,Hi-27 Acrostar,common,epic,0,1
+HIND,Hawker,Hind,common,epic,0,1
+HLD4,Halberstadt,D-4 Replica,common,epic,0,1
+HORZ,Fisher Aero,Horizon,common,epic,0,4
+HRNT,Aak,Hornet,common,epic,0,4
+I103,Ilyushin,Il-103,common,epic,0,1
+I114,Ilyushin,Il-114,common,epic,0,4
+I153,Polikarpov,I-153,common,epic,0,1
+I15B,Polikarpov,I-15bis,common,epic,0,1
+I16,Polikarpov,I-16,common,epic,0,1
+I3,Interavia,I-3,common,epic,0,1
+IA46,Dinfia,IA-46 Ranquel,common,epic,0,4
+INCQ,Inpaer,Conquest,common,epic,0,2
+INTG,Aura Aero,Integral R,common,epic,0,6
+IP06,Ipe,IPE-06 Curucaca,common,epic,0,1
+IPAN,Embraer,U-19 Ipanema,common,epic,0,1
+IR25,Ica,IAR-825TP Triumf,common,epic,0,1
+IR28,Ica,IS-28MA,common,epic,0,2
+IR46,Iar,IAR-46 Katty,common,epic,0,7
+ISPT,Isaacs,Spitfire,common,epic,0,3
+J300,Alms,J-300 Joker,common,epic,0,6
+JC01,Coupe,JC-01,common,epic,0,1
+JCRU,Aasi,Jetcruzer,common,epic,0,1
+JD2,Dyke,JD-2 Delta,common,epic,0,7
+JFOX,Airo,1,common,epic,0,5
+JS3,Century,Jetstream 3,common,epic,0,2
+JT2,Taylor,JT-2 Titch,common,epic,0,3
+JUN1,Kaminskas,RK-1 Jungster 1,common,epic,0,6
+KAK1,Kieger,AK-1,common,epic,0,1
+KAK3,Junkers Profly,Junka,common,epic,0,1
+KEHA,Kestrel,Float Hawk,common,epic,0,5
+KELA,Keleher,Lark,common,epic,0,2
+KELD,Kelly,D,common,epic,0,1
+KERO,Rearwin,2000 Ken-Royce,common,epic,0,2
+KFAB,Kitplanes For Africa,Bushbaby,common,epic,0,5
+KFIS,Anderson,EA-1 Kingfisher,common,epic,0,3
+KIS2,Tri-R,KIS TD,common,epic,0,7
+KITH,Bourdon,Kitty Hawk,common,epic,0,1
+KL25,Klemm,L-25,common,epic,0,4
+KL35,Klemm,Kl-35,common,epic,0,6
+KLBR,Kolb,King Kolbra,common,epic,0,3
+KM2,Fuji,KM-2,common,epic,0,7
+KR31,Fairchild,KR-31,common,epic,0,9
+KRAG,Soko,P-2 Kraguj,common,epic,0,2
+KZ2,Sai,KZ-2 Kupe,common,epic,0,2
+KZ3,Sai,KZ-3,common,epic,0,4
+KZ7,Sai,KZ-7 Laerke,common,epic,0,8
+KZ8,Sai,KZ-8,common,epic,0,1
+L11E,Luscombe,11E,common,epic,0,1
+L14,Lockheed,L-14 Hudson,common,epic,0,2
+L4,Chaika,L-4,common,epic,0,2
+L60,Orličan,K-60 Brigadyr,common,epic,0,1
+L70,Valmet,L-70 Vinka,common,epic,0,4
+L90,Aermacchi,M-290TP Redigo,common,epic,0,6
+LA60,Aermacchi,AL-60,common,epic,0,6
+LA8,Aerovolga,LA-8 Flagman,common,epic,0,2
+LACO,Laven,LACO-125,common,epic,0,1
+LAKR,Laser,Akro Z,common,epic,0,6
+LBUG,Lightning Bug,Bug,common,epic,0,1
+LEGD,Performance,Legend,common,epic,0,2
+LMC1,Chasle,LMC-1 Sprintair,common,epic,0,1
+LN27,Falcomposite,LN-27 Furio,common,epic,0,3
+LOVE,Loving-Wayne,WR-1 Love,common,epic,0,1
+LSTR,Custom Flight,Lite Star,common,epic,0,1
+LWIN,Howard Hughes,Australian LightWing GR-582,common,epic,0,3
+M106,Lambert,M-106 Mission,common,epic,0,3
+M108,Lambert,M-108 Mission,common,epic,0,4
+M26,Pzl-Mielec,M-26 Air Wolf,common,epic,0,4
+M2HK,Miles,M-2 Hawk Major,common,epic,0,1
+M308,German Bianco,MB-308,common,epic,0,1
+M404,Martin,404,common,epic,0,5
+M7T,Maule,M-7-420,common,epic,0,2
+M9,Maule,M-9,common,epic,0,1
+MAGC,Eagle Aviation,EA-100,common,epic,0,9
+MAGI,Miles,M-14 Magister,common,epic,0,4
+MAJR,Falconar,Cubmajor,common,epic,0,2
+MAKO,Lancair,NLA-450 Mako,common,epic,0,3
+MAMB,Melbourne,MA-2 Mamba,common,epic,0,2
+MAVR,Aea,Maverick,common,epic,0,1
+MCOU,Chris Tena,Mini Coupe,common,epic,0,1
+MCOY,Montana,Coyote,common,epic,0,7
+MD3,Sme,MD-3 Tiga,common,epic,0,1
+MD3R,Gryf,MD-3 Rider,common,epic,0,9
+ME62,Legend Flyers,Me-262,common,epic,0,3
+MEL2,Garrison,Melmoth 2,common,epic,0,1
+MESS,Miles,M-38 Messenger,common,epic,0,9
+MJ10,Jurca,MJ-10 Spit,common,epic,0,1
+MJ1H,Jurca,MJ-100 Spitfire Replica,common,epic,0,1
+MJ2,Jurca,MJ-2 Tempête,common,epic,0,3
+MJ7,Boeve,P-51 Mustang,common,epic,0,1
+MJ77,Jurca,MJ-77 Gnatsum,common,epic,0,1
+MJ8,Jurca,MJ-8 1-Nine-0,common,epic,0,2
+MJ80,Jurca,MJ-80 Focke-Wulf Fw-190 Replica,common,epic,0,1
+MJ90,Jurca,MJ-90 Messerschmitt Bf-109 Replica,common,epic,0,2
+MOSP,Mong,Sport,common,epic,0,6
+MP02,Aero-Kros,MP-02 Czajka,common,epic,0,4
+MP20,Plan,MP-205 Busard,common,epic,0,1
+MR3T,Murphy,SR-3500 T-Moose,common,epic,0,1
+MRMD,Csa,Mermaid,common,epic,0,3
+MS31,Morane-Saulnier,MS-315,common,epic,0,2
+MS73,Morane-Saulnier,MS-733 Alcyon,common,epic,0,4
+MS76,Dinfia,MS-760 Paris,common,epic,0,3
+MY12,Mylius,MY-102 Tornado,common,epic,0,2
+MY13,Mylius,MY-103 Mistral,common,epic,0,1
+N110,Nord,1100 Noralpha,common,epic,0,4
+N120,Nord,1200 Norecrin,common,epic,0,2
+N219,Dirgantara Indonesia,N-219 Nurtanio,common,epic,0,1
+NC85,Nord,NC-854,common,epic,0,6
+ND1T,Ndn,NDN-1T Turbo Firecracker,common,epic,0,1
+NI28,Nieuport,28 Replica,common,epic,0,2
+NIBB,Aviamilano,F-14 Nibbio,common,epic,0,2
+NT10,Nuwaco,T-10,common,epic,0,1
+NXT,Nemesis,NXT,common,epic,0,1
+O3,Lockheed,YO-3,common,epic,0,3
+OMGA,Isae,Omega,common,epic,0,1
+ONE,Gogetair,G-600,common,epic,0,8
+OPCA,Brooklands,OA-7 Optica Scout,common,epic,0,3
+P136,Piaggio,P-136,common,epic,0,8
+P19,Aviamilano,P-19 Scricciolo,common,epic,0,1
+P220,Antoniewski,P-220S-AT2,common,epic,0,2
+P230,Pottier,P-230 Panda,common,epic,0,1
+P270,Pottier,P-270 Amster,common,epic,0,2
+P50,Pottier,P-50 Bouvreuil,common,epic,0,1
+P66P,Piaggio,P-166,common,epic,0,2
+P66T,Piaggio,P-166DL3,common,epic,0,1
+P68T,Partenavia,AP-68TP-300 Spartacus,common,epic,0,4
+P80,Pottier,P-80,common,epic,0,1
+PACE,Bellanca,D Skyrocket,common,epic,0,3
+PANT,Rotec,Panther 2,common,epic,0,8
+PAR1,Paradise,P-1,common,epic,0,8
+PAT4,Neiva,NE-821 Caraja,common,epic,0,7
+PC6P,Pilatus,PC-6 Porter,common,epic,0,3
+PEMB,Hunting Percival,P-66 Pembroke,common,epic,0,1
+PETL,Aero Itba,Petrel,common,epic,0,1
+PIAE,Pipistrel,WattsUp,common,epic,0,9
+PICO,General Avia,F-15 Delfino,common,epic,0,5
+PINO,General Avia,F-22 Pinguino,common,epic,0,6
+PK15,Pik,PIK-15 Hinu,common,epic,0,1
+PK23,Pik,PIK-23 Suhinu,common,epic,0,1
+PK25,Pik,PIK-25 Varttimarkka,common,epic,0,1
+PKAN,Uetz,U-3M Pelikan,common,epic,0,4
+PL12,Transavia,PL-12 Airtruk,common,epic,0,8
+PL9,Pazmany,PL-9 Stork,common,epic,0,3
+PLUS,Taylorcraft,Plus C,common,epic,0,4
+PO2,Css,CSS-13,common,epic,0,3
+PO60,Potez,60 Sauterelle,common,epic,0,1
+POLI,Alvarez,Polliwagen,common,epic,0,4
+PREN,Percival,P-40 Prentice,common,epic,0,1
+PREX,Private Explorer,Explorer,common,epic,0,1
+PROC,Percival,P-28 Proctor,common,epic,0,5
+PSTM,Podesva,Stearman,common,epic,0,1
+PT80,Pottier,P-180,common,epic,0,7
+PULR,P&m Aviation,PulsR,common,epic,0,1
+PURS,Rans,S-11 Pursuit,common,epic,0,1
+PUSH,Prescott,Pusher,common,epic,0,5
+PVTR,Privateer,Privateer,common,epic,0,2
+PZ01,Lipnur,PZL-101 Gawron,common,epic,0,4
+PZ02,Pzl-Okecie,PZL-102 Kos,common,epic,0,1
+PZ06,Pzl-Okecie,PZL-106A Kruk,common,epic,0,4
+Q28,Boeing Australia,MQ-28 Ghost Bat,common,epic,0,3
+QR01,Quercy,CQR-01,common,epic,0,1
+QUAS,Aeroalcool,Quasar Lite,common,epic,0,5
+R109,Aircraft Spruce,DR-109 Rhino,common,epic,0,5
+R185,Johnson,Rocket 125,common,epic,0,6
+RANG,Navion,Rangemaster,common,epic,0,5
+RARO,Altitude,P-85,common,epic,0,4
+RAV5,Ravin,500,common,epic,0,3
+RAZM,Saint Germain,Raz-Mut,common,epic,0,2
+RCAL,Murphy,Radical,common,epic,0,1
+RF47,Arc Atlantique,RF-47,common,epic,0,2
+RF9,Abs,RF-9,common,epic,0,1
+RJ03,Junqua,RJ-03 Ibis,common,epic,0,2
+RNGR,Dac,RangeR,common,epic,0,1
+ROND,Ambrosini,F-4 Rondone,common,epic,0,2
+RV4T,Van's,RV-4T,common,epic,0,1
+RW26,Ragwing,RW-26 Special 2,common,epic,0,8
+S05F,Siai-Marchetti,S-205-18F,common,epic,0,2
+S15S,Stemme,S-15,common,epic,0,1
+S200,Sipa,S-200 Minijet,common,epic,0,2
+S208,Siai-Marchetti,S-208,common,epic,0,9
+S223,CASA,223 Flamingo,common,epic,0,7
+S355,Scaled,355 Firebird,common,epic,0,1
+S38,Sikorsky,S-38 Replica,common,epic,0,1
+S39,Sikorsky,S-39,common,epic,0,3
+S401,Scaled,401 Sierra,common,epic,0,2
+S51D,Stewart,S-51D,common,epic,0,4
+S900,Sipa,S-901,common,epic,0,7
+SA2,Icp,SA-2 Vimana,common,epic,0,2
+SA37,Schweizer,RG-8 Condor,common,epic,0,7
+SA70,Stolp,SA-700 Acroduster,common,epic,0,5
+SABW,Azalea,Saberwing,common,epic,0,3
+SACE,Ace,Super Ace,common,epic,0,6
+SAFF,Halsted,Saffire,common,epic,0,1
+SAH1,Fls,Sprint,common,epic,0,5
+SAND,Short,S-25 Sandringham,common,epic,0,1
+SAPH,Piel,CP-1320 Saphir,common,epic,0,3
+SAVA,Sadler,Vampire,common,epic,0,1
+SB7,Seabird,SB-7 Seeker,common,epic,0,4
+SCAM,Aerosport,Scamp,common,epic,0,7
+SCTR,Flaglor,Scooter,common,epic,0,2
+SD2,Spacek,SD-2 SportMaster,common,epic,0,8
+SF2,Hapi,SF-2 Cygnet,common,epic,0,9
+SF23,Scheibe,SF-23 Sperling,common,epic,0,4
+SF24,Scheibe,SF-24 Motorspatz,common,epic,0,2
+SF31,Sportavia-Putzer,SFS-31 Milan,common,epic,0,1
+SF36,Scheibe,SF-36,common,epic,0,1
+SG92,Technoavia,SM-92T Turbo Finist,common,epic,0,4
+SGRA,Prestige,Storm Rally,common,epic,0,5
+SHER,Sherpa,Sherpa,common,epic,0,2
+SHRT,Sherpa,K-650T,common,epic,0,1
+SKIM,Colonial,C-1 Skimmer,common,epic,0,8
+SL1,Star-Lite,SL-1 Star-Lite,common,epic,0,1
+SM60,Stinson,T Tri-Motor,common,epic,0,2
+SNS2,Sorrell,SNS-2 Guppy,common,epic,0,4
+SNS9,Sorrell,SNS-9 EXP-2,common,epic,0,3
+SOKL,Mraz,M-1 Sokol,common,epic,0,1
+SOL2,Solar Impulse,2,common,epic,0,1
+SP55,Technoavia,SP-55,common,epic,0,1
+SPIR,Questair,Spirit,common,epic,0,1
+SPKR,Tl Ultralight,Sparker,common,epic,0,3
+SPR2,Carlson,Sparrow 2,common,epic,0,1
+SPRT,Practavia,Sprite,common,epic,0,1
+SQ2T,Glassic,SQ-2000,common,epic,0,1
+SRAS,D'apuzzo,D-260 Senior Aero Sport,common,epic,0,3
+SS2,Rutan,339 Space Ship Two,common,epic,0,1
+ST10,Socata,ST-10 Provence,common,epic,0,7
+ST4,Stearman,4 Junior Speedmail,common,epic,0,1
+ST60,Staudacher,S-600,common,epic,0,2
+ST87,Stern,ST-87 Europlane,common,epic,0,2
+STAL,Aircraft Designs,Stallion,common,epic,0,4
+STLN,Helio,AU-24 Stallion,common,epic,0,3
+STRA,Striplin,Sky Ranger,common,epic,0,7
+STRE,Tl Ultralight,Stream,common,epic,0,9
+STRI,Sopwith,Triplane Replica,common,epic,0,6
+SU31,Sukhoi,Su-31,common,epic,0,8
+SWFT,Scaled,400 Swift,common,epic,0,1
+SYNC,Fly Synthesis,Syncro,common,epic,0,4
+SZ45,Szd,SZD-45 Ogar,common,epic,0,3
+T250,Anderson-Greenwood,51,common,epic,0,1
+T35,Temco,T-35 Buckaroo,common,epic,0,5
+T40,Turner,T-40,common,epic,0,5
+T411,Khrunichev,T-411 Aist,common,epic,0,1
+TA15,Taylorcraft,15 Tourist,common,epic,0,9
+TA16,Thurston,TA-16 Trojan,common,epic,0,2
+TAGO,Team Tango,Tango-2,common,epic,0,7
+TBEE,United Consultant,UC-1 Twin Bee,common,epic,0,4
+TBR3,Golden Circle,T-Bird 3,common,epic,0,3
+TC2,Aero Mirage,TC-2,common,epic,0,1
+TERM,Smith,Termite,common,epic,0,3
+TERR,Foxcon,Terrier,common,epic,0,7
+TF22,Taylorcraft,F-22 Ranger,common,epic,0,8
+TIPB,Avions Fairey,Tipsy B,common,epic,0,2
+TM5,Tm Aircraft,TM-5,common,epic,0,1
+TMOT,Fisher,R-80 Tiger Moth,common,epic,0,8
+TOXO,Cag,Toxo,common,epic,0,1
+TPIN,Scottish Aviation,Twin Pioneer,common,epic,0,2
+TR55,3xtrim,550 Trener,common,epic,0,2
+TRIM,Ford,4-AT Tri-Motor,common,epic,0,2
+TRIS,Anglo Normandy,BN-2A Mk3 Trislander,common,epic,0,5
+TRMA,Stinson,A Tri-Motor,common,epic,0,1
+TUCT,Flying Legend,Turbine Tucano Replica,common,epic,0,1
+TWST,Silence,Twister,common,epic,0,4
+U21,Beechcraft,EU-21 Ute,common,epic,0,4
+U22,Beechcraft,1074,common,epic,0,1
+UL10,Streamline Welding,10 Ultimate Winner,common,epic,0,3
+UL20,Streamline Welding,20 Ultimate Companion,common,epic,0,1
+UL45,3xtrim,450 Ultra,common,epic,0,3
+URRA,Ibis,GS-600 Arrow,common,epic,0,1
+UT66,Utva,66,common,epic,0,8
+UT75,Utva,75,common,epic,0,1
+V252,Msw,Votec 252,common,epic,0,1
+V322,Msw,Votec 322,common,epic,0,7
+V452,Msw,Votec 452,common,epic,0,1
+VG3T,Aviakit,Vega 3000,common,epic,0,2
+VGUL,Percival,K-1 Vega Gull,common,epic,0,2
+VIMA,Valtion,Viima,common,epic,0,1
+VIPJ,Viper,ViperJet,common,epic,0,2
+VK3P,Cirrus,VK-30 Cirrus,common,epic,0,1
+VL3T,Jmb Aircraft,VL-3 Evolution Turbine,common,epic,0,2
+VSON,American Affordable,Vision,common,epic,0,1
+VTOR,Vulcanair,AP-68TP-600 Viator,common,epic,0,4
+VUT1,Evektor,VUT-100 Cobra,common,epic,0,1
+VWIT,Aircraft Spruce,V-Witt,common,epic,0,3
+W11,Wolf,W-11 Boredom Fighter,common,epic,0,2
+W5BC,Wittman,W-5 Buttercup,common,epic,0,1
+WA42,Wassmer,WA-421 Prestige,common,epic,0,9
+WA80,Wassmer,WA-80 Piranha,common,epic,0,8
+WAC9,Waco,9,common,epic,0,6
+WACD,Waco,D,common,epic,0,1
+WACE,Waco,ARE Aristocrat,common,epic,0,6
+WACG,Waco,G,common,epic,0,1
+WACM,Waco,JWM,common,epic,0,5
+WACN,Waco,AVN,common,epic,0,5
+WACT,Waco,RPT,common,epic,0,1
+WBOO,Dean-Wilson,DW-200 Whitney Boomerang,common,epic,0,4
+WDEX,Radab,Windex,common,epic,0,2
+WFOC,War,Focke-Wulf 190,common,epic,0,5
+WFUR,War,Hawker Sea Fury,common,epic,0,2
+WH1,Wendt,WH-1 Traveler,common,epic,0,3
+WH4,Hall,WH-4 Harpoon,common,epic,0,7
+WHIT,Miles,M-11 Whitney Straight,common,epic,0,1
+WICH,Javelin,Wichawk,common,epic,0,8
+WILT,Aerostar,WT-01 Wild Thing,common,epic,0,3
+WIND,Watson,GW-1 Windwagon,common,epic,0,3
+WISP,Whisper,Whisper,common,epic,0,2
+WM2,Miller,WM-2,common,epic,0,1
+WOPU,Aerosport,Woody Pusher,common,epic,0,4
+WW1,White,WW-1 Der Jäger D-9,common,epic,0,1
+XB1,Boom,XB-1,common,epic,0,1
+Y112,Yakovlev,Yak-112,common,epic,0,1
+Y12F,Harbin,Y-12F Aircar,common,epic,0,1
+YA1,Yeoman,YA-1 Cropmaster,common,epic,0,2
+YK12,Pzl-Okecie,Yak-12,common,epic,0,6
+YK53,Yakovlev,Yak-53,common,epic,0,1
+YK54,Yakovlev,Yak-54,common,epic,0,4
+YL15,Boeing,451 Scout,common,epic,0,4
+YUKN,Murphy,Yukon,common,epic,0,2
+Z37T,Moravan,Z-137 Agro Turbo,common,epic,0,1
+A660,Ayres,S-2R-T660 Turbo Thrush,common,rare,0,92
+A9,Rockwell,A-9 Quail Commander,common,rare,0,51
+AAT3,Aero,AT-3,common,rare,0,82
+AAT4,Aero,AT-4,common,rare,0,14
+AC56,Aero,Commander 560,common,rare,0,25
+AC68,Aero,Commander 680E,common,rare,0,74
+AC6L,Aero Commander,685,common,rare,0,13
+AC80,Rockwell,681 Hawk Commander,common,rare,0,17
+ACAR,Auster,J-5B Autocar,common,rare,0,32
+ACR2,Acro Sport,Acro-Sport 2,common,rare,0,94
+ACRO,Acro Sport,Acro-Sport 1,common,rare,0,53
+ADVE,Auster,J-5 Adventurer,common,rare,0,12
+AERK,Aeronca,K Scout,common,rare,0,41
+AIGT,Auster,J-5F Aiglet Trainer,common,rare,0,17
+AKRO,Stephens,Akro,common,rare,0,10
+ALBU,Aviation Development,Alaskan Bushmaster,common,rare,0,12
+ALGR,Fantasy Air,Allegro,common,rare,0,63
+ALIG,Arion,LS-1 Lightning,common,rare,0,86
+ALSL,Airlony,Skylane,common,rare,0,49
+ALTO,Direct Fly,Alto,common,rare,0,81
+AN24,Xian,Y-7E,common,rare,0,23
+AN26,Antonov,An-26,common,rare,0,71
+APM2,Issoire,APM-21 Lion,common,rare,0,22
+APM3,Issoire,APM-30 Lion,common,rare,0,15
+AR50,Aeronca,50 Chief,common,rare,0,14
+ARV1,Arv,ARV-1 Super 2,common,rare,0,12
+AS02,Ffa,AS-202-18 Wren,common,rare,0,27
+AS16,Schleicher,ASK-16,common,rare,0,24
+ASTO,Tecnam,Astore,common,rare,1,51
+ATL,Robin,ATL,common,rare,0,60
+AUS3,Taylorcraft,E,common,rare,0,17
+AUS5,Auster,J,common,rare,0,38
+AUS6,Auster,K,common,rare,0,22
+AV68,Alpla,AVO-68 Samburo,common,rare,0,22
+AVAM,Avid,Catalina,common,rare,0,15
+AVTR,Aero Adventure,Aventura 2,common,rare,0,68
+B14A,Bellanca,14 Junior,common,rare,0,83
+B209,Bolkow,BO-209 Monsun,common,rare,0,65
+B36T,Beechcraft,36 Turbine Bonanza,common,rare,0,45
+B58T,Beechcraft,58TC Baron,common,rare,0,18
+BD5,Bede,BD-5B Micro,common,rare,0,50
+BE56,Beechcraft,56 Turbo Baron,common,rare,0,44
+BE65,Beechcraft,65 Queen Air,common,rare,0,60
+BE80,Beechcraft,80 Zamir,common,rare,0,22
+BIPL,Eaa,Biplane,common,rare,0,77
+BKUT,Berkut,Berkut,common,rare,0,17
+BLKS,Aircraft Spruce,Baby Lakes,common,rare,0,68
+BPAT,Avipro,Bearhawk Patrol,common,rare,0,38
+BRAV,Tecnam,P-2004 Bravo,common,rare,0,48
+BROU,Max Holste,MH-1521 Broussard,common,rare,0,38
+BU33,Bitz,Bü-133 Jungmeister,common,rare,0,42
+BUCA,Advanced Aeromarine,Mallard,common,rare,0,30
+BUSH,Rainbow Skyreach,BushCat,common,rare,1,66
+BW60,Blackwing,BW-600,common,rare,0,10
+BW6T,Blackwing,BW-635,common,rare,0,12
+BX2,Brandli,BX-2 Cherry,common,rare,0,46
+C10T,Advanced Aircraft,Spirit 750,common,rare,0,54
+C190,Cessna,190,common,rare,0,85
+C205,Cessna,205,common,rare,0,39
+C240,Cessna,T240 TTx,common,rare,0,14
+C335,Cessna,335,common,rare,0,35
+C336,Cessna,336 Skymaster,common,rare,0,43
+C404,Cessna,404 Titan,common,rare,0,89
+C411,Cessna,411,common,rare,0,19
+C82T,Cessna,TR182 Turbo Skylane RG,common,rare,0,95
+CA25,Commonwealth,CA-25 Winjeel,common,rare,0,32
+CA4,Aerocomp,CA-4 Comp Air 4,common,rare,0,13
+CAD2,Class,Bush Caddy R-80,common,rare,0,62
+CAML,Sopwith,Camel,common,rare,0,11
+CASS,Cassutt,Special,common,rare,0,79
+CE43,Cerva,CE-43 Guepard,common,rare,0,16
+CH20,Heintz,CH-200 Zénith,common,rare,0,46
+CH25,Zenair,CH-250 Zénith,common,rare,0,22
+CH2T,Amd,CH-2000 Alarus,common,rare,1,67
+CH30,Zenair,CH-300 Tri-Z,common,rare,0,48
+CH64,Zenair,CH-640 Zodiac,common,rare,0,12
+CH65,Amd,CH-650 Zodiac,common,rare,0,99
+CH80,Jordan Aerospace,CH-8000 Shark,common,rare,0,77
+CHR1,Elmwood,CA-05 Christavia Mk1,common,rare,0,63
+CHR4,Elmwood,CH-8 Christavia Mk4,common,rare,0,12
+CJ1,Corby,CJ-1 Starlet,common,rare,0,51
+CLBR,Fisher Aero,Celebrity,common,rare,0,11
+CLDS,Rearwin,8090 Cloudster,common,rare,0,20
+CMAS,Cessna,C-34,common,rare,0,50
+CNUK,Fleet,80 Canuck,common,rare,0,46
+COL3,Cessna,350,common,rare,0,20
+COLT,Texas Aircraft,Colt,common,rare,0,26
+CORO,Corvus,Corone,common,rare,0,14
+COUG,Acro Sport,Cougar,common,rare,0,18
+CP23,Mudry,CAP-230,common,rare,0,42
+CP32,Piel,CP-320 Super Emeraude,common,rare,0,17
+CP60,Piel,CP-60 Diamant,common,rare,0,10
+CP65,Porterfield,CP-65 Collegiate,common,rare,0,28
+CRBN,Curtiss-Robertson,50 Robin,common,rare,0,39
+CRES,New Zealand,Cresco,common,rare,0,41
+CT4,Pacific Aerospace,CT-4 Akala,common,rare,0,89
+CTAH,Rainbow Skyreach,Cheetah,common,rare,0,14
+CUB2,Aces High,Cuby 2,common,rare,0,19
+CUCA,Culver,LAR Cadet,common,rare,0,79
+CULV,Culver,V,common,rare,0,11
+D150,Jodel,D-150 Mascaret,common,rare,0,30
+D18,Jodel,D-18,common,rare,0,25
+D25,New Standard,D-25,common,rare,0,14
+D250,Centre Est,DR-200,common,rare,0,60
+D253,Centre Est,DR-253 Regent,common,rare,0,37
+D31,Druine,D-31 Turbulent,common,rare,0,28
+D5,Beagle,D-5,common,rare,0,11
+D6CR,Druine,D-60 Condor,common,rare,0,16
+D7,Fokker,D-7 Replica,common,rare,0,24
+DA2,Davis,DA-2,common,rare,0,14
+DA50,Diamond,DA-50,common,rare,0,82
+DAKH,Fisher,Dakota Hawk,common,rare,0,13
+DAL4,Dallach,D-4 Fascination,common,rare,0,25
+DEFI,Rutan,40 Defiant,common,rare,0,27
+DH83,De Havilland,DH-83 Fox Moth,common,rare,0,15
+DH87,De Havilland,DH-87 Hornet Moth,common,rare,0,19
+DO27,Dornier,Do-27,common,rare,0,56
+DO28,Dornier,Do-28A,common,rare,0,14
+DR1,Fokker,Dr-1 Replica,common,rare,0,47
+DR22,Centre Est,DR-220 2+2,common,rare,0,41
+DRIF,Austflight,Drifter,common,rare,0,12
+DUCE,Bakeng,Duce,common,rare,0,35
+DV1,Dova,DV-1 Skylark,common,rare,0,48
+DW1,Bellanca,DW-1 Eagle,common,rare,0,34
+E121,Embraer,EMB-121 Xingu,common,rare,0,40
+E200,Extra,EA-200,common,rare,0,11
+E2CB,Taylor,E-2 Cub,common,rare,0,23
+E400,Extra,EA-400,common,rare,1,18
+EAGX,Eagle Aircraft,100,common,rare,0,23
+EDGE,Zivko,Edge 540,common,rare,0,42
+ELSP,A2 Cz,Ellipse Spirit,common,rare,0,15
+ESCP,Just Aircraft,Escapade,common,rare,0,58
+EVOP,Lancair,Evolution Piston,common,rare,1,44
+EVOT,Evolution,EVOT-550 Evolution,common,rare,1,56
+EXNG,Extra,NG,common,rare,0,60
+EXPR,Express,90,common,rare,0,44
+F156,Morane-Saulnier,MS-500 Criquet,common,rare,0,14
+F406,Cessna,F406 Vigilant,common,rare,0,46
+F50,Fokker,50,common,rare,0,72
+F8L,Aeromere,F-8L Falco,common,rare,0,99
+FAET,Atec,321 Faeta,common,rare,1,62
+FALC,American Aircraft,Falcon XP,common,rare,0,28
+FBA2,Found,FBA-2,common,rare,0,59
+FDF2,Flight Design,F-2,common,rare,0,17
+FINC,Fleet,10,common,rare,0,35
+FK12,B & F Technik,FK-12 Comet,common,rare,0,29
+FK14,B & F Technik,FK-14 Polaris,common,rare,0,72
+FLE2,Fleet,2,common,rare,0,36
+FLE7,Fleet,7,common,rare,0,25
+FM25,Flying Machines,FM-250 Vampire,common,rare,0,12
+FU24,Air Parts,Fletcher FU-24,common,rare,0,52
+FUSI,Magnus,MG-11 Fusion,common,rare,0,13
+FW44,Fma,Fw-44 Stieglitz,common,rare,0,11
+FW90,Flug Werk,Fw-190 Replica,common,rare,0,26
+G1,G1 Aviation,G-1,common,rare,0,29
+G120,Grob,G-120,common,rare,0,83
+G159,Grumman,TC-4 Academe,common,rare,0,11
+G200,Akrotech,G-200,common,rare,0,42
+G202,Akrotech,G-202,common,rare,0,27
+G64T,Schweizer,G-164 Turbo Ag-Cat,common,rare,0,19
+G70,Groppo,G-70,common,rare,0,30
+GA20,Gippsland,GA-200 Fatman,common,rare,0,21
+GA7,Grumman American,GA-7 Cougar,common,rare,0,68
+GLSP,New Glastar,Sportsman 2+2,common,rare,1,42
+GOLF,Tecnam,P-96 Golf,common,rare,0,82
+GP3,Osprey,GP-3 Osprey 2,common,rare,0,66
+GP4,Osprey,GP-4,common,rare,0,10
+GSIS,Slipstream,Genesis,common,rare,0,21
+GUEP,Aero Services,Guepy,common,rare,0,20
+GX,Remos,GX,common,rare,0,91
+GY20,Cab,GY-20 Minicab,common,rare,1,34
+GY80,Gardan,GY-80 Horizon,common,rare,0,56
+H207,Hb-Flugtechnik,HB-207 Alfa,common,rare,0,15
+HN70,Nicollier,HN-700 Menestrel 2,common,rare,0,22
+HR10,Robin,HR-100 Royal,common,rare,0,49
+HRON,IAI,Heron,common,rare,0,10
+HUML,Hummel,Bird,common,rare,0,24
+IFUR,Isaacs,Fury,common,rare,0,14
+IL18,Ilyushin,Il-18,common,rare,0,34
+IMPU,Impulse,Xcite,common,rare,0,26
+IR23,Ica,IAR-823,common,rare,0,39
+IS28,Iar,IS-28M2,common,rare,0,36
+J1,Auster,J-1 Alpha,common,rare,0,92
+J2,Piper,J-2 Cub,common,rare,0,85
+J400,Jihlavan,JA-400 Skyleader 400,common,rare,0,20
+J600,Jihlavan,JA-600 Rapid 600,common,rare,1,24
+JAB2,Jabiru,J160,common,rare,0,79
+JACE,Ace,Junior Ace,common,rare,0,33
+JB15,Oberlerchner,JOB-15,common,rare,0,11
+JK05,Ekolot,JK-05 Beetle,common,rare,0,16
+KFAS,Kitplanes For Africa,Safari,common,rare,0,10
+KIS4,Pulsar,Super Cruiser,common,rare,0,14
+KL07,Bolkow,F-207,common,rare,0,34
+KP2,Jihlavan,KP-2 Rapid 200,common,rare,0,40
+KP5,Jihlavan,KP-5 Rapid 500,common,rare,0,35
+KR1,Rand,KR-1,common,rare,0,24
+KR21,Fairchild,KR-21,common,rare,0,11
+KR30,Ekolot,KR-030 Topaz,common,rare,0,30
+KR34,Fairchild,KR-34,common,rare,0,10
+KTOO,Amax,J-6 Karatoo,common,rare,0,22
+L11,Luscombe,11A Sedan,common,rare,0,38
+L13,Convair,L-13,common,rare,0,14
+L13M,Let,L-13 Blanik,common,rare,0,67
+L13S,Aerotechnik,L-13S Vivat,common,rare,0,10
+L200,Let,L-200 Morava,common,rare,0,26
+L37,Lockheed,L-15 Harpoon,common,rare,0,17
+L40,Orličan,L-40 Meta Sokol,common,rare,0,16
+LA25,Lake,LA-250 Seafury,common,rare,0,80
+LARK,Rockwell,100 Lark Commander,common,rare,0,10
+LESP,Lancair,ES-P,common,rare,0,11
+LGND,Aeropilot,L-600,common,rare,0,50
+LXR,Elixir,Elixir,common,rare,0,60
+M10,Aerostar,90,common,rare,0,47
+M110,Aviat,110 Special,common,rare,0,19
+M18,Aii,AVA-303,common,rare,0,94
+M200,Aero Commander,200 Commander 200,common,rare,0,87
+M22,Mooney,M-22,common,rare,0,18
+M28,Pzl-Mielec,C-145,common,rare,0,41
+M4,Maule,M-4,common,rare,0,65
+M6,Maule,M-6 Super Rocket,common,rare,0,26
+MA5,Marquart,MA-5 Charger,common,rare,0,54
+MA60,Xian,MA-60,common,rare,0,33
+MAGN,Airdale,Magnum,common,rare,0,40
+MAME,Aerocomp,Merlin,common,rare,0,56
+MC01,Montaer,MC-01,common,rare,0,17
+MC10,Colomban,MC-10 Cricri,common,rare,0,16
+MC45,Meyers,MAC-145,common,rare,0,33
+MC90,Monocoupe,90,common,rare,0,64
+MCR4,Dyn'aero,MCR-2,common,rare,0,80
+ME08,Nord,1000,common,rare,0,19
+ME09,Hispano,HA-1112 Buchon,common,rare,0,29
+MF17,Pakistan,Shahbaz,common,rare,0,45
+MJ5,Jurca,MJ-5 Sirocco,common,rare,0,12
+MONI,Monnett,Moni,common,rare,0,40
+MR25,Murphy,SR-2500 Super Rebel,common,rare,0,10
+MR35,Murphy,SR-3500 Moose,common,rare,0,76
+MRAI,Monnett,Monerai P,common,rare,0,24
+MSQ2,Backcountry,Mackey SQ-2,common,rare,0,21
+MX1T,World Aircraft,Sentinel,common,rare,0,17
+MX2,Mx Aircraft,MX-2,common,rare,1,17
+MXS,Mx Aircraft,MXS,common,rare,0,20
+N3,Nostalgair,N-3 Super Pup,common,rare,0,18
+N320,Nord,3202,common,rare,0,17
+NDAC,Normand Dube,Aerocruiser,common,rare,0,42
+NDIC,Norman,Nordic 2,common,rare,0,26
+NG4,Roko Aero,NG-4,common,rare,0,22
+NIPR,Avions Fairey,T-66 Nipper,common,rare,0,16
+NNJA,Best Off,Nynja,common,rare,0,61
+NPOR,Redfern,Nieuport 17,common,rare,0,42
+NSTR,Custom Flight,North Star,common,rare,0,10
+ONEX,Sonex,Onex,common,rare,1,83
+OSCR,Partenavia,P-64 Oscar,common,rare,0,39
+P149,Focke-Wulf,FWP-149,common,rare,1,64
+P337,Cessna,P337 Pressurized Skymaster,common,rare,0,82
+P750,Pacific Aerospace,750XL,common,rare,0,80
+PEGZ,Pegase Aero,Pegazair,common,rare,0,22
+PETR,Edra,Paturi,common,rare,0,85
+PIPA,Pipistrel,Panthera,common,rare,0,27
+PIT4,Pipistrel,Taurus Electro G4,common,rare,0,10
+PIVE,Pipistrel,Velis Electro,common,rare,0,29
+PL1,Pazmany,PL-1 Laminar,common,rare,0,14
+PL2,Pazmany,PL-2,common,rare,0,27
+PL4,Pazmany,PL-4,common,rare,0,14
+PNR2,Alpi,Pioneer 200,common,rare,0,99
+PNR4,Alpi,Pioneer 400,common,rare,0,38
+PNTH,Sport Performance,Panther,common,rare,0,19
+PP2,Pilatus,P-2,common,rare,0,10
+PP3,Pilatus,P-3,common,rare,0,47
+PPRO,Hunting Percival,P-56 Provost,common,rare,0,11
+PRIM,Blackshape,Bk-100 Prime,common,rare,0,26
+PTMS,Kimball,Ti-12,common,rare,0,61
+PTSS,Aviat,S-1-11 Super Stinker,common,rare,0,14
+PUP,Beagle,B-121 Pup,common,rare,0,51
+PZ04,Pzl-Okecie,PZL-104 Wilga 35,common,rare,0,82
+PZ3T,Pzl-Okecie,PZL-130 Orlik,common,rare,0,26
+PZ4M,Pzl-Okecie,PZL-104M Wilga 2000,common,rare,0,15
+Q1,General Atomics,MQ-1 Warrior,common,rare,0,87
+Q9,General Atomics,NR-05,common,rare,0,89
+QIC2,Quickie,Q2,common,rare,0,71
+QUIC,Quickie,Quickie,common,rare,0,42
+R100,Robin,R-1180 Aiglon,common,rare,0,27
+R200,Robin,R-2112 Alpha,common,rare,0,80
+R300,Robin,R-300,common,rare,0,44
+R90R,Ruschmeyer,MF-85,common,rare,0,23
+RA14,Maranda,BM-1 Loisirs,common,rare,0,11
+RC70,Rockwell,700 Commander 700,common,rare,0,12
+RENE,Murphy,Renegade,common,rare,0,28
+RF10,Aeromot,AMT-100 Ximango,common,rare,0,75
+RF3,Alpavia,RF-3,common,rare,0,16
+RF4,Alpavia,RF-4,common,rare,0,31
+RF5,Fournier,RF-5,common,rare,0,65
+RISN,Porto,Risen,common,rare,2,38
+RODS,Aircraft Spruce,DR-107 One Design,common,rare,0,40
+RS18,Sportavia-Putzer,RS-180 Sportsman,common,rare,0,19
+RS20,Rans,S-20 Raven,common,rare,0,78
+RYST,Ryan,ST-A,common,rare,0,46
+S05R,Siai-Marchetti,S-205-18R,common,rare,0,45
+S11,Fokker,S-11 Instructor,common,rare,0,11
+S12,Spencer,S-12 Air Car,common,rare,0,11
+S211,Padc,S-211,common,rare,0,25
+S2T,Imp,S-2 Turbo Tracker,common,rare,0,27
+S450,Aero-East-Europe,SILA-450,common,rare,0,17
+S6,Stemme,S-6,common,rare,0,14
+SA02,K & S,SA-102.5 Cavalier,common,rare,0,22
+SA10,Stolp,SA-100 Starduster,common,rare,0,47
+SA11,Stits,SA-11 Playmate,common,rare,0,15
+SA3,Stits,SA-3 Playboy,common,rare,0,52
+SA50,Stolp,SA-500 Starlet,common,rare,0,13
+SA6,Stits,SA-6 Flut-R-Bug,common,rare,0,27
+SA7,Stits,SA-7 Sky-Coupe,common,rare,0,21
+SA75,Stolp,SA-750 Acroduster Too,common,rare,0,37
+SAKO,Rans,S-10 Sakota,common,rare,0,99
+SASP,Supermarine Aircraft,Spitfire Mk25,common,rare,0,29
+SASY,Protech,PT-2 Sassy,common,rare,0,30
+SATA,Hispano,HA-200 Saeta,common,rare,0,16
+SAVG,Alms,Callao,common,rare,0,97
+SB05,Saab,105,common,rare,0,29
+SBOY,Interplane,Skyboy,common,rare,0,42
+SC01,Fft,SC-01 Speed Canard,common,rare,0,26
+SE1,Spirit,SE-1,common,rare,0,45
+SE5A,Raf,SE-5A,common,rare,0,25
+SE5R,Replica Plans,SE-5A Replica,common,rare,0,13
+SEAW,Seawind,Seawind,common,rare,0,46
+SF28,Scheibe,SF-28 Tandem Falke,common,rare,0,22
+SHEK,Rans,S-16 Shekari,common,rare,0,13
+SIDE,Smyth,S Sidewinder,common,rare,0,16
+SKAR,Iii,Sky Arrow,common,rare,0,62
+SLH4,Sling Aircraft,4 High Wing,common,rare,1,20
+SM19,Siai-Marchetti,SM-1019,common,rare,0,41
+SMAX,Airmax,M-22 SeaMax,common,rare,0,30
+SNGY,Ciac,Synergy,common,rare,0,19
+SNS7,Sorrell,SNS-7 Hiperbipe,common,rare,0,37
+SP7,Spartan,7 Executive,common,rare,0,19
+SPST,Rearwin,7000 Sportster,common,rare,0,12
+SPUP,Sopwith,Pup,common,rare,0,19
+SSTL,Just Aircraft,SuperSTOL,common,rare,0,55
+ST3,Stearman,C-3,common,rare,0,15
+ST30,Panzl,S-330,common,rare,0,16
+STCH,Fly Synthesis,Storch,common,rare,0,32
+STG2,Rans,S-18 Stinger 2,common,rare,0,19
+STOR,Storch Aviation,SS-4 Storch,common,rare,0,20
+STRM,Sg Aviation,Storm,common,rare,0,32
+STST,Cfm,SA-2 Star Streak,common,rare,0,29
+SU26,Sukhoi,Su-26,common,rare,0,27
+SU29,Sukhoi,Su-29,common,rare,0,29
+SUBA,Fuji,FA-200 Aero Subaru,common,rare,0,90
+SWAK,Warner,Sportster,common,rare,0,10
+SX30,Swearingen,SX-300,common,rare,0,32
+SYMP,Omf,OMF-100 Symphony,common,rare,0,50
+T211,Indus,T-211 Sport E,common,rare,0,37
+T50,Cessna,Crane,common,rare,0,51
+T51,Titan,T-51 Mustang,common,rare,0,79
+TARR,Pelegrin,Tarragon,common,rare,0,19
+TAYD,Taylorcraft,DC,common,rare,0,37
+TB21,Socata,TB-21 Trinidad TC,common,rare,0,98
+TB30,Aerospatiale,TB-30 Epsilon,common,rare,0,74
+TEAL,Schweizer,TSC-1 Teal,common,rare,0,16
+TEXA,Fly Synthesis,Texan,common,rare,0,62
+TF21,Taylor Kits,T-Kraft,common,rare,0,34
+TFUN,Twi,Taifun,common,rare,0,37
+TLEG,Legend,Turbine Legend,common,rare,1,19
+TMUS,Papa 51,Thunder Mustang,common,rare,0,11
+TNAV,Camair,480 Twin Navion,common,rare,0,14
+TNDR,Dream,Tundra,common,rare,0,19
+TOOT,Meyer,Little Toot,common,rare,0,14
+TRAL,Groppo,Trail,common,rare,0,36
+TRF1,Team Rocket,F-1,common,rare,0,49
+TS11,Pzl-Mielec,TS-11 Iskra,common,rare,0,28
+TTRS,Humbert,Tetras,common,rare,0,35
+TTWO,Parker,Teenie Two,common,rare,0,38
+TUCR,Flying Legend,Tucano Replica,common,rare,0,34
+TVL4,Travel Air,4,common,rare,0,64
+TVLB,Travel Air,B,common,rare,0,31
+U15,Phoenix Air,U-15 Phoenix,common,rare,0,20
+UF10,Airo,5,common,rare,0,23
+UF13,Distar,D-13 SunDancer,common,rare,0,41
+UNIV,Neiva,T-25 Universal,common,rare,0,16
+VELT,Velocity,V-Twin,common,rare,0,13
+VIX,Skystar,Kitfox Vixen,common,rare,0,10
+VJ22,Volmer,VJ-22 Sportsman,common,rare,0,61
+VM1,Vol Mediterrani,VM-1 Esqual,common,rare,0,11
+VNTR,Icp,Ventura,common,rare,0,18
+VP2,Evans,VP-2 Volksplane,common,rare,0,92
+VTRA,Rans,S-19 Venterra,common,rare,0,69
+VTUR,Nuventure,Venture,common,rare,0,24
+VVIG,Rutan,27 VariViggen,common,rare,0,11
+W201,Weatherly,201,common,rare,0,46
+W62T,Weatherly,620TP,common,rare,0,13
+WA40,Wassmer,WA-40 Super 4,common,rare,0,11
+WA41,Wassmer,WA-41 Baladou,common,rare,0,10
+WA50,Wassmer,WA-52 Europa,common,rare,0,41
+WACA,Waco,IBA,common,rare,0,11
+WHIL,Reflex,WLAC-1 White Lightning,common,rare,0,11
+WT10,Aerospool,WT-10 Advantic,common,rare,0,10
+XA41,Xtremeair,XA-41,common,rare,0,10
+XA42,Xtremeair,XA-42,common,rare,0,34
+XA85,Raj Hamsa,X-AIR Hawk,common,rare,0,19
+XAIR,Raj Hamsa,X-AIR S,common,rare,0,24
+XL2,Discovery,XL-2,common,rare,0,73
+XNOS,Sonex,Xenos,common,rare,0,28
+Y12,Harbin,Y-12C,common,rare,0,24
+Y18T,Technoavia,SM-94,common,rare,0,66
+YALE,North American,NJ Yale,common,rare,0,16
+YK11,Let,C-11,common,rare,0,23
+YK18,Yakovlev,Yak-18,common,rare,0,32
+YK50,Yakovlev,Yak-50,common,rare,0,63
+YK55,Yakovlev,Yak-55,common,rare,0,59
+Z26,Moravan,Zlin Z-626,common,rare,0,92
+Z37P,Let,Z-37 Cmelák,common,rare,0,20
+Z43,Moravan,Safir 43,common,rare,0,72
+Z50,Moravan,Zlin Z-50,common,rare,0,12
+ZEPH,Atec,122 Zephyr,common,rare,0,49
+A210,Aquila,A-210,common,uncommon,2,226
+A5,Icon,A-5,common,uncommon,2,217
+AA1,Grumman American,AA-1 Tr2,common,uncommon,4,854
+AC11,Rockwell,112 Commander 112,common,uncommon,4,893
+AC50,Aero Commander,500,common,uncommon,0,275
+ACAM,Leza-Lockwood,Air Cam,common,uncommon,0,186
+AEST,Aerostar,600,common,uncommon,3,538
+AN32,Antonov,An-32,common,uncommon,0,125
+AP22,Aeroprakt,A-22,common,uncommon,0,331
+AP32,Aeroprakt,A-32 Vixxen,common,uncommon,0,236
+AR11,Aeronca,11 Chief,common,uncommon,0,982
+AR15,Aeronca,15 Sedan,common,uncommon,0,216
+AR65,Aeronca,65 Super Chief,common,uncommon,0,406
+AR6T,Aeronca,60 Tandem,common,uncommon,0,166
+AT3P,Air Tractor,AT-300,common,uncommon,0,146
+AT3T,Air Tractor,AT-302,common,uncommon,0,392
+AT5T,Air Tractor,AT-502,common,uncommon,0,796
+AT6T,Air Tractor,AT-602,common,uncommon,0,296
+AURA,Sunward,SA60 Aurora,common,uncommon,1,142
+AVID,Airdale,Flyer,common,uncommon,0,287
+B14C,Bellanca,14 Bellanca 260A,common,uncommon,0,296
+BD4,Bede,BD-4,common,uncommon,0,113
+BDOG,Scottish Aviation,Sk61,common,uncommon,0,122
+BE17,Beechcraft,17 Staggerwing,common,uncommon,0,222
+BE19,Beechcraft,19 Sport,common,uncommon,0,218
+BE23,Beechcraft,23 Musketeer,common,uncommon,2,1329
+BE24,Beechcraft,24 Sierra,common,uncommon,2,401
+BE50,Beechcraft,50 Twin Bonanza,common,uncommon,0,151
+BE55,Beechcraft,55 Baron,common,uncommon,5,664
+BE60,Beechcraft,60 Duke,common,uncommon,1,328
+BE76,Beechcraft,76 Duchess,common,uncommon,1,266
+BE77,Beechcraft,77 Skipper,common,uncommon,0,159
+BE95,Beechcraft,95 Travel Air,common,uncommon,9,1521
+BEAR,Avipro,Bearhawk,common,uncommon,0,147
+BEVR,Asap,Beaver,common,uncommon,0,280
+BL17,Bellanca,17 Viking,common,uncommon,1,703
+BL8,American Champion,8 Scout,common,uncommon,1,1459
+BOLT,Steen,Skybolt,common,uncommon,0,306
+BR23,Brm Aero,Bristell B23,common,uncommon,0,182
+BREZ,Aerostyle,Breezer,common,uncommon,0,181
+BT36,Beechcraft,A36TC Bonanza,common,uncommon,0,125
+BTB2,Baykar,Bayraktar TB-2,common,uncommon,0,127
+BU31,Dornier,DoBü-131 Lerche,common,uncommon,0,151
+C07T,Cessna,207,common,uncommon,2,119
+C120,Cessna,120,common,uncommon,0,788
+C140,Cessna,140,common,uncommon,2,2147
+C162,Cessna,162 Skycatcher,common,uncommon,7,194
+C170,Cessna,170,common,uncommon,3,2471
+C177,Cessna,177,common,uncommon,6,1749
+C180,Cessna,180,common,uncommon,10,3390
+C185,Cessna,185 Skywagon,common,uncommon,5,2404
+C188,Cessna,188 AgWagon,common,uncommon,0,479
+C195,Cessna,195,common,uncommon,1,495
+C207,Cessna,207 Skywagon 207,common,uncommon,0,134
+C210,Cessna,210,common,uncommon,4,2217
+C303,Cessna,T303 Crusader,common,uncommon,0,139
+C310,Cessna,310,common,uncommon,7,2011
+C320,Cessna,320 Skyknight,common,uncommon,1,164
+C337,Cessna,337 Super Skymaster,common,uncommon,4,800
+C340,Cessna,340,common,uncommon,2,910
+C414,Cessna,414,common,uncommon,4,784
+C42,Ikarus,C-42,common,uncommon,2,773
+C421,Cessna,421,common,uncommon,3,959
+C72R,Cessna,172RG Cutlass,common,uncommon,2,674
+C77R,Cessna,177RG Cardinal,common,uncommon,5,946
+C82R,Cessna,R182 Skylane RG,common,uncommon,8,2498
+C82S,Cessna,T182 Turbo Skylane,common,uncommon,1,131
+CAMP,Grega,GN-1 Aircamper,common,uncommon,0,316
+CB1,Hatz,CB-1 Biplane,common,uncommon,0,132
+CC11,Cub Crafters,CC-11 Sport Cub,common,uncommon,6,858
+CC19,Cub Crafters,CC-19 XCub,common,uncommon,1,207
+CH60,Roland,Z-602,common,uncommon,3,839
+CH70,Roland,S-Stol,common,uncommon,0,632
+CH75,Amd,CH-750 Stol,common,uncommon,0,484
+CH7B,Champion,7GCAA,common,uncommon,4,3409
+CHIN,Asap,Chinook,common,uncommon,0,201
+CJ6,Hongdu,BT-6,common,uncommon,2,276
+CN35,CASA,CN-235,common,uncommon,1,132
+COL4,Cessna,400,common,uncommon,8,886
+COUR,Helio,H-391 Courier,common,uncommon,0,146
+COY2,Rans,S-6 Coyote 2,common,uncommon,0,523
+COZY,Aerocad,AeroCanard,common,uncommon,1,227
+CP10,Akrotech Europe,CAP-10,common,uncommon,0,166
+CP30,Piel,CP-30 Emeraude,common,uncommon,0,101
+CRER,Rans,S-7 Courier,common,uncommon,0,400
+CRUZ,Csa,PiperSport,common,uncommon,2,567
+D11,Jodel,D-11,common,uncommon,0,246
+D140,Jodel,D-140 Abeille,common,uncommon,0,102
+DA42,Diamond,DA-42 Guardian,common,uncommon,6,1069
+DA62,Diamond,DA-62,common,uncommon,2,445
+DFLY,Slipstream,Dragonfly,common,uncommon,0,124
+DG15,Howard,NH,common,uncommon,0,106
+DH82,De Havilland,DH-82 Queen Bee,common,uncommon,1,479
+DHC1,De Havilland Canada,DHC-1 Chipmunk,common,uncommon,0,336
+DHC2,De Havilland Canada,DHC-2 Beaver,common,uncommon,4,737
+DHC3,De Havilland Canada,DHC-3 Otter,common,uncommon,0,120
+DIMO,Diamond,HK-36 MPX,common,uncommon,1,399
+DR10,Centre Est,DR-1050 Sicile,common,uncommon,0,168
+DR30,Robin,DR-300,common,uncommon,0,117
+DR40,Robin,DR-400 2+2,common,uncommon,2,1554
+DSA1,Smith,DSA-1 Miniplane,common,uncommon,0,104
+DV20,Diamond,DA-20 Falcon,common,uncommon,2,1057
+E300,Extra,EA-300,common,uncommon,1,575
+EAGL,Aviat,Eagle,common,uncommon,0,258
+ECHO,Tecnam,P-92 Echo,common,uncommon,0,532
+EFOX,Aerotrek,A-220,common,uncommon,0,459
+ERCO,Erco,415 Ercoupe,common,uncommon,1,1910
+EUPA,Europa,Europa,common,uncommon,0,291
+EV97,Evektor,EV-97 Harmony,common,uncommon,2,471
+EVSS,Evektor,SportStar,common,uncommon,1,224
+F260,Siai-Marchetti,SF-260,common,uncommon,0,168
+FA24,Fairchild,F-24 Argus,common,uncommon,0,284
+FA62,Fairchild,M-62 Cornell,common,uncommon,0,267
+FB1A,Bowers,Fly Baby 1A,common,uncommon,0,151
+FDCT,Flight Design,CT,common,uncommon,2,942
+FK9,B & F Technik,FK-9,common,uncommon,2,194
+FNKB,Akron,Funk B,common,uncommon,0,129
+FOX,Skyfox,CA-25 Impala,common,uncommon,1,1451
+G109,Grob,G-109,common,uncommon,0,218
+G115,Grob,G-115,common,uncommon,0,257
+G12T,Grob,G-120TP,common,uncommon,0,116
+G164,Grumman American,G-164 Ag-Cat,common,uncommon,0,705
+G2T1,Great Lakes,2T-1 Sport,common,uncommon,1,245
+G3,Remos,G-3 Mirage,common,uncommon,1,221
+GA8,Gippsaero,GA-8 Airvan,common,uncommon,1,198
+GB1,Game Composites,GB-1 GameBird,common,uncommon,2,124
+GC1,Globe,GC-1 Swift,common,uncommon,1,618
+GLAS,Glasair,Glasair,common,uncommon,2,817
+GLST,Glasair,GlaStar,common,uncommon,3,667
+HIGH,Just Aircraft,JA20 Highlander,common,uncommon,0,329
+HR20,Robin,R-200,common,uncommon,0,113
+HROC,Harmon,Rocket,common,uncommon,2,194
+HUSK,Aviat,A-1 Husky,common,uncommon,1,1260
+J3,Piper,NE Cub,common,uncommon,2,4686
+J4,Piper,J-4 Cub Coupe,common,uncommon,0,232
+J5,Piper,AE Cub Cruiser,common,uncommon,0,314
+JAB4,Jabiru,J200,common,uncommon,0,370
+JABI,Jabiru,SK,common,uncommon,0,105
+JUNR,Andreasson,BA-7,common,uncommon,0,100
+KR2,Rand,KR-2,common,uncommon,0,211
+L5,Stinson,OY Sentinel,common,uncommon,0,146
+L8,Luscombe,8,common,uncommon,2,1923
+LA4,Lake,LA-4,common,uncommon,2,420
+LEG2,Lancair,Legacy,common,uncommon,2,216
+LGEZ,Rutan,61 Long-EZ,common,uncommon,1,547
+LNC2,Lancair,200,common,uncommon,0,461
+LNC4,Lancair,4,common,uncommon,0,102
+LNCE,Lancair,ES,common,uncommon,0,112
+LNP4,Lancair,PropJet 4,common,uncommon,0,219
+M5,Maule,M-5,common,uncommon,0,115
+M7,Maule,MX-7-180,common,uncommon,4,1520
+MCR1,Dyn'aero,MCR-01,common,uncommon,0,152
+MIMU,Bushby,MM-1 Midget Mustang,common,uncommon,0,119
+MITE,Mooney,M-18 Mite,common,uncommon,0,110
+MOR2,Varga,2150 Kachina,common,uncommon,0,123
+MUS2,Bushby,M-2 Mustang 2,common,uncommon,0,149
+NAVI,North American,L-17 Navion,common,uncommon,2,990
+NG5,Brm Aero,Bristell HD,common,uncommon,3,587
+O1,Cessna,OE Bird Dog,common,uncommon,1,371
+P06T,Tecnam,P-2006T,common,uncommon,0,348
+P208,Tecnam,P-2008,common,uncommon,1,552
+P210,Cessna,P210 Centurion,common,uncommon,3,545
+P28B,Piper,PA-28-236 Dakota,common,uncommon,8,1623
+P28S,Piper,PA-28R-201T Turbo Arrow,common,uncommon,2,519
+P28T,Piper,PA-28RT-201 Arrow 4,common,uncommon,2,617
+P28U,Aicsa,PA-28RT-201T Turbo Arrow 4,common,uncommon,0,221
+P32T,Piper,PA-32RT-300T Turbo Lance 2,common,uncommon,0,480
+P68,Partenavia,P-68,common,uncommon,2,328
+PA11,Piper,PA-11 Cub Special,common,uncommon,0,692
+PA12,Piper,PA-12 Super Cruiser,common,uncommon,2,1513
+PA14,Piper,PA-14 Family Cruiser,common,uncommon,0,171
+PA15,Piper,PA-15 Vagabond,common,uncommon,0,256
+PA16,Piper,PA-16 Clipper,common,uncommon,0,325
+PA17,Piper,PA-17 Vagabond,common,uncommon,0,120
+PA20,Piper,PA-20 Pacer,common,uncommon,0,418
+PA22,Piper,PA-22 Colt,common,uncommon,5,3669
+PA23,Piper,PA-23-150 Apache,common,uncommon,2,1529
+PA24,Piper,PA-24 Comanche,common,uncommon,10,2871
+PA25,Piper,PA-25 Pawnee,common,uncommon,3,688
+PA27,Piper,PA-23-250 Aztec,common,uncommon,0,303
+PA30,Piper,PA-30 Twin Comanche,common,uncommon,5,1216
+PA31,Piper,PA-31-300 Navajo,common,uncommon,4,1534
+PA32,Piper,PA-32 6X,common,uncommon,5,2397
+PA34,Piper,PA-34 Seneca,common,uncommon,9,1904
+PA36,Piper,PA-36 Pawnee Brave,common,uncommon,0,157
+PA38,Aicsa,PA-38 Tomahawk,common,uncommon,0,785
+PELI,Flyer,Pelican,common,uncommon,0,116
+PIAT,Pipistrel,Alpha Trainer,common,uncommon,0,257
+PISI,Pipistrel,Sinus,common,uncommon,0,149
+PIVI,Pipistrel,Explorer,common,uncommon,0,482
+PNR3,Alpi,Pioneer 300,common,uncommon,1,209
+PTS1,Aerotek,Pitts S-1 Special,common,uncommon,1,719
+PTS2,Aerotek,Pitts S-2 Special,common,uncommon,1,548
+PULS,Pulsar,Pulsar,common,uncommon,0,166
+RALL,Socata,Gabier,common,uncommon,0,489
+RBEL,Murphy,Elite,common,uncommon,0,266
+RC3,Republic,RC-3 Seabee,common,uncommon,0,193
+RELI,Stinson,SR Reliant,common,uncommon,0,172
+RF6,Slingsby,T-3 Firefly,common,uncommon,0,119
+RLU1,Rlu,RLU-1 Breezy,common,uncommon,0,101
+RS12,Rans,S-12 Airaile,common,uncommon,0,235
+RS21,Rans,S-21 Outbound,common,uncommon,0,169
+RV10,Van's,RV-10,common,uncommon,8,1063
+RV12,Van's,RV-12,common,uncommon,9,1186
+RV14,Van's,RV-14,common,uncommon,2,495
+RV3,Van's,RV-3,common,uncommon,0,205
+RV4,Van's,RV-4,common,uncommon,4,1268
+RV8,Van's,RV-8,common,uncommon,10,1912
+RV9,Van's,RV-9,common,uncommon,4,1082
+S1,Interstate,S-1,common,uncommon,0,131
+S10,Stinson,105,common,uncommon,0,163
+S108,Stinson,108 Voyager,common,uncommon,1,1716
+SA30,Stolp,SA-300 Starduster Too,common,uncommon,0,324
+SD4,Tomark,SD-4 Viper,common,uncommon,0,141
+SF25,Scheibe,SF-25 Falke,common,uncommon,1,529
+SHRK,Shark Aero,Shark,common,uncommon,0,107
+SIRA,Tecnam,P-2002,common,uncommon,1,582
+SKRA,Best Off,Sky Ranger,common,uncommon,0,304
+SKYR,Rearwin,175 Skyranger,common,uncommon,0,106
+SLG2,Sonaca,S-2,common,uncommon,3,249
+SONX,Sonex,Sonex,common,uncommon,2,536
+SRAI,Great Plains,Sonerai,common,uncommon,0,226
+SREY,Progressive Aerodyne,SeaRey,common,uncommon,2,468
+SS2P,Ayres,S-2R-600 Thrush,common,uncommon,0,317
+SS2T,Ayres,V-1 Vigilante,common,uncommon,0,418
+ST75,Boeing,75 Kaydet,common,uncommon,2,2000
+SV4,Aiaa,SV-4,common,uncommon,0,117
+SVNH,Aerotec,MXP-740 Savannah,common,uncommon,0,377
+T18,Classic Sport,S-18,common,uncommon,1,302
+T206,Cessna,T206 Stationair TC,common,uncommon,1,509
+T34P,Beechcraft,45 Mentor,common,uncommon,1,370
+TAIL,Wittman,W-8 Tailwind,common,uncommon,0,215
+TAMP,Socata,TB-9 Tampico,common,uncommon,1,217
+TAYA,Taylor-Young,A,common,uncommon,0,189
+TB20,Shijiazhuang,LE-500 Xiaoying,common,uncommon,0,539
+TF19,Taylorcraft,19 Sportsman,common,uncommon,0,110
+TL20,Tl Ultralight,TL-96 Star,common,uncommon,1,261
+TL30,Tl Ultralight,TL-3000 Sirius,common,uncommon,1,139
+TOBA,Socata,TB-10 Tobago,common,uncommon,0,414
+TOUR,Aesl,Airtourer,common,uncommon,0,109
+TRDO,Titan,Tornado S,common,uncommon,0,136
+TWEN,Tecnam,P-2010 Gran Lusso,common,uncommon,1,310
+VALI,Vultee,SNV Valiant,common,uncommon,0,120
+VELO,Velocity,LW,common,uncommon,4,304
+VEZE,Rutan,33 VariEze,common,uncommon,0,293
+VL3,Aveko,VL-3,common,uncommon,0,396
+VO10,Volaircraft,Volaire 10,common,uncommon,0,191
+VR7,Vashon,Ranger R7,common,uncommon,1,144
+WACC,Waco,C,common,uncommon,0,166
+WACF,Waco,F,common,uncommon,0,478
+WACO,Waco,O,common,uncommon,0,189
+WAIX,Sonex,Waiex,common,uncommon,0,313
+WT9,Aerospool,WT-9 Dynamic,common,uncommon,1,648
+YK52,Aerostar,Iak-52,common,uncommon,0,403
+Z42,Moravan,Zlin Z-42,common,uncommon,0,191
