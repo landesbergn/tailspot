@@ -178,11 +178,11 @@ struct SetsRarityConsistencyTests {
         ("ga-bonanza", "BE35", Rarity.common),      // was .uncommon
         ("ga-mooney",  "M20P", Rarity.common),      // was .rare
         ("ga-da40",    "DA40", Rarity.common),      // was .uncommon
-        ("ga-da42",    "DA42", Rarity.common),      // was .rare
+        ("ga-da42",    "DA42", Rarity.uncommon),    // 6 airframes caught: thin GA → uncommon
         ("ga-r44",     "R44",  Rarity.uncommon),    // was .rare
         // Heritage (typecoded)
         ("h-dc3",      "DC3",  Rarity.rare),         // vintage classic → rare
-        ("h-sofia",    "B74S", Rarity.rare),         // was .legendary
+        ("h-sofia",    "B74S", Rarity.legendary),    // exceptional surviving 747SP fleet
     ] as [(String, String, Rarity)])
     func setEntry_rarityMatchesTable(_ entryID: String, _ typecode: String, _ expected: Rarity) {
         // Find the entry in the catalog.

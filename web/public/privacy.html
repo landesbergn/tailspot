@@ -12,6 +12,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=B612+Mono:ital,wght@0,400;0,700;1,400&display=swap">
   <link rel="stylesheet" href="style.css">
+  <script src="/analytics.js" defer></script>
 </head>
 <body>
 
@@ -25,10 +26,12 @@
   <div class="meta">
     <p><strong>Operator:</strong> Noah Landesberg (sole developer)</p>
     <p><strong>Contact:</strong> <a href="mailto:privacy@tailspot.app">privacy@tailspot.app</a></p>
-    <p><strong>Effective date:</strong> October 25, 2026</p>
+    <p><strong>Effective date:</strong> November 1, 2026</p>
   </div>
 
   <p>Tailspot is a free plane-spotting game. This policy explains what information the app collects, why, and what happens to it. It is written to be read, not lawyered around.</p>
+
+  <p><strong>What changed on November 1, 2026</strong>: this website (tailspot.app) now counts visits with PostHog, in a mode that sets no cookies and stores nothing in your browser (see §3). The app is unchanged.</p>
 
   <p><strong>What changed on October 25, 2026</strong>: catch cards can now be turned over to show more about the aircraft type. Doing so fetches a short summary from Wikipedia, and the back of the card may load a photo of the type from Wikimedia Commons. Wikimedia is a new third party the app talks to (see §4).</p>
 
@@ -142,6 +145,10 @@
     <li><strong>Session replay</strong> — periodic screenshots of the app's interface while you use it, replayed as a recording. This shows what any user of the app sees: aircraft labels, your collection, your handle. <strong>The live camera view is excluded from recordings, and your catch photos are masked</strong> — screens that display one of your photos show a blank box in its place. We use replays to find broken flows; they are visible only to the developer and PostHog as processor.</li>
     <li><strong>Diagnostics</strong> — crash type and code location (the exception, and where in the app's code it happened), hang duration and location, app-exit counts, launch time, and memory summaries from Apple's on-device MetricKit.</li>
   </ul>
+
+  <h3>This website</h3>
+
+  <p>tailspot.app uses PostHog too, to count visits. It records which pages you view, the links and buttons you click (for example the App Store badge), the referring site, and your browser, device type, and approximate location (country and city, derived from your IP address). It runs in <strong>cookieless mode</strong>: it sets no cookies and stores nothing in your browser. PostHog tells repeat visits apart with a hash of your IP address and browser that changes every day, so visits on different days are not linked to each other or to the app. The website does not record session replays.</p>
 
   <p>Separately, <strong>Apple's own opt-in crash reporting</strong> (part of iOS, governed by Apple's privacy policy) may reach us via App Store Connect if you've opted in on your device.</p>
 

@@ -38,6 +38,20 @@ struct RarityResolutionTests {
         ("C17",  .epic),             // C-17 — military workhorse → epic
         ("A388", .rare),             // A380 — ~200 fly, hub-concentrated
         ("B2",   .legendary),        // B-2 Spirit — icon
+        // Full catalog audit: special fleets, family boundaries and downgrades.
+        ("A337", .legendary),        // BelugaXL
+        ("BLCF", .legendary),        // Dreamlifter
+        ("STAR", .legendary),        // Beech Starship
+        ("VF35", .legendary),        // F-35B matches F-35 family
+        ("A306", .rare),             // include cargo operations
+        ("B722", .epic),             // working 727-200s
+        ("R721", .legendary),        // re-engined 727-100 follows B721
+        ("R722", .epic),             // re-engined 727-200 follows B722
+        ("BE9L", .uncommon),         // King Air 90 matches executive turboprops
+        ("P46T", .uncommon),         // turbine Meridian
+        ("PA46", .common),           // piston Malibu must not move with Meridian
+        ("E390", .epic),             // military support family
+        ("F104", .epic),             // heritage jet, not frontline fighter tier
     ])
     func rarityFromTypecode(_ code: String, _ expected: Rarity) {
         #expect(AircraftNaming.rarity(forTypecode: code) == expected)

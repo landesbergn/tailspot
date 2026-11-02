@@ -34,6 +34,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Seconds, and stdlib-only: checks that tools/generate-aircraft-types.py
+      # and the bundled AircraftTypes.json agree (tiers, types, override
+      # targets). Lives in this every-PR job, not the path-gated backend job,
+      # so a catalog edit can never skip it.
+      - name: Aircraft catalog tests (Python)
+        run: python3 -m unittest discover -s tools -p 'test_aircraft_tiers.py' -v
+
       # PINNED, not latest-stable: even within one image, 'latest-stable'
       # resolved to different Xcodes on different runs — and the older
       # compiler type-checked differently than local dev. Pin to the version
