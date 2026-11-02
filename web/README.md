@@ -13,11 +13,28 @@ web/
     attributions.html
     support.html
     style.css
+    analytics.js   # PostHog, cookieless (see "Analytics" below)
     img/           # real catch photos + the social preview card
   Dockerfile       # nginx:alpine serving public/ on :8080
   nginx.conf       # port 8080, gzip, cache headers
   fly.toml         # Fly.io config — app: tailspot-www, region: sjc
 ```
+
+## Analytics
+
+`public/analytics.js` loads PostHog in cookieless mode (no cookies or browser
+storage, so no consent banner) and is included in the `<head>` of every page
+people see. `invite.html` is left out because nginx serves it only to
+link-preview bots. Events go to the same PostHog project as the app; filter on
+`$lib = 'web'` to see only the website.
+
+Cookieless events are dropped unless the PostHog project setting "cookieless
+server hash mode" is on. Session replay is turned off in the init call because
+the project has replay enabled for the app.
+
+Before this existed, the only record of traffic was Fly's nginx logs in
+fly-metrics.net (VictoriaLogs), which keep about six days. Most of those lines
+are the API's own `tailspot-api-site-probe` health checks.
 
 ## Images
 
