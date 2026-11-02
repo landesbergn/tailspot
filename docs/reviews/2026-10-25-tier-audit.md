@@ -363,6 +363,52 @@ Catalog: 2613 entries. 309 rarity changes; 187 category changes. No live catch c
 | YURO | Soko-Cniar J-22 Orao | common → epic | narrow → mil |
 | ZERO | Mitsubishi A6M Zero | common → epic | ga → ga |
 
+## Round 2 — GA presence tier from real catches and US fleet (2026-11-01)
+
+Round 1 left about 1,800 uncurated fixed-wing GA types at the blanket Common default, and 1,640 of them had never been caught by anyone. Noah's calls on 2026-11-01: keep every curated tier above as is, tier never-caught GA by US fleet size, move thinly caught GA from Common to Uncommon, and allow downgrades freely (this round only upgrades).
+
+Evidence, read-only from prod on 2026-11-01 and checked in as plain per-typecode counts:
+
+- `tools/data/caught-airframes-by-typecode.csv`: distinct airframes per typecode in `catches` (21,005 catches, 11,165 airframes, 115 devices, 390 typecodes). Mostly Bay Area, so it is a floor on what is ordinary, not a census.
+- `tools/data/us-fleet-by-typecode.csv`: `registry` rows per typecode (the FAA Releasable Aircraft DB, so US-registered airframes, active or not; 1,955 typecodes).
+
+Rule (`ga_presence_tier` in the generator; curated pins and helicopters are untouched):
+
+| Evidence | Tier |
+|---|---|
+| More than 10 distinct airframes caught | Common |
+| Caught 1–10 airframes | Uncommon, or rarer if the fleet row below says so |
+| Never caught, US fleet ≥ 1,000 | Common |
+| Never caught, 100–999 | Uncommon |
+| Never caught, 10–99 | Rare |
+| Never caught, 1–9 | Epic |
+| Never caught, not US-registered | Common (no evidence either way) |
+
+Result: 1,188 Common GA types move up: 255 to Uncommon, 412 to Rare, 521 to Epic. Examples: Cessna 180/185/210/310, PA-24 Comanche, PA-30 Twin Comanche, Baron 55, DHC-2 Beaver and the RV-4/7/8/9/10/12 go Common → Uncommon. Aeronca Chief, Cessna 120, Tomahawk and Ag-Cat (never caught, hundreds registered) go Uncommon. Every everyday type stays Common (C172, PA-28, SR22, C182, Bonanza 35, RV-6, Super Cub). Catalog totals move from Common 1,886 / Uncommon 311 / Rare 106 / Epic 217 / Legendary 93 to Common 698 / Uncommon 566 / Rare 518 / Epic 738 / Legendary 93.
+
+Full per-type ledger: [2026-11-01-ga-presence-tier.csv](2026-11-01-ga-presence-tier.csv).
+
+Limits:
+
+- US fleet undercounts types that are ordinary elsewhere (An-24/26, MA60, Dornier Do-27/28 land at Rare or Epic). Bali and Europe catches are thin in the sample; revisit when they aren't.
+- Catch counts reflect where testers live. A refresh of either CSV re-tiers GA, so treat it as a scoring-version bump.
+- Airliner, regional, biz and helicopter defaults are unchanged; so is every curated pin from round 1.
+- The live ICAO source has drifted since round 1 (BAe ATP removed, Hawker Fury split into Fury and Sea Fury, a few additions). This round projects the rule onto the committed catalog instead of regenerating, so the next full regeneration will carry those upstream edits and needs its own review. ATP's `rare` pin will fail the override-target test then.
+
+## Rollout
+
+Tiers live in two places that ship separately: the app's bundled `AircraftTypes.json` (what the Hangar, reveal and sets show; resolved live on read, so existing catches re-tier on update) and the prod `typecodes` table (what the server scores and the leaderboard sums). Old app builds keep their bundled tiers until they update. Neither side depends on the other, so the order is chosen to keep the two in step for users.
+
+1. **Merge this PR** once CI is green (Ring 1; ships nothing).
+2. **TestFlight.** Claude cuts one Xcode Cloud build from main (`bin/xcode-cloud-build --watch`); Noah releases it to testers. Soak checks: the Hangar shows the new tiers after an upgrade; trophy and set counts on a large seeded Hangar look right (round 1's downgrades, A306 and B722, are the ones that can take a trophy's qualifying catch away); no launch-time cost on the upgrade path.
+3. **App Review.** Noah submits with phased release on, with a What's New line about re-tiered planes. This ships in whichever train is open: 1.2.4 is open and unsubmitted, so it can ride along if Noah wants it in 1.2.4, or else open 1.2.5 after it.
+4. **Server, on the day the release goes live** (start of the phased rollout), so leaderboard points move when most users' tiers do. Ideally just after the Monday 00:00 UTC week rollover so one weekly board isn't half old, half new:
+   1. Snapshot the prod DB.
+   2. Ingest first: `DATABASE_URL=… npm run ingest:doc8643 -- ../ios/Tailspot/Tailspot/AircraftTypes.json` (through `fly proxy`). Catches uploaded after this score with the new tiers.
+   3. Deploy the v9 backend (`fly deploy --remote-only` from `backend/`; needs Noah's explicit go). Ingesting first means no catch is stamped 9 with old tiers.
+   4. Rescore dry run on the machine (`node dist/catches/rescore.js --dry-run`): review rows moved, the biggest user-total changes and the weekly/monthly/all-time top 10 before and after. Then apply.
+5. **After release:** App Store Connect crashes; the PostHog `catch_performed` rarity mix by `$app_version`; leaderboard or support complaints about points moving.
+
 ## Evidence and limitations
 
 Role-based changes use existing catalog identities and the approved policy; not every changed type has an independently verified active fleet count. Source evidence for the key fleet exceptions:

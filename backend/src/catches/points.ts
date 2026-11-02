@@ -69,7 +69,9 @@ export const UNKNOWN_RARITY_POINTS = 10;
  *   8 — classic jets (2026-10-11): T-33 rare → epic; Sabreliner (SBR1, SBR2),
  *       Learjet 23/24 and Jet Commander uncommon → rare. Same order.
  *   9 — full catalog tier review (2026-10-25): exceptional civilian fleets,
- *       military/heritage omissions, turboprop parity and cargo-aware tiers.
+ *       military/heritage omissions, turboprop parity and cargo-aware tiers;
+ *       plus (2026-11-01) uncurated GA tiered by real catches + US fleet size
+ *       (1,188 types up from Common; docs/reviews/2026-10-25-tier-audit.md).
  *       Reload `typecodes` BEFORE DEPLOYING this server, not just before the
  *       rescore: a catch uploaded in a deploy→ingest gap is scored with the
  *       old tiers but stamped 9, and the default rescore (`scoringVersion <

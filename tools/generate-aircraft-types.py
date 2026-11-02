@@ -86,6 +86,17 @@ SCORING_BONUSES = {
     "typeGuess": 0.25,
 }
 FAA_XLSX = Path(__file__).resolve().parent / "data/faa_aircraft_characteristics.xlsx"
+# Evidence snapshots for the GA presence tier (see ga_presence_tier). Both are
+# plain counts per typecode, taken read-only from prod on 2026-11-01:
+#   us-fleet-by-typecode.csv        — `registry` rows per typecode (FAA
+#                                     Releasable Aircraft DB = US-registered
+#                                     airframes, active or not)
+#   caught-airframes-by-typecode.csv — distinct icao24 per typecode in
+#                                     `catches` (115 devices, 11,165 airframes)
+# Refresh them deliberately (re-run the two COUNT queries) — a refresh re-tiers
+# GA types, so it is a scoring-version bump like any other tier change.
+US_FLEET_CSV = Path(__file__).resolve().parent / "data/us-fleet-by-typecode.csv"
+CAUGHT_CSV = Path(__file__).resolve().parent / "data/caught-airframes-by-typecode.csv"
 
 # ---------------------------------------------------------------------------
 # Canonical-manufacturer map
@@ -1365,6 +1376,49 @@ RARITY_OVERRIDES = {
 }
 
 
+def _load_counts(path):
+    """typecode → int from a two-column `typecode,count` CSV with a header."""
+    with open(path, encoding="utf-8") as fh:
+        next(fh)
+        return {tc: int(n) for tc, n in (line.strip().split(",") for line in fh if line.strip())}
+
+
+US_FLEET = _load_counts(US_FLEET_CSV)
+CAUGHT_AIRFRAMES = _load_counts(CAUGHT_CSV)
+
+_TIER_RANK = {tier: i for i, tier in enumerate(RARITY_POINTS)}  # common … legendary
+
+# A type with more distinct airframes caught than this is demonstrably an
+# everyday catch, whatever its fleet size (RV-6 at 14, Bonanza 35 at 26).
+GA_COMMON_MIN_CAUGHT = 10
+# US-registered fleet → tier, for GA nobody (or almost nobody) has caught.
+# Thousands = Common, hundreds = Uncommon, dozens = Rare, a handful = Epic.
+GA_FLEET_TIERS = ((1000, "common"), (100, "uncommon"), (10, "rare"), (1, "epic"))
+
+
+def ga_presence_tier(tc):
+    """
+    Evidence-based tier for an uncurated fixed-wing GA type, which used to
+    default to Common across the board (~1,600 types nobody had ever caught).
+
+    - Caught more than GA_COMMON_MIN_CAUGHT distinct airframes → Common.
+    - Caught at least once, but thinly → at least Uncommon (rarer if the US
+      fleet says so): a PA-24 or a Baron 55 is a real find, not filler.
+    - Never caught → by US fleet size (GA_FLEET_TIERS).
+    - No US registrations and no catches → Common: no evidence either way,
+      and these are mostly foreign types that are locally ordinary (Robin,
+      Aeroprakt). Unknown stays conservative.
+    """
+    caught = CAUGHT_AIRFRAMES.get(tc, 0)
+    if caught > GA_COMMON_MIN_CAUGHT:
+        return "common"
+    fleet = US_FLEET.get(tc, 0)
+    fleet_tier = next((tier for floor, tier in GA_FLEET_TIERS if fleet >= floor), None)
+    if caught:
+        return max("uncommon", fleet_tier or "uncommon", key=_TIER_RANK.get)
+    return fleet_tier or "common"
+
+
 def aircraft_rarity(tc, info, type_str):
     """
     Activity-tier ("sky presence") for a typecode — roughly how likely you
@@ -1397,8 +1451,12 @@ def aircraft_rarity(tc, info, type_str):
     # to legendary in RARITY_OVERRIDES.
     if type_str == "mil":
         return "epic"
-    # narrow / regional / ga — the high-movement long tail. Vanishing airliners,
-    # rare narrowbodies, and warbirds are overridden up.
+    # Fixed-wing GA: tiered by catch + US fleet evidence (curated pins above
+    # still win; helicopters returned above).
+    if type_str == "ga":
+        return ga_presence_tier(tc)
+    # narrow / regional — the high-movement airliner tail. Vanishing airliners
+    # and rare narrowbodies are overridden up.
     return "common"
 
 

@@ -5,12 +5,12 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
-## 2026-10-25 — Full catalog tier decision pass (local, unshipped)
+## 2026-11-01 — Aircraft tier audit, two rounds (PR #406, branch `fix/full-aircraft-tier-audit`)
 
-- Reviewed all 2,613 catalog rows: 309 tier changes and 187 category corrections across 348 entries. BelugaXL and Dreamlifter are Legendary; A300-600 becomes Rare and 727-200 Epic. Retained unsupported candidates conservatively; live catch-frequency calibration remains unavailable.
-- Fixed overly broad airliner prefixes and military-role omissions; removed dead typecode overrides. Generator and bundled catalog agree. Scoring version 9 requires reference ingest before rescore; production untouched.
-- Offline checks: 5 passed. Backend typecheck passed; 610 tests passed, one loopback socket test blocked by sandbox EPERM. iOS tests blocked during PostHog package resolution by unavailable network/DNS.
-- Full decisions and limitations: [tier audit](docs/reviews/2026-10-25-tier-audit.md).
+- Round 1 (2026-10-25), curated: 309 tier changes and 187 category corrections across 348 entries. BelugaXL and Dreamlifter Legendary; A300-600 Epic → Rare, 727-200 Legendary → Epic. Fixed over-broad airliner prefixes and military-role omissions; removed dead overrides.
+- Round 2 (2026-11-01), evidence: uncurated fixed-wing GA was a blanket Common, and 1,640 of those types had never been caught. Now tiered by real catches (prod `catches`, 11,165 airframes) and US fleet (prod `registry`), both checked in under `tools/data/`. 1,188 types move up from Common; thinly caught classics (PA-24, C180, Beaver, the RVs) become Uncommon. Curated tiers untouched.
+- Scoring version 9. Reload `typecodes` before deploying the server, then rescore. Production untouched so far.
+- `tools/test_aircraft_tiers.py` now runs in the every-PR Unit tests job. Decisions, rule, ledger and rollout: [tier audit](docs/reviews/2026-10-25-tier-audit.md).
 
 ## 2026-10-31 — Beauty pass (branch `claude/beauty-pass-2026-10-31`)
 

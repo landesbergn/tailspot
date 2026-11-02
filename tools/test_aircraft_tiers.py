@@ -69,6 +69,37 @@ class AircraftTierTests(unittest.TestCase):
         self.assertEqual(GEN['aircraft_rarity']('ZZZZ', {}, 'ga'), 'common')
         self.assertEqual(GEN['RARITY_POINTS'], {'common': 10, 'uncommon': 20, 'rare': 50, 'epic': 100, 'legendary': 500})
 
+    def test_ga_presence_tier_rules(self):
+        tier = GEN['ga_presence_tier']
+        caught, fleet = GEN['CAUGHT_AIRFRAMES'], GEN['US_FLEET']
+        # Everyday catches stay Common whatever the fleet says.
+        for code in 'C172 P28A SR22 C182'.split():
+            with self.subTest(code=code):
+                self.assertGreater(caught[code], GEN['GA_COMMON_MIN_CAUGHT'])
+                self.assertEqual(tier(code), 'common')
+        # Thinly caught classics are a find, even with a big US fleet.
+        for code in 'PA24 C180 PA30 BE55 DHC2'.split():
+            with self.subTest(code=code):
+                self.assertLessEqual(caught[code], GEN['GA_COMMON_MIN_CAUGHT'])
+                self.assertEqual(tier(code), 'uncommon')
+        # Never caught: tiered by US fleet; no evidence at all stays Common.
+        never = [c for c in CAT if c not in caught and CAT[c]['type'] == 'ga']
+        by_fleet = {f: next(c for c in never if lo <= fleet.get(c, 0) < hi)
+                    for f, lo, hi in [('epic', 1, 10), ('rare', 10, 100), ('uncommon', 100, 1000)]}
+        for expected, code in by_fleet.items():
+            with self.subTest(code=code):
+                self.assertEqual(tier(code), expected)
+        self.assertEqual(tier('ZZZZ'), 'common')
+
+    def test_uncurated_ga_rows_match_presence_tier(self):
+        # Projection parity: every uncurated fixed-wing GA row carries the
+        # evidence tier. Helicopters keep their own 'uncommon' default.
+        for code, entry in CAT.items():
+            if entry['type'] != 'ga' or code in GEN['RARITY_OVERRIDES']:
+                continue
+            with self.subTest(code=code):
+                self.assertIn(entry['rarity'], {GEN['ga_presence_tier'](code), 'uncommon'})
+
 
 if __name__ == '__main__':
     unittest.main()
