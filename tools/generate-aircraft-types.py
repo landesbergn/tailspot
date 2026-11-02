@@ -86,6 +86,17 @@ SCORING_BONUSES = {
     "typeGuess": 0.25,
 }
 FAA_XLSX = Path(__file__).resolve().parent / "data/faa_aircraft_characteristics.xlsx"
+# Evidence snapshots for the GA presence tier (see ga_presence_tier). Both are
+# plain counts per typecode, taken read-only from prod on 2026-11-01:
+#   us-fleet-by-typecode.csv        — `registry` rows per typecode (FAA
+#                                     Releasable Aircraft DB = US-registered
+#                                     airframes, active or not)
+#   caught-airframes-by-typecode.csv — distinct icao24 per typecode in
+#                                     `catches` (115 devices, 11,165 airframes)
+# Refresh them deliberately (re-run the two COUNT queries) — a refresh re-tiers
+# GA types, so it is a scoring-version bump like any other tier change.
+US_FLEET_CSV = Path(__file__).resolve().parent / "data/us-fleet-by-typecode.csv"
+CAUGHT_CSV = Path(__file__).resolve().parent / "data/caught-airframes-by-typecode.csv"
 
 # ---------------------------------------------------------------------------
 # Canonical-manufacturer map
@@ -808,7 +819,7 @@ BIZ = {
     'C25A','C25B','C25C','C500','C510','C525','C550','C560','C56X','C680','C68A','C700','C750',
     'E50P','E55P',
     'LJ35','LJ45','LJ60','LJ75','FA7X','FA8X','F2TH','F900',
-    'BD100','H25B','ASTR','PRM1','MU2','PC24','LJ31','LJ40','LJ55','C25M',
+    'H25B','ASTR','PRM1','MU2','PC24','LJ31','LJ40','LJ55','C25M',
     # 2026-06-09: closed the bizjet type gaps found by the full classifier
     # audit — these are confirmed business jets that fell through to narrow
     # (Jet+WTC M) or ga (Jet+WTC L) because they were absent here. Each
@@ -823,12 +834,14 @@ BIZ = {
     'H25A','H25C','HA4T','BE40','BE4W',                                    # Hawker 125/4000, Beechjet 400
     'HDJT','SF50','EA50',                                                  # VLJ / single-engine jets
     'MU30','SJ30','HF20','S601','JCOM','SBR1','SBR2','L29A','L29B','WW23',  # other production / classic
+    'WW24',  # Westwind family; special-mission variants share the designator
+
 }
 MIL = {
-    'C130','C30J','C17','C5M','C5','KC135','KC10','KC46','K35R','K35E',
+    'C130','C30J','C17','C5M','K35R','K35E',
     'B52','C27J','C295','A400','P3','P8','E3CF','E3TF','E6',
-    'C12','C12J','U28','RC12','C160','AN12','IL76','A124','C141',
-    'VC25','E4','C32','C40','B1','B2','C2','E2',
+    'C160','AN12','IL76','A124',
+    'B1','B2','C2','E2',
     # Military rotorcraft / tiltrotors. These must be checked before the
     # generic rotorcraft→GA fallback below.
     'H47','H60','H64','H53','H46','UH1','V22','NH90','A129','AS65',
@@ -838,6 +851,29 @@ MIL = {
     # Warbird fighters / attack / jet trainers (2026-10-11 sweep) — were
     # narrow (airliner badge) or ga.
     'T33','F86','HUNT','P38','A1','MG15','MG17',
+    # Full role audit: avoid airliner/GA fallbacks for military families.
+    'A10','A149','A3','A37','A4','A50','A6','AJET',
+    'ALIZ','AMX','AT3','ATLA','B21','B26M','BE12','BLEN',
+    'BUC','C1','C101','C135','C15','CKUO','CL41','CNBR',
+    'E314','E390','E530','E737','E767','EH10','ETAR','EUFI',
+    'F1','F104','F117','F14','F15','F16','F2','F22',
+    'F35','F4','F5','F5SA','F8','F9F','FC1','FOUG',
+    'G91','GNAT','H53S','HAR','HAWK','HT16','HT36','HT40',
+    'HUCO','HURK','I22','IA58','IA63','IL28','IL38','IR99',
+    'J10','J20','J8A','J8B','JAGR','JAST','JH7','JL9',
+    'JPRO','K50','K8','KA50','KA52','KC2','KE3','KFIR',
+    'KT1','L15','L159','L59','LCA','LCH','LYNX','M326',
+    'M339','M345','M346','METR','MG19','MG21','MG23','MG25',
+    'MG29','MG31','MI24','MI28','MIR2','MIRA','MRF1','MT2',
+    'MYA4','MYS4','P1','P2','P4Y','P61','P82','PC21',
+    'PC7','PC9','Q5','R135','RFAL','RVAL','S2P','S3',
+    'SB29','SB32','SB35','SB37','SGCD','SGEF','SHAC','SHAW',
+    'SMB2','SSAB','STRK','SU17','SU24','SU25','SU27','SU57',
+    'SU7','SUCO','SURN','SWOR','T1','T160','T2','T22M',
+    'T34T','T37','T38','T4','T5YY','TIGR','TOR','TU16',
+    'TU22','TU95','TUCA','U2','UH1Y','US2','V1','V10',
+    'VAMP','VAUT','VF35','VNOM','W135','WZ10','Y130','Y20',
+    'YK28','YURO',
 }
 # Regional jets absent from the prefix regex below — BAe 146, Avro RJ,
 # Fokker 70/100/F28, Dornier 328JET, Antonov An-148/158. Exact-match like
@@ -850,9 +886,9 @@ REGIONAL = {
     'E275','E290','E295','BN2P','DHC6','L410','BE99','P212',
 }
 
-_REGIONAL_RE = re.compile(r'^(CRJ|E17|E19|E75|E70|DH8|AT4|AT7|AT5|SF3|SB20|J41|E45|E13|E14)')
-_WIDE_RE     = re.compile(r'^(B74|B77|B78|B76|A33|A34|A35|A38|MD11|IL9|IL8|A124|AN12|AN22|A30|A310)')
-_NARROW_RE   = re.compile(r'^(B70|B73|B72|B75|A31|A32|BCS|MD8|MD9|DC8|DC9|E290|E190|E195|A19N|A20N|A21N)')
+_REGIONAL_RE = re.compile(r'^(CRJ|E17|E19|E75|E70|DH8[ABCD]$|AT[457][0-9]$|SF34$|SB20|J41|E45|E13|E14)')
+_WIDE_RE     = re.compile(r'^(B74|B77|B78|B76|A33[0-9]$|A34[0-9]$|A35[0-9K]$|A38[0-9]$|MD11|IL9|IL8|A124|AN12|AN22|A30|A310)')
+_NARROW_RE   = re.compile(r'^(B70|B73|B72|B75|A31[0-9]$|A32[0-9]$|BCS|MD8|MD9|DC8|DC9|E290|E190|E195|A19N|A20N|A21N)')
 
 
 def aircraft_type(tc, info):
@@ -919,8 +955,8 @@ def aircraft_type(tc, info):
 # Activity-rarity overrides: typecode → tier. Pins designators where the
 # category default (see aircraft_rarity) mis-tiers sky presence. Only
 # EXCEPTIONS belong here — things the default already gets right (e.g.
-# military workhorses → mil → rare) are omitted. Keyed on the ICAO
-# designator; absent designators simply never match (harmless).
+# military workhorses → mil → epic) are omitted. Keyed on the ICAO
+# designator; tests reject pins absent from the bundled catalog.
 # See docs/archive/superpowers/specs/2026-06-08-activity-rarity-design.md.
 RARITY_OVERRIDES = {
     # Military category does not automatically imply an epic encounter. The
@@ -928,28 +964,21 @@ RARITY_OVERRIDES = {
     "AS65": "uncommon",
     # ── legendary — icons / extinct / sole-example / no civil signal ──
     # (grounded in 2025-26 fleet data — see docs/archive/plans/2026-06-29-002 plan §R1)
-    "VC25": "legendary",  # Air Force One (VC-25A)
     "B2":   "legendary",  # B-2 Spirit (no ADS-B — aspirational)
     "U2":   "legendary",  # U-2 Dragon Lady (no ADS-B)
-    "SR71": "legendary",  # SR-71 (retired / museum)
-    "CONC": "legendary",  # Concorde (extinct 2003)
     "F14":  "legendary",  # F-14 (Iranian only, no civil signal)
-    "E4":   "legendary",  # E-4B Nightwatch (4 airframes) — was epic
-    "A225": "legendary",  # An-225 (destroyed 2022; historical marker)
-    "L101": "legendary",  # L-1011 TriStar (no airworthy commercial)
-    "B721": "legendary", "B722": "legendary",   # 727 — extinct from pax (was uncommon)
+    "L101": "legendary",  # L-1011 TriStar: exceptional surviving fleet
+    "B721": "legendary", "B722": "epic",  # distinguish -100 survivors from working -200 cargo
     "T154": "legendary",  # Tu-154 (government only)
     "IL62": "legendary",  # Il-62 (Air Koryo only)
-    "B29":  "legendary",  # B-29 (1 airworthy worldwide)
+    "B29":  "legendary",  # B-29: exceptional surviving warbird fleet
     "LANC": "legendary",  # Avro Lancaster (2 airworthy)
     # ── legendary — military combat & strategic (mostly no ADS-B → aspirational grails) ──
     "B52":  "legendary",  # B-52 Stratofortress
     "B1":   "legendary",  # B-1 Lancer
     "E3TF": "legendary", "E3CF": "legendary",  # E-3 Sentry (AWACS)
     "E6":   "legendary",  # E-6 Mercury (TACAMO command)
-    "F15":  "legendary", "F16": "legendary", "F18": "legendary",
-    # DOC 8643 has no plain "F18": Hornets are F18H, Super Hornets (the Blue
-    # Angels since 2021) F18S. The "F18" pin above never matched anything.
+    "F15":  "legendary", "F16": "legendary", # F-15 / F-16; Hornet variants below
     "F18H": "legendary", "F18S": "legendary",
     "F22":  "legendary", "F35": "legendary",   # US fighters
     "A10":  "legendary",  # A-10 Thunderbolt II
@@ -962,9 +991,8 @@ RARITY_OVERRIDES = {
     "RFAL": "legendary",  # Dassault Rafale
     "TOR":  "legendary",  # Panavia Tornado
     "MG29": "legendary", "MG31": "legendary",   # MiG-29 / MiG-31
-    "SU25": "legendary", "SU27": "legendary", "SU30": "legendary",
-    "SU34": "legendary", "SU57": "legendary",   # Sukhoi
-    "J10":  "legendary", "J11": "legendary", "J20": "legendary",   # Chinese fighters
+    "SU25": "legendary", "SU27": "legendary", "SU57": "legendary",   # Sukhoi
+    "J10":  "legendary", "J20": "legendary",   # Chinese fighters
     # ── epic — super-rare airliners · scarce warbirds · military workhorses ──
     "B748": "epic",       # 747-8 (super-heavy, scarce pax)
     "C5M":  "epic",       # C-5M Super Galaxy (strategic airlift workhorse)
@@ -982,14 +1010,14 @@ RARITY_OVERRIDES = {
     "DC10": "epic",       # DC-10 (cargo / tanker / Orbis)
     "MD11": "epic",       # MD-11 (all cargo, scarce) — was rare
     "A310": "epic",       # A310 (~10, Iranian)
-    "A30B": "epic", "A306": "epic",   # A300 (~13)
+    "A30B": "epic", "A306": "rare",  # A306 includes substantial UPS/FedEx cargo fleets
     "IL96": "epic",       # Il-96 (Cubana only)
     "SPIT": "epic",       # Spitfire (airshow catch)
     "B17":  "epic",       # B-17 Flying Fortress
     # ── rare — scarce widebodies · vanishing airliners · heavy bizjets · warbirds ──
     "A388": "rare",       # A380 (~200 fly, hub-concentrated) — was epic
-    "B742": "rare", "B744": "rare", "B74S": "rare",   # 747 classic / -400 / SP
-    "A343": "rare", "A345": "rare", "A346": "rare",   # A340-300 / -500 / -600
+    "B742": "epic", "B744": "rare", "B74S": "legendary",   # 747 variants: -200 Epic, -400 Rare, SP Legendary
+    "A343": "rare", "A345": "epic", "A346": "rare",   # A340-300 / -500 / -600
     "B753": "rare",       # 757-300 (32 left)
     "B752": "uncommon",   # 757-200 (~130 still flying — a notch, not rare)
     "B712": "rare",       # 717 (Delta/Hawaiian only) — was uncommon
@@ -1003,7 +1031,7 @@ RARITY_OVERRIDES = {
     "GL7T": "rare",       # Bombardier Global 7500
     "GL5T": "rare",       # Bombardier Global 5000
     "GLEX": "rare",       # Bombardier Global Express / 6000
-    "P51":  "rare", "T6": "rare", "AT6": "rare",   # P-51 Mustang, T-6 Texan (100+ fly — abundant for warbirds)
+    "P51":  "rare", "T6": "rare", # P-51 Mustang, T-6 Texan (100+ fly — abundant for warbirds)
     "L39":  "rare",       # L-39 Albatros (civil warbird jet; display teams, not daily traffic)
     # 2026-10-11 warbird sweep: rare ≈ P-51 scarcity (dozens–100+ airworthy,
     # airshow regulars); epic ≈ B-17 / Spitfire (a handful airworthy).
@@ -1034,7 +1062,361 @@ RARITY_OVERRIDES = {
     # active utility commuters: globally established, but far less sky
     # presence than the scheduled regional-jet / ATR defaults
     "BN2P": "uncommon", "DHC6": "uncommon", "L410": "uncommon",
+
+    # 2026-10-25 full catalog review. See docs/reviews/2026-10-25-tier-audit.md.
+    # These are curated encounter tiers, not measured global catch percentiles.
+    # legendary
+    "A337": "legendary",
+    "A3ST": "legendary",
+    "A50": "legendary",
+    "AMX": "legendary",
+    "B21": "legendary",
+    "B24": "legendary",
+    "B26M": "legendary",
+    "BLCF": "legendary",
+    "C15": "legendary",
+    "CARV": "legendary",
+    "CKUO": "legendary",
+    "CL4G": "legendary",
+    "DC7": "legendary",
+    "E737": "legendary",
+    "E767": "legendary",
+    "F1": "legendary",
+    "F2": "legendary",
+    "F5SA": "legendary",
+    "FC1": "legendary",
+    "IL28": "legendary",
+    "J8A": "legendary",
+    "J8B": "legendary",
+    "JAGR": "legendary",
+    "JH7": "legendary",
+    "K50": "legendary",
+    "KFIR": "legendary",
+    "LCA": "legendary",
+    "MG21": "legendary",
+    "MG23": "legendary",
+    "MG25": "legendary",
+    "MIR2": "legendary",
+    "MIRA": "legendary",
+    "MRF1": "legendary",
+    "MYA4": "legendary",
+    "P61": "legendary",
+    "P82": "legendary",
+    "PRTS": "legendary",
+    "R135": "legendary",
+    "R721": "legendary",
+    "SGCD": "legendary",
+    "SGEF": "legendary",
+    "SGUP": "legendary",
+    "SLCH": "legendary",
+    "STAR": "legendary",
+    "SU17": "legendary",
+    "SU24": "legendary",
+    "SU7": "legendary",
+    "T160": "legendary",
+    "T22M": "legendary",
+    "TU16": "legendary",
+    "TU22": "legendary",
+    "TU95": "legendary",
+    "VF35": "legendary",
+    "W135": "legendary",
+    "WB57": "legendary",
+    "X59": "legendary",
+    # epic
+    "A149": "epic",
+    "A20": "epic",
+    "A3": "epic",
+    "A338": "epic",
+    "A37": "epic",
+    "A6": "epic",
+    "A700": "epic",
+    "AJET": "epic",
+    "ALIZ": "epic",
+    "AT3": "epic",
+    "ATLA": "epic",
+    "B26": "epic",
+    "B701": "epic",
+    "B703": "epic",
+    "B720": "epic",
+    "B741": "epic",
+    "B743": "epic",
+    "B74R": "epic",
+    "BA11": "epic",
+    "BCAT": "epic",
+    "BE12": "epic",
+    "BLEN": "epic",
+    "BUC": "epic",
+    "C1": "epic",
+    "C101": "epic",
+    "C119": "epic",
+    "C123": "epic",
+    "C135": "epic",
+    "C46": "epic",
+    "C97": "epic",
+    "CAT": "epic",
+    "CL41": "epic",
+    "CNBR": "epic",
+    "CONI": "epic",
+    "CORS": "epic",
+    "CVLP": "epic",
+    "CVLT": "epic",
+    "DC2": "epic",
+    "DC3S": "epic",
+    "DC4": "epic",
+    "DC6": "epic",
+    "DC86": "epic",
+    "DC87": "epic",
+    "DH4T": "epic",
+    "DHC4": "epic",
+    "DHC5": "epic",
+    "DHC7": "epic",
+    "E314": "epic",
+    "E390": "epic",
+    "E530": "epic",
+    "EH10": "epic",
+    "ETAR": "epic",
+    "F104": "epic",
+    "F28": "epic",
+    "F8": "epic",
+    "F9F": "epic",
+    "FFLY": "epic",
+    "FOUG": "epic",
+    "FURY": "epic",
+    "G21": "epic",
+    "G44": "epic",
+    "G73": "epic",
+    "G91": "epic",
+    "GANT": "epic",
+    "GNAT": "epic",
+    "GSPN": "epic",
+    "H53S": "epic",
+    "HAWK": "epic",
+    "HCAT": "epic",
+    "HT16": "epic",
+    "HT36": "epic",
+    "HT40": "epic",
+    "HUCO": "epic",
+    "HURI": "epic",
+    "HURK": "epic",
+    "I22": "epic",
+    "IA58": "epic",
+    "IA63": "epic",
+    "IL38": "epic",
+    "IL86": "epic",
+    "IR99": "epic",
+    "JAST": "epic",
+    "JL9": "epic",
+    "JPRO": "epic",
+    "K8": "epic",
+    "KA50": "epic",
+    "KA52": "epic",
+    "KC2": "epic",
+    "KE3": "epic",
+    "KT1": "epic",
+    "L15": "epic",
+    "L159": "epic",
+    "L59": "epic",
+    "LCH": "epic",
+    "LYNX": "epic",
+    "M326": "epic",
+    "M339": "epic",
+    "M345": "epic",
+    "M346": "epic",
+    "METR": "epic",
+    "MG19": "epic",
+    "MI24": "epic",
+    "MI28": "epic",
+    "MOSQ": "epic",
+    "MT2": "epic",
+    "MYS4": "epic",
+    "NORA": "epic",
+    "P1": "epic",
+    "P2": "epic",
+    "P39": "epic",
+    "P40": "epic",
+    "P47": "epic",
+    "P4Y": "epic",
+    "P63": "epic",
+    "PC7": "epic",
+    "PC9": "epic",
+    "Q5": "epic",
+    "R722": "epic",
+    "RJ70": "epic",
+    "RVAL": "epic",
+    "S2P": "epic",
+    "S3": "epic",
+    "SB29": "epic",
+    "SB32": "epic",
+    "SB35": "epic",
+    "SB37": "epic",
+    "SBD": "epic",
+    "SHAC": "epic",
+    "SHAW": "epic",
+    "SMB2": "epic",
+    "SSAB": "epic",
+    "STRK": "epic",
+    "SUCO": "epic",
+    "SURN": "epic",
+    "SWOR": "epic",
+    "T1": "epic",
+    "T134": "epic",
+    "T2": "epic",
+    "T34T": "epic",
+    "T37": "epic",
+    "T4": "epic",
+    "T5YY": "epic",
+    "TCAT": "epic",
+    "TIGR": "epic",
+    "TUCA": "epic",
+    "U16": "epic",
+    "UH1Y": "epic",
+    "US2": "epic",
+    "V1": "epic",
+    "V10": "epic",
+    "VAMP": "epic",
+    "VAUT": "epic",
+    "VNOM": "epic",
+    "WCAT": "epic",
+    "WZ10": "epic",
+    "Y130": "epic",
+    "Y20": "epic",
+    "YAK3": "epic",
+    "YAK9": "epic",
+    "YK28": "epic",
+    "YURO": "epic",
+    "ZERO": "epic",
+    # rare
+    "A748": "rare",
+    "AN3": "rare",
+    "AN38": "rare",
+    "ANSN": "rare",
+    "ATP": "rare",
+    "B736": "rare",
+    "B764": "rare",
+    "BER2": "rare",
+    "C408": "rare",
+    "CL2P": "rare",
+    "CL2T": "rare",
+    "CRJX": "rare",
+    "D328": "rare",
+    "DC3T": "rare",
+    "DH60": "rare",
+    "DH89": "rare",
+    "DOVE": "rare",
+    "F27": "rare",
+    "F60": "rare",
+    "FA6X": "rare",
+    "FA7X": "rare",
+    "FA8X": "rare",
+    "GA5C": "rare",
+    "GLF2": "rare",
+    "HERN": "rare",
+    "HF20": "rare",
+    "J328": "rare",
+    "JS31": "rare",
+    "JS32": "rare",
+    "JS41": "rare",
+    "JSX": "rare",
+    "KMAX": "rare",
+    "L10": "rare",
+    "L12": "rare",
+    "L18": "rare",
+    "L188": "rare",
+    "L29A": "rare",
+    "L29B": "rare",
+    "LAR1": "rare",
+    "LJ28": "rare",
+    "LYSA": "rare",
+    "MI26": "rare",
+    "N262": "rare",
+    "N3N": "rare",
+    "NOMA": "rare",
+    "NORS": "rare",
+    "P180": "rare",
+    "PT22": "rare",
+    "S601": "rare",
+    "S64": "rare",
+    "S716": "rare",
+    "SB20": "rare",
+    "SC7": "rare",
+    "SH33": "rare",
+    "SH36": "rare",
+    "WIRR": "rare",
+    "WW23": "rare",
+    "YS11": "rare",
+    # uncommon
+    "AC90": "uncommon",
+    "AC95": "uncommon",
+    "B190": "uncommon",
+    "BE10": "uncommon",
+    "BE9L": "uncommon",
+    "BE9T": "uncommon",
+    "BN2T": "uncommon",
+    "C212": "uncommon",
+    "C425": "uncommon",
+    "C441": "uncommon",
+    "D228": "uncommon",
+    "DH2T": "uncommon",
+    "DH3T": "uncommon",
+    "E110": "uncommon",
+    "E120": "uncommon",
+    "K100": "uncommon",
+    "K900": "uncommon",
+    "M600": "uncommon",
+    "M700": "uncommon",
+    "P46T": "uncommon",
+    "PAY1": "uncommon",
+    "PAY2": "uncommon",
+    "PAY3": "uncommon",
+    "PAY4": "uncommon",
+    "PC6T": "uncommon",
+    "SW3": "uncommon",
+    "SW4": "uncommon",
+    "WW24": "uncommon",
 }
+
+
+def _load_counts(path):
+    """typecode → int from a two-column `typecode,count` CSV with a header."""
+    with open(path, encoding="utf-8") as fh:
+        next(fh)
+        return {tc: int(n) for tc, n in (line.strip().split(",") for line in fh if line.strip())}
+
+
+US_FLEET = _load_counts(US_FLEET_CSV)
+CAUGHT_AIRFRAMES = _load_counts(CAUGHT_CSV)
+
+_TIER_RANK = {tier: i for i, tier in enumerate(RARITY_POINTS)}  # common … legendary
+
+# A type with more distinct airframes caught than this is demonstrably an
+# everyday catch, whatever its fleet size (RV-6 at 14, Bonanza 35 at 26).
+GA_COMMON_MIN_CAUGHT = 10
+# US-registered fleet → tier, for GA nobody (or almost nobody) has caught.
+# Thousands = Common, hundreds = Uncommon, dozens = Rare, a handful = Epic.
+GA_FLEET_TIERS = ((1000, "common"), (100, "uncommon"), (10, "rare"), (1, "epic"))
+
+
+def ga_presence_tier(tc):
+    """
+    Evidence-based tier for an uncurated fixed-wing GA type, which used to
+    default to Common across the board (~1,600 types nobody had ever caught).
+
+    - Caught more than GA_COMMON_MIN_CAUGHT distinct airframes → Common.
+    - Caught at least once, but thinly → at least Uncommon (rarer if the US
+      fleet says so): a PA-24 or a Baron 55 is a real find, not filler.
+    - Never caught → by US fleet size (GA_FLEET_TIERS).
+    - No US registrations and no catches → Common: no evidence either way,
+      and these are mostly foreign types that are locally ordinary (Robin,
+      Aeroprakt). Unknown stays conservative.
+    """
+    caught = CAUGHT_AIRFRAMES.get(tc, 0)
+    if caught > GA_COMMON_MIN_CAUGHT:
+        return "common"
+    fleet = US_FLEET.get(tc, 0)
+    fleet_tier = next((tier for floor, tier in GA_FLEET_TIERS if fleet >= floor), None)
+    if caught:
+        return max("uncommon", fleet_tier or "uncommon", key=_TIER_RANK.get)
+    return fleet_tier or "common"
 
 
 def aircraft_rarity(tc, info, type_str):
@@ -1069,8 +1451,12 @@ def aircraft_rarity(tc, info, type_str):
     # to legendary in RARITY_OVERRIDES.
     if type_str == "mil":
         return "epic"
-    # narrow / regional / ga — the high-movement long tail. Vanishing airliners,
-    # rare narrowbodies, and warbirds are overridden up.
+    # Fixed-wing GA: tiered by catch + US fleet evidence (curated pins above
+    # still win; helicopters returned above).
+    if type_str == "ga":
+        return ga_presence_tier(tc)
+    # narrow / regional — the high-movement airliner tail. Vanishing airliners
+    # and rare narrowbodies are overridden up.
     return "common"
 
 
