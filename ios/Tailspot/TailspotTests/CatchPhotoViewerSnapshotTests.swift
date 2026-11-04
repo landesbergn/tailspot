@@ -127,5 +127,63 @@ struct CatchPhotoViewerSnapshotTests {
         snapshotWindow(host, as: "photo_viewer_entry_card")
         window.isHidden = true
     }
+    /// Regression (tester report 2026-11-04): on the post-catch reveal — a
+    /// full-screen cover — the open viewer's X sat under the status bar
+    /// (dead to taps) because the overlay hosted it inside its
+    /// `.ignoresSafeArea()` morph layer. The X must clear the top inset.
+    @Test func openViewerCloseButtonClearsStatusBar() async throws {
+        let url = try fixturePhotoURL()
+        _ = RevealPhoto.cachedDecode(url: url)
+        let model = HeroZoomModel()
+        let host = UIHostingController(rootView: ZStack {
+            Color.black.ignoresSafeArea()
+            HeroZoomOverlay(model: model)
+        })
+        let topInset: CGFloat = 59   // Dynamic Island status bar height
+        host.additionalSafeAreaInsets = UIEdgeInsets(top: topInset, left: 0, bottom: 34, right: 0)
+        let window = UIWindow(frame: Self.bounds)
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        model.openByTap(url: url, focus: nil)
+        // The open morph settles in ~340 ms, then the viewer swaps in —
+        // poll, since a loaded MainActor (full parallel suite) runs late.
+        for _ in 0..<50 where model.phase != .open {
+            try? await Task.sleep(for: .seconds(0.1))
+        }
+        try #require(model.phase == .open)
+        try? await Task.sleep(for: .seconds(0.2))   // let the viewer lay out
+        host.view.layoutIfNeeded()
+
+        // The hosted test window exposes no accessibility tree, so probe
+        // pixels: the X's white glyph is the only bright thing in its
+        // column above the photo (the 3:4 fixture fits from y≈164).
+        let fmt = UIGraphicsImageRendererFormat()
+        fmt.scale = 1
+        let shot = UIGraphicsImageRenderer(bounds: Self.bounds, format: fmt).image { _ in
+            host.view.drawHierarchy(in: Self.bounds, afterScreenUpdates: true)
+        }
+        try? FileManager.default.createDirectory(at: Self.snapDir, withIntermediateDirectories: true)
+        try? shot.pngData()?.write(to: Self.snapDir.appendingPathComponent("photo_viewer_open_inset.png"))
+        let cg = try #require(shot.cgImage)
+        let w = cg.width, h = cg.height
+        var px = [UInt8](repeating: 0, count: w * h * 4)
+        let ctx = try #require(CGContext(
+            data: &px, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
+        let glyphX = Int(Self.bounds.width - 16 - 22)   // trailing pad + half the disc
+        var topGlyphY: Int? = nil
+        for y in 0..<150 {
+            for x in (glyphX - 8)...(glyphX + 8) {
+                let o = (y * w + x) * 4
+                if px[o] > 200, px[o + 1] > 200, px[o + 2] > 200 { topGlyphY = y; break }
+            }
+            if topGlyphY != nil { break }
+        }
+        let y = try #require(topGlyphY, "no X glyph found above the photo")
+        #expect(CGFloat(y) >= topInset, "Close X glyph starts at y=\(y), under the status bar")
+        window.isHidden = true
+    }
 }
 #endif

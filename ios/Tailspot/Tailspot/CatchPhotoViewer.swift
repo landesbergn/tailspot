@@ -220,15 +220,34 @@ struct HeroZoomSource: ViewModifier {
 // MARK: - Screen-root overlay
 
 /// Place LAST in a screen's root ZStack. Empty while idle. During the
-/// transition it draws the scrim + the morphing photo; once open it hosts
-/// the interactive viewer. Hit-testing only when open, so an in-flight
-/// pinch keeps flowing to the hero underneath.
+/// transition it draws the scrim + the morphing photo (edge to edge,
+/// ignoring the safe area); once open it hosts the interactive viewer,
+/// which keeps the safe area so its X clears the status bar. Hit-testing
+/// only when open, so an in-flight pinch keeps flowing to the hero.
 struct HeroZoomOverlay: View {
     let model: HeroZoomModel
 
     var body: some View {
+        ZStack {
+            morphLayer
+            // The open viewer lives OUTSIDE the safe-area-ignoring morph
+            // layer: under `.ignoresSafeArea()` its X pill lost the top
+            // inset and landed under the status bar, where taps never
+            // reach the app (tester report 2026-11-04 — the post-catch
+            // reveal is a full-screen cover; the Hangar detail sits in a
+            // sheet below the status bar, which hid the bug there). The
+            // viewer extends its own black + image edge to edge, so the
+            // swap at progress 1 still matches the full-screen fit rect.
+            if model.phase == .open, let image = model.image {
+                CatchPhotoViewer(image: image, onClose: { model.close() })
+            }
+        }
+        .allowsHitTesting(model.phase == .open)
+    }
+
+    private var morphLayer: some View {
         GeometryReader { geo in
-            if model.phase != .idle, let image = model.image {
+            if model.phase != .idle, model.phase != .open, let image = model.image {
                 // Work in overlay-local coordinates: the hero frame is
                 // global, so subtract this overlay's own global origin
                 // (normally .zero once ignoresSafeArea makes it fill the
@@ -241,36 +260,34 @@ struct HeroZoomOverlay: View {
                 ZStack(alignment: .topLeading) {
                     Color.black.opacity(Double(p))
 
-                    if model.phase == .open {
-                        CatchPhotoViewer(image: image, onClose: { model.close() })
-                    } else {
-                        let src = HeroZoomMath.fillRect(imageSize: image.size,
-                                                        in: hero, focus: model.focus)
-                        let dst = HeroZoomMath.fitRect(imageSize: image.size, in: bounds)
-                        let img = HeroZoomMath.lerp(src, dst, p)
-                        let clip = HeroZoomMath.lerp(hero, bounds, p)
-                        ZStack(alignment: .topLeading) {
-                            Image(uiImage: image)
-                                .resizable()
-                                .frame(width: img.width, height: img.height)
-                                .offset(x: img.minX, y: img.minY)
-                        }
-                        .frame(width: geo.size.width, height: geo.size.height,
-                               alignment: .topLeading)
-                        .mask(alignment: .topLeading) {
-                            RoundedRectangle(cornerRadius: (1 - p) * Brand.Radius.card)
-                                .frame(width: clip.width, height: clip.height)
-                                .offset(x: clip.minX, y: clip.minY)
-                        }
-                        // PRIVACY: the user's own photo, mid-morph — masked
-                        // from session replay like every other render site.
-                        .catchPhotoReplayMask()
+                    let src = HeroZoomMath.fillRect(imageSize: image.size,
+                                                    in: hero, focus: model.focus)
+                    let dst = HeroZoomMath.fitRect(imageSize: image.size, in: bounds)
+                    let img = HeroZoomMath.lerp(src, dst, p)
+                    let clip = HeroZoomMath.lerp(hero, bounds, p)
+                    ZStack(alignment: .topLeading) {
+                        Image(uiImage: image)
+                            .resizable()
+                            .frame(width: img.width, height: img.height)
+                            .offset(x: img.minX, y: img.minY)
                     }
+                    .frame(width: geo.size.width, height: geo.size.height,
+                           alignment: .topLeading)
+                    .mask(alignment: .topLeading) {
+                        RoundedRectangle(cornerRadius: (1 - p) * Brand.Radius.card)
+                            .frame(width: clip.width, height: clip.height)
+                            .offset(x: clip.minX, y: clip.minY)
+                    }
+                    // PRIVACY: the user's own photo, mid-morph — masked
+                    // from session replay like every other render site.
+                    .catchPhotoReplayMask()
                 }
             }
         }
         .ignoresSafeArea()
-        .allowsHitTesting(model.phase == .open)
+        // The morph never takes touches: an in-flight pinch keeps flowing
+        // to the hero underneath.
+        .allowsHitTesting(false)
     }
 }
 
