@@ -192,5 +192,75 @@ struct CatchPhotoViewerSnapshotTests {
         #expect(CGFloat(y) >= topInset, "Close X glyph starts at y=\(y), under the status bar")
         window.isHidden = true
     }
+    /// Mirrors the reveal's real presentation: a `.fullScreenCover` with a
+    /// clear presentation background, the overlay last in a GeometryReader
+    /// ZStack (CatchRevealView.body).
+    private struct CoverHarness: View {
+        let model: HeroZoomModel
+        @State private var shown = false
+        var body: some View {
+            Color.black.ignoresSafeArea()
+                .onAppear { shown = true }
+                .fullScreenCover(isPresented: $shown) {
+                    GeometryReader { _ in
+                        ZStack {
+                            Color.gray.ignoresSafeArea()
+                            HeroZoomOverlay(model: model)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+                    .presentationBackground(.clear)
+                }
+        }
+    }
+
+    @Test func coverPresentedViewerCloseButtonClearsStatusBar() async throws {
+        let url = try fixturePhotoURL()
+        _ = RevealPhoto.cachedDecode(url: url)
+        let model = HeroZoomModel()
+        let host = UIHostingController(rootView: CoverHarness(model: model))
+        let window = UIWindow(frame: Self.bounds)
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        try? await Task.sleep(for: .seconds(1.0))   // cover presents
+        model.openByTap(url: url, focus: nil)
+        for _ in 0..<50 where model.phase != .open {
+            try? await Task.sleep(for: .seconds(0.1))
+        }
+        try #require(model.phase == .open)
+        #expect(host.presentedViewController != nil, "cover never presented")
+        let topInset = host.presentedViewController?.view.safeAreaInsets.top ?? 0
+        var topGlyphY: Int? = nil
+        for _ in 0..<30 {
+            let fmt = UIGraphicsImageRendererFormat()
+            fmt.scale = 1
+            let shot = UIGraphicsImageRenderer(bounds: Self.bounds, format: fmt).image { _ in
+                (host.presentedViewController?.view ?? window).drawHierarchy(in: Self.bounds, afterScreenUpdates: true)
+            }
+            try? FileManager.default.createDirectory(at: Self.snapDir, withIntermediateDirectories: true)
+            try? shot.pngData()?.write(to: Self.snapDir.appendingPathComponent("photo_viewer_cover.png"))
+            let cg = try #require(shot.cgImage)
+            let w = cg.width, h = cg.height
+            var px = [UInt8](repeating: 0, count: w * h * 4)
+            let ctx = try #require(CGContext(
+                data: &px, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
+                space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+            ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
+            let glyphX = Int(Self.bounds.width - 16 - 22)
+            outer: for y in 0..<150 {
+                for x in (glyphX - 8)...(glyphX + 8) {
+                    let o = (y * w + x) * 4
+                    if px[o] > 200, px[o + 1] > 200, px[o + 2] > 200 { topGlyphY = y; break outer }
+                }
+            }
+            if topGlyphY != nil { break }
+            try? await Task.sleep(for: .seconds(0.1))
+        }
+        let y = try #require(topGlyphY, "no X glyph found above the photo")
+        #expect(topInset > 0, "test window has no safe area: \(topInset)")
+        #expect(CGFloat(y) >= topInset, "Close X glyph at y=\(y), window inset \(topInset)")
+        window.isHidden = true
+    }
 }
 #endif
