@@ -193,12 +193,6 @@ nonisolated enum CardBackFormat {
         catchLog(list, top: .max).rows
     }
 
-    /// The small label over the catch log. Without it, "DELTA AIR LINES 94×"
-    /// didn't say whose catches those were or what the number counted
-    /// (Noah, 2026-11-04). "Airline" over "operator": it's the word people
-    /// use, and a GA type's "Private" row still reads fine under it.
-    static let catchLogHeader = "YOUR CATCHES BY AIRLINE"
-
     /// The footer under the top rows when the log is longer: "+3 MORE".
     static func catchLogMore(_ more: Int) -> String { "+\(more) MORE" }
 
@@ -561,21 +555,15 @@ struct CatchCardBack: View {
         .accessibilityElement(children: .combine)
     }
 
-    /// The catch log: who was flying the ones you caught. A small header
-    /// says what the rows are; past the top three, a "+N MORE … SEE ALL ›"
-    /// footer opens the whole list in a sheet — the same shape and
-    /// `onCardTap` handling as the Wikipedia teaser's "MORE ›", so a swipe
-    /// that starts here still turns the card.
+    /// The catch log: who was flying the ones you caught. No header on the
+    /// card (Noah, 2026-11-04: excessive); the sheet carries one. Past the
+    /// top three, a "+N MORE … SEE ALL ›" footer opens the whole list in a
+    /// sheet — the same shape and `onCardTap` handling as the Wikipedia
+    /// teaser's "MORE ›", so a swipe that starts here still turns the card.
     @ViewBuilder
     private func catchLogBlock(_ log: (rows: [CardBackFormat.LogRow], more: Int),
                                scale: CGFloat) -> some View {
         let rows = VStack(alignment: .leading, spacing: 6 * scale) {
-            Text(CardBackFormat.catchLogHeader)
-                .font(.system(size: 9.5 * scale, weight: .semibold, design: .monospaced))
-                .tracking(1.5)
-                .foregroundStyle(RP.faint)
-                .padding(.top, 4 * scale)
-                .accessibilityAddTraits(.isHeader)
             ForEach(log.rows, id: \.name) { row in
                 logLine(row.name.uppercased(), row.count, scale: scale)
                     .accessibilityLabel("\(row.name), \(row.count.dropLast()) caught")
