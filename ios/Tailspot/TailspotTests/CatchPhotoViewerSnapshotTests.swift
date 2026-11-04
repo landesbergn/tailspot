@@ -3,8 +3,9 @@
 //  TailspotTests
 //
 //  Visual-pass harness for the full-res pinch-zoom catch-photo viewer
-//  (ProfileSettingsSnapshotTests pattern). NOT an assertion test: writes
-//  PNGs to /private/tmp/tailspot_snaps and passes — review the images.
+//  (ProfileSettingsSnapshotTests pattern): writes PNGs to
+//  /private/tmp/tailspot_snaps for review. The render tests always pass;
+//  `openViewerCloseButtonClearsStatusBar` is a REAL regression assertion.
 //
 //  The viewer's zoom host is a UIScrollView (UIViewRepresentable), which
 //  ImageRenderer can't draw, so this hosts the screen in a real UIWindow
@@ -151,35 +152,41 @@ struct CatchPhotoViewerSnapshotTests {
             try? await Task.sleep(for: .seconds(0.1))
         }
         try #require(model.phase == .open)
-        try? await Task.sleep(for: .seconds(0.2))   // let the viewer lay out
-        host.view.layoutIfNeeded()
-
         // The hosted test window exposes no accessibility tree, so probe
         // pixels: the X's white glyph is the only bright thing in its
         // column above the photo (the 3:4 fixture fits from y≈164).
-        let fmt = UIGraphicsImageRendererFormat()
-        fmt.scale = 1
-        let shot = UIGraphicsImageRenderer(bounds: Self.bounds, format: fmt).image { _ in
-            host.view.drawHierarchy(in: Self.bounds, afterScreenUpdates: true)
-        }
-        try? FileManager.default.createDirectory(at: Self.snapDir, withIntermediateDirectories: true)
-        try? shot.pngData()?.write(to: Self.snapDir.appendingPathComponent("photo_viewer_open_inset.png"))
-        let cg = try #require(shot.cgImage)
-        let w = cg.width, h = cg.height
-        var px = [UInt8](repeating: 0, count: w * h * 4)
-        let ctx = try #require(CGContext(
-            data: &px, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
-            space: CGColorSpaceCreateDeviceRGB(),
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
-        ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
-        let glyphX = Int(Self.bounds.width - 16 - 22)   // trailing pad + half the disc
-        var topGlyphY: Int? = nil
-        for y in 0..<150 {
-            for x in (glyphX - 8)...(glyphX + 8) {
-                let o = (y * w + x) * 4
-                if px[o] > 200, px[o + 1] > 200, px[o + 2] > 200 { topGlyphY = y; break }
+        // Polled: a loaded MainActor can lay the viewer out late.
+        func probe() throws -> Int? {
+            let fmt = UIGraphicsImageRendererFormat()
+            fmt.scale = 1
+            let shot = UIGraphicsImageRenderer(bounds: Self.bounds, format: fmt).image { _ in
+                host.view.drawHierarchy(in: Self.bounds, afterScreenUpdates: true)
             }
+            try? FileManager.default.createDirectory(at: Self.snapDir, withIntermediateDirectories: true)
+            try? shot.pngData()?.write(to: Self.snapDir.appendingPathComponent("photo_viewer_open_inset.png"))
+            let cg = try #require(shot.cgImage)
+            let w = cg.width, h = cg.height
+            var px = [UInt8](repeating: 0, count: w * h * 4)
+            let ctx = try #require(CGContext(
+                data: &px, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
+                space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+            ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
+            let glyphX = Int(Self.bounds.width - 16 - 22)   // trailing pad + half the disc
+            for y in 0..<150 {
+                for x in (glyphX - 8)...(glyphX + 8) {
+                    let o = (y * w + x) * 4
+                    if px[o] > 200, px[o + 1] > 200, px[o + 2] > 200 { return y }
+                }
+            }
+            return nil
+        }
+        var topGlyphY: Int? = nil
+        for _ in 0..<30 {
+            host.view.layoutIfNeeded()
+            topGlyphY = try probe()
             if topGlyphY != nil { break }
+            try? await Task.sleep(for: .seconds(0.1))
         }
         let y = try #require(topGlyphY, "no X glyph found above the photo")
         #expect(CGFloat(y) >= topInset, "Close X glyph starts at y=\(y), under the status bar")
