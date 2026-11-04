@@ -188,6 +188,20 @@ nonisolated enum CardBackFormat {
         return (rows, named.count - rows.count)
     }
 
+    /// Every operator in the log, for the full-list sheet.
+    static func fullCatchLog(_ list: [TypeHistory.AirlineCount]) -> [LogRow] {
+        catchLog(list, top: .max).rows
+    }
+
+    /// The small label over the catch log. Without it, "DELTA AIR LINES 94×"
+    /// didn't say whose catches those were or what the number counted
+    /// (Noah, 2026-11-04). "Airline" over "operator": it's the word people
+    /// use, and a GA type's "Private" row still reads fine under it.
+    static let catchLogHeader = "YOUR CATCHES BY AIRLINE"
+
+    /// The footer under the top rows when the log is longer: "+3 MORE".
+    static func catchLogMore(_ more: Int) -> String { "+\(more) MORE" }
+
     /// The exact number, grouped for the locale ("5,215") — never rounded
     /// or approximated.
     static func numberBuilt(_ n: Int, locale: Locale = .current) -> String {
@@ -315,6 +329,7 @@ struct CatchCardBack: View {
     /// snapshots (which can't wait on AsyncImage) still show a photo.
     let snapshotImage: UIImage?
     @State private var showingSummary = false
+    @State private var showingCatchLog = false
     @Environment(\.cardSwipeGuard) private var swipeGuard
 
     /// The photo and credit links: a swipe that started on them turns the
@@ -360,14 +375,7 @@ struct CatchCardBack: View {
                     Rectangle().fill(RP.rule).frame(height: 1)
                     VStack(spacing: 6 * scale) {
                         if let first { ledgerLine("FIRST CAUGHT", first, scale: scale) }
-                        // The catch log: who was flying the ones you caught.
-                        ForEach(log.rows, id: \.name) { row in
-                            logLine(row.name.uppercased(), row.count, scale: scale)
-                                .accessibilityLabel("\(row.name), \(row.count.dropLast()) caught")
-                        }
-                        if log.more > 0 {
-                            logLine("+\(log.more) MORE", "", scale: scale)
-                        }
+                        if !log.rows.isEmpty { catchLogBlock(log, scale: scale) }
                     }
                 }
 
@@ -553,6 +561,58 @@ struct CatchCardBack: View {
         .accessibilityElement(children: .combine)
     }
 
+    /// The catch log: who was flying the ones you caught. A small header
+    /// says what the rows are; past the top three, a "+N MORE … SEE ALL ›"
+    /// footer opens the whole list in a sheet — the same shape and
+    /// `onCardTap` handling as the Wikipedia teaser's "MORE ›", so a swipe
+    /// that starts here still turns the card.
+    @ViewBuilder
+    private func catchLogBlock(_ log: (rows: [CardBackFormat.LogRow], more: Int),
+                               scale: CGFloat) -> some View {
+        let rows = VStack(alignment: .leading, spacing: 6 * scale) {
+            Text(CardBackFormat.catchLogHeader)
+                .font(.system(size: 9.5 * scale, weight: .semibold, design: .monospaced))
+                .tracking(1.5)
+                .foregroundStyle(RP.faint)
+                .padding(.top, 4 * scale)
+                .accessibilityAddTraits(.isHeader)
+            ForEach(log.rows, id: \.name) { row in
+                logLine(row.name.uppercased(), row.count, scale: scale)
+                    .accessibilityLabel("\(row.name), \(row.count.dropLast()) caught")
+            }
+        }
+
+        if log.more > 0 {
+            VStack(alignment: .leading, spacing: 6 * scale) {
+                rows
+                HStack(spacing: 6 * scale) {
+                    Text(CardBackFormat.catchLogMore(log.more))
+                        .font(.system(size: 10 * scale, weight: .regular, design: .monospaced))
+                        .foregroundStyle(RP.muted)
+                    Spacer(minLength: 0)
+                    Text("SEE ALL ›")
+                        .font(.system(size: 9.5 * scale, weight: .semibold, design: .monospaced))
+                        .tracking(1)
+                        .foregroundStyle(RP.muted)
+                        .fixedSize()
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("\(log.more) more airlines")
+                .accessibilityHint("Shows every airline you've caught this type with")
+                .accessibilityAddTraits(.isButton)
+                .accessibilityAction { showingCatchLog = true }
+            }
+            .contentShape(Rectangle())
+            .onCardTap { showingCatchLog = true }
+            .sheet(isPresented: $showingCatchLog) {
+                CatchLogSheet(title: model.modelName,
+                              rows: CardBackFormat.fullCatchLog(model.history?.airlines ?? []))
+            }
+        } else {
+            rows
+        }
+    }
+
     /// A catch-log row: operator left (truncates if it must), count right.
     private func logLine(_ name: String, _ count: String, scale: CGFloat) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 10 * scale) {
@@ -670,6 +730,48 @@ struct CatchCardBack: View {
             .accessibilityElement()
             .accessibilityLabel("Loading Wikipedia summary")
         }
+    }
+}
+
+/// Every airline you've caught this type with, opened from the card back's
+/// "SEE ALL ›". Same sheet shape as the Wikipedia one below.
+struct CatchLogSheet: View {
+    let title: String
+    let rows: [CardBackFormat.LogRow]
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    ForEach(rows, id: \.name) { row in
+                        HStack(alignment: .firstTextBaseline) {
+                            Text(row.name)
+                                .font(.body)
+                                .foregroundStyle(Brand.Color.textPrimary)
+                            Spacer(minLength: 12)
+                            Text(row.count)
+                                .font(Brand.Font.mono(size: 15, weight: .semibold, relativeTo: .body))
+                                .foregroundStyle(Brand.Color.textPrimary)
+                                .monospacedDigit()
+                        }
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel("\(row.name), \(row.count.dropLast()) caught")
+                    }
+                } header: {
+                    Text("Your catches by airline")
+                }
+            }
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(role: .close) { dismiss() }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .preferredColorScheme(.dark)
     }
 }
 
