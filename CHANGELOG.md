@@ -5,6 +5,18 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-11-05 — Full-screen catch photo: working X, true full screen, smooth zoom (PR #411)
+
+- Tester report: after a catch, the full-screen photo's X sat under the status bar and did nothing. The open viewer was hosted inside the morph layer's `.ignoresSafeArea()`, which removed its top inset.
+- The open viewer is now its own full-screen cover, so it fills the screen from a sheet (the Hangar detail) too, not just from the reveal.
+- The zoom never actually animated: the morph view was inserted in the same update that animated it, so SwiftUI drew it at the end value. Tap-open and close now start their spring from the morph's `onAppear`. The X fades in, and the morph carries the hero's rarity border so it no longer pops back on landing.
+- Tests mirror both hosts (reveal cover, Hangar sheet): viewer presented, black to the top edge, X below the status bar.
+
+## 2026-11-04 — Card back: full airline list (branch `claude/airline-table-clarity-expand-681562`)
+
+- The catch log's "+N MORE" row on the card back now ends in "SEE ALL ›" and opens a sheet listing every airline you've caught that type with, with counts. Same tap and swipe handling as the Wikipedia "MORE ›".
+- A "YOUR CATCHES BY AIRLINE" label over the rows was tried and removed on the device pass; the sheet keeps it as its header.
+
 ## 2026-11-01 — Aircraft tier audit, two rounds (PR #406, branch `fix/full-aircraft-tier-audit`)
 
 - Round 1 (2026-10-25), curated: 309 tier changes and 187 category corrections across 348 entries. BelugaXL and Dreamlifter Legendary; A300-600 Epic → Rare, 727-200 Legendary → Epic. Fixed over-broad airliner prefixes and military-role omissions; removed dead overrides.

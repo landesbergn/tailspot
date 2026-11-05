@@ -138,6 +138,14 @@ struct CardBackFormatTests {
         #expect(empty.rows.isEmpty && empty.more == 0)
     }
 
+    @Test func fullCatchLogKeepsEveryNamedOperatorInOrder() {
+        let all = CardBackFormat.fullCatchLog(BackFixtures.b738History.airlines
+                                              + [.init(name: "", count: 4), .init(name: "Zero", count: 0)])
+        #expect(all.map(\.name) == ["United", "Southwest", "Alaska", "American", "Delta"])
+        #expect(all.first?.count == "3×")
+        #expect(CardBackFormat.catchLogMore(3) == "+3 MORE")
+    }
+
     @Test func firstCaughtIsAShortDate() {
         #expect(CardBackFormat.firstCaught(BackFixtures.firstCaught, locale: us,
                                            timeZone: TimeZone(identifier: "UTC")!) == "Mar 4, 2026")
@@ -259,6 +267,14 @@ struct CardBackSnapshotTests {
     @Test func backPlanespotters() async throws {
         let png = try await render(back(BackFixtures.b738, photo: Self.testPhoto),
                                    name: "closeup_back_planespotters.png")
+        #expect(!png.isEmpty)
+    }
+
+    @Test func catchLogSheet() async throws {
+        let png = try await render(
+            CatchLogSheet(title: "Boeing 737-800",
+                          rows: CardBackFormat.fullCatchLog(BackFixtures.b738History.airlines)),
+            name: "closeup_back_catch_log_sheet.png")
         #expect(!png.isEmpty)
     }
 
