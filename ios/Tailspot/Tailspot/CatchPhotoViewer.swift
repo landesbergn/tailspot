@@ -113,8 +113,20 @@ final class HeroZoomModel {
 
     func close() {
         guard phase == .open else { return }
-        phase = .transitioning
+        // Leaving .open dismisses the viewer's full-screen cover — with
+        // no slide, so the morph underneath picks up at progress 1.
+        Self.withoutAnimation { phase = .transitioning }
         settle(to: 0, then: .idle)
+    }
+
+    /// Phase flips into and out of `.open` present and dismiss the
+    /// viewer's full-screen cover. Disabling the transaction's animations
+    /// makes that cover appear and vanish in place instead of sliding up,
+    /// so the morph hands off to it without a seam.
+    private static func withoutAnimation(_ body: () -> Void) {
+        var t = Transaction()
+        t.disablesAnimations = true
+        withTransaction(t, body)
     }
 
     private func commit(method: String) {
@@ -129,7 +141,7 @@ final class HeroZoomModel {
         Task {
             try? await Task.sleep(for: .milliseconds(Self.settleMs))
             guard phase == .transitioning, progress == target else { return }
-            phase = end
+            Self.withoutAnimation { phase = end }
             if end == .idle { image = nil; focus = nil }
         }
     }
@@ -221,39 +233,43 @@ struct HeroZoomSource: ViewModifier {
 
 /// Place LAST in a screen's root ZStack. Empty while idle. During the
 /// transition it draws the scrim + the morphing photo (edge to edge,
-/// ignoring the safe area); once open it hosts the interactive viewer,
-/// which keeps the safe area so its X clears the status bar. Hit-testing
-/// only when open, so an in-flight pinch keeps flowing to the hero.
+/// ignoring the safe area). Once open, the interactive viewer is
+/// presented as its own full-screen cover, so it fills the whole screen
+/// even when this screen is a sheet (the Hangar detail): drawn inside the
+/// sheet, the viewer stopped under the status bar with the sheet's
+/// rounded top showing (tester report 2026-11-04). The cover also gives
+/// the viewer the real safe area, so its X clears the status bar.
 struct HeroZoomOverlay: View {
     let model: HeroZoomModel
 
     var body: some View {
-        ZStack {
-            morphLayer
-            // The open viewer lives OUTSIDE the safe-area-ignoring morph
-            // layer: under `.ignoresSafeArea()` its X pill lost the top
-            // inset and landed under the status bar, where taps never
-            // reach the app (tester report 2026-11-04 — the post-catch
-            // reveal is a full-screen cover; the Hangar detail sits in a
-            // sheet below the status bar, which hid the bug there). The
-            // viewer extends its own black + image edge to edge, so the
-            // swap at progress 1 still matches the full-screen fit rect.
-            if model.phase == .open, let image = model.image {
-                CatchPhotoViewer(image: image, onClose: { model.close() })
+        morphLayer
+            .fullScreenCover(isPresented: Binding(
+                get: { model.phase == .open },
+                set: { if !$0 { model.close() } }
+            )) {
+                CatchPhotoViewer(image: model.image, onClose: { model.close() })
+                    .presentationBackground(.black)
             }
-        }
-        .allowsHitTesting(model.phase == .open)
     }
 
     private var morphLayer: some View {
         GeometryReader { geo in
-            if model.phase != .idle, model.phase != .open, let image = model.image {
+            if model.phase == .transitioning, let image = model.image {
                 // Work in overlay-local coordinates: the hero frame is
-                // global, so subtract this overlay's own global origin
-                // (normally .zero once ignoresSafeArea makes it fill the
-                // window — the translation is a guard, not a hope).
+                // global, so subtract this overlay's own global origin.
+                // That origin is .zero on a full-screen host (the reveal)
+                // and the sheet's top edge on a sheet (the Hangar detail).
                 let origin = geo.frame(in: .global).origin
-                let bounds = CGRect(origin: .zero, size: geo.size)
+                // Aim the morph at the WHOLE screen, where the viewer's
+                // cover will draw the photo, not at this overlay's own
+                // bounds: in a sheet the part above the sheet is clipped,
+                // but what shows lines up with the cover at progress 1.
+                // The overlay ignores the safe area, so it reaches the
+                // screen's right and bottom edges.
+                let bounds = CGRect(x: -origin.x, y: -origin.y,
+                                    width: geo.size.width + origin.x,
+                                    height: geo.size.height + origin.y)
                 let hero = model.heroFrame.offsetBy(dx: -origin.x, dy: -origin.y)
                 let p = model.progress
 
