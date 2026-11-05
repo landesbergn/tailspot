@@ -67,6 +67,12 @@ final class HeroZoomModel {
     /// tracked, every card scroll would invalidate the (empty) overlay.
     @ObservationIgnored var heroFrame: CGRect = .zero
 
+    /// The hero's rarity border, which sits above the hero, so the morph
+    /// covers it. The morph redraws it on its own edge and fades it with
+    /// progress; otherwise it vanished on open and popped back when the
+    /// photo landed (field recording 2026-11-05). nil = no border.
+    @ObservationIgnored var heroRarity: Rarity? = nil
+
     @ObservationIgnored private(set) var image: UIImage? = nil
     @ObservationIgnored private(set) var focus: CGPoint? = nil
 
@@ -106,17 +112,36 @@ final class HeroZoomModel {
         guard phase == .idle, let decoded = RevealPhoto.cachedDecode(url: url) else { return }
         image = decoded
         self.focus = focus
-        phase = .transitioning
         progress = 0
-        commit(method: "tap")
+        phase = .transitioning
+        onCommit?("tap")
+        // The morph view only now enters the hierarchy. Animating progress
+        // in this same update would insert it already AT the end value —
+        // the photo jumped straight to full screen with no zoom (field
+        // recording 2026-11-05) — so the morph starts the spring once it
+        // has appeared at progress 0 (`morphAppeared`).
+        pendingSettle = (1, .open)
     }
 
     func close() {
         guard phase == .open else { return }
         // Leaving .open dismisses the viewer's full-screen cover — with
-        // no slide, so the morph underneath picks up at progress 1.
+        // no slide, so the morph underneath picks up at progress 1. As
+        // with a tap-open, the morph view is inserted by this change, so
+        // the zoom back into the card waits for it to appear.
+        pendingSettle = (0, .idle)
         Self.withoutAnimation { phase = .transitioning }
-        settle(to: 0, then: .idle)
+    }
+
+    /// A settle queued until the morph view is on screen at its start
+    /// value. A pinch needs none: its morph is already showing.
+    @ObservationIgnored private var pendingSettle: (target: CGFloat, end: Phase)?
+
+    /// Called by the overlay when the morph view appears.
+    func morphAppeared() {
+        guard let pending = pendingSettle else { return }
+        pendingSettle = nil
+        settle(to: pending.target, then: pending.end)
     }
 
     /// Phase flips into and out of `.open` present and dismiss the
@@ -207,6 +232,9 @@ struct HeroZoomSource: ViewModifier {
     let url: URL?
     let focus: CGPoint?
     let enabled: Bool
+    /// The rarity border the screen draws over this hero (CatchRarityBorder),
+    /// so the morph can carry it; nil when the hero has none.
+    var rarity: Rarity? = nil
 
     func body(content: Content) -> some View {
         content
@@ -215,6 +243,7 @@ struct HeroZoomSource: ViewModifier {
                 proxy.frame(in: .global)
             } action: { frame in
                 model.heroFrame = frame
+                model.heroRarity = rarity
             }
             .simultaneousGesture(
                 MagnifyGesture(minimumScaleDelta: 0.02)
@@ -297,7 +326,21 @@ struct HeroZoomOverlay: View {
                     // PRIVACY: the user's own photo, mid-morph — masked
                     // from session replay like every other render site.
                     .catchPhotoReplayMask()
+
+                    // The hero's rarity border, on the morph's own edge,
+                    // fading out as the photo grows and back in as it lands.
+                    if let rarity = model.heroRarity {
+                        CatchRarityBorder(rarity: rarity,
+                                          cornerRadius: (1 - p) * Brand.Radius.card,
+                                          emphasis: 0.55)
+                            .frame(width: clip.width, height: clip.height)
+                            .offset(x: clip.minX, y: clip.minY)
+                            .opacity(Double(1 - p))
+                    }
                 }
+                // Starts a queued tap-open / close spring now that the
+                // morph is on screen at its start value.
+                .onAppear { model.morphAppeared() }
             }
         }
         .ignoresSafeArea()
@@ -314,6 +357,9 @@ struct CatchPhotoViewer: View {
     /// fallback below rather than a broken screen.
     let image: UIImage?
     let onClose: () -> Void
+    /// The X fades in rather than popping when the viewer takes over from
+    /// the morph (whose last frame is the same photo with no X).
+    @State private var closeShown = false
 
     init(image: UIImage?, onClose: @escaping () -> Void) {
         self.image = image
@@ -350,6 +396,10 @@ struct CatchPhotoViewer: View {
             ChromeButton(.close, action: onClose)
                 .padding(.top, 8)
                 .padding(.trailing, 16)
+                .opacity(closeShown ? 1 : 0)
+        }
+        .onAppear {
+            withAnimation(.easeOut(duration: 0.2)) { closeShown = true }
         }
     }
 }

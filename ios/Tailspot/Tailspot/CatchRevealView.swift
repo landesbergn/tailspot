@@ -1773,7 +1773,8 @@ struct CatchRevealView: View {
                     .modifier(HeroZoomSource(model: heroZoom,
                                              url: zoomablePhotoURL,
                                              focus: livePlane.photoFocus,
-                                             enabled: settled))
+                                             enabled: settled,
+                                             rarity: livePlane.rarity))
                     .overlay(
                         CatchRarityBorder(rarity: livePlane.rarity,
                                           cornerRadius: Brand.Radius.card, emphasis: 0.55)
