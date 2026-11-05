@@ -181,7 +181,8 @@ struct SettledCatchCard: View {
                     // (Planespotters) heroes keep pinch off via url: nil.
                     url: plane.photoURL.flatMap { $0.isFileURL ? $0 : nil },
                     focus: plane.photoFocus,
-                    enabled: true))
+                    enabled: true,
+                    rarity: plane.rarity))
             } else {
                 base
             }

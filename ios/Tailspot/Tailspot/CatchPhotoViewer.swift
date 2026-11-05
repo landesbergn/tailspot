@@ -67,6 +67,12 @@ final class HeroZoomModel {
     /// tracked, every card scroll would invalidate the (empty) overlay.
     @ObservationIgnored var heroFrame: CGRect = .zero
 
+    /// The hero's rarity border, which sits above the hero, so the morph
+    /// covers it. The morph redraws it on its own edge and fades it with
+    /// progress; otherwise it vanished on open and popped back when the
+    /// photo landed (field recording 2026-11-05). nil = no border.
+    @ObservationIgnored var heroRarity: Rarity? = nil
+
     @ObservationIgnored private(set) var image: UIImage? = nil
     @ObservationIgnored private(set) var focus: CGPoint? = nil
 
@@ -106,15 +112,46 @@ final class HeroZoomModel {
         guard phase == .idle, let decoded = RevealPhoto.cachedDecode(url: url) else { return }
         image = decoded
         self.focus = focus
-        phase = .transitioning
         progress = 0
-        commit(method: "tap")
+        phase = .transitioning
+        onCommit?("tap")
+        // The morph view only now enters the hierarchy. Animating progress
+        // in this same update would insert it already AT the end value —
+        // the photo jumped straight to full screen with no zoom (field
+        // recording 2026-11-05) — so the morph starts the spring once it
+        // has appeared at progress 0 (`morphAppeared`).
+        pendingSettle = (1, .open)
     }
 
     func close() {
         guard phase == .open else { return }
-        phase = .transitioning
-        settle(to: 0, then: .idle)
+        // Leaving .open dismisses the viewer's full-screen cover — with
+        // no slide, so the morph underneath picks up at progress 1. As
+        // with a tap-open, the morph view is inserted by this change, so
+        // the zoom back into the card waits for it to appear.
+        pendingSettle = (0, .idle)
+        Self.withoutAnimation { phase = .transitioning }
+    }
+
+    /// A settle queued until the morph view is on screen at its start
+    /// value. A pinch needs none: its morph is already showing.
+    @ObservationIgnored private var pendingSettle: (target: CGFloat, end: Phase)?
+
+    /// Called by the overlay when the morph view appears.
+    func morphAppeared() {
+        guard let pending = pendingSettle else { return }
+        pendingSettle = nil
+        settle(to: pending.target, then: pending.end)
+    }
+
+    /// Phase flips into and out of `.open` present and dismiss the
+    /// viewer's full-screen cover. Disabling the transaction's animations
+    /// makes that cover appear and vanish in place instead of sliding up,
+    /// so the morph hands off to it without a seam.
+    private static func withoutAnimation(_ body: () -> Void) {
+        var t = Transaction()
+        t.disablesAnimations = true
+        withTransaction(t, body)
     }
 
     private func commit(method: String) {
@@ -129,7 +166,7 @@ final class HeroZoomModel {
         Task {
             try? await Task.sleep(for: .milliseconds(Self.settleMs))
             guard phase == .transitioning, progress == target else { return }
-            phase = end
+            Self.withoutAnimation { phase = end }
             if end == .idle { image = nil; focus = nil }
         }
     }
@@ -195,6 +232,9 @@ struct HeroZoomSource: ViewModifier {
     let url: URL?
     let focus: CGPoint?
     let enabled: Bool
+    /// The rarity border the screen draws over this hero (CatchRarityBorder),
+    /// so the morph can carry it; nil when the hero has none.
+    var rarity: Rarity? = nil
 
     func body(content: Content) -> some View {
         content
@@ -203,6 +243,7 @@ struct HeroZoomSource: ViewModifier {
                 proxy.frame(in: .global)
             } action: { frame in
                 model.heroFrame = frame
+                model.heroRarity = rarity
             }
             .simultaneousGesture(
                 MagnifyGesture(minimumScaleDelta: 0.02)
@@ -220,57 +261,92 @@ struct HeroZoomSource: ViewModifier {
 // MARK: - Screen-root overlay
 
 /// Place LAST in a screen's root ZStack. Empty while idle. During the
-/// transition it draws the scrim + the morphing photo; once open it hosts
-/// the interactive viewer. Hit-testing only when open, so an in-flight
-/// pinch keeps flowing to the hero underneath.
+/// transition it draws the scrim + the morphing photo (edge to edge,
+/// ignoring the safe area). Once open, the interactive viewer is
+/// presented as its own full-screen cover, so it fills the whole screen
+/// even when this screen is a sheet (the Hangar detail): drawn inside the
+/// sheet, the viewer stopped under the status bar with the sheet's
+/// rounded top showing (tester report 2026-11-04). The cover also gives
+/// the viewer the real safe area, so its X clears the status bar.
 struct HeroZoomOverlay: View {
     let model: HeroZoomModel
 
     var body: some View {
+        morphLayer
+            .fullScreenCover(isPresented: Binding(
+                get: { model.phase == .open },
+                set: { if !$0 { model.close() } }
+            )) {
+                CatchPhotoViewer(image: model.image, onClose: { model.close() })
+                    .presentationBackground(.black)
+            }
+    }
+
+    private var morphLayer: some View {
         GeometryReader { geo in
-            if model.phase != .idle, let image = model.image {
+            if model.phase == .transitioning, let image = model.image {
                 // Work in overlay-local coordinates: the hero frame is
-                // global, so subtract this overlay's own global origin
-                // (normally .zero once ignoresSafeArea makes it fill the
-                // window — the translation is a guard, not a hope).
+                // global, so subtract this overlay's own global origin.
+                // That origin is .zero on a full-screen host (the reveal)
+                // and the sheet's top edge on a sheet (the Hangar detail).
                 let origin = geo.frame(in: .global).origin
-                let bounds = CGRect(origin: .zero, size: geo.size)
+                // Aim the morph at the WHOLE screen, where the viewer's
+                // cover will draw the photo, not at this overlay's own
+                // bounds: in a sheet the part above the sheet is clipped,
+                // but what shows lines up with the cover at progress 1.
+                // The overlay ignores the safe area, so it reaches the
+                // screen's right and bottom edges.
+                let bounds = CGRect(x: -origin.x, y: -origin.y,
+                                    width: geo.size.width + origin.x,
+                                    height: geo.size.height + origin.y)
                 let hero = model.heroFrame.offsetBy(dx: -origin.x, dy: -origin.y)
                 let p = model.progress
 
                 ZStack(alignment: .topLeading) {
                     Color.black.opacity(Double(p))
 
-                    if model.phase == .open {
-                        CatchPhotoViewer(image: image, onClose: { model.close() })
-                    } else {
-                        let src = HeroZoomMath.fillRect(imageSize: image.size,
-                                                        in: hero, focus: model.focus)
-                        let dst = HeroZoomMath.fitRect(imageSize: image.size, in: bounds)
-                        let img = HeroZoomMath.lerp(src, dst, p)
-                        let clip = HeroZoomMath.lerp(hero, bounds, p)
-                        ZStack(alignment: .topLeading) {
-                            Image(uiImage: image)
-                                .resizable()
-                                .frame(width: img.width, height: img.height)
-                                .offset(x: img.minX, y: img.minY)
-                        }
-                        .frame(width: geo.size.width, height: geo.size.height,
-                               alignment: .topLeading)
-                        .mask(alignment: .topLeading) {
-                            RoundedRectangle(cornerRadius: (1 - p) * Brand.Radius.card)
-                                .frame(width: clip.width, height: clip.height)
-                                .offset(x: clip.minX, y: clip.minY)
-                        }
-                        // PRIVACY: the user's own photo, mid-morph — masked
-                        // from session replay like every other render site.
-                        .catchPhotoReplayMask()
+                    let src = HeroZoomMath.fillRect(imageSize: image.size,
+                                                    in: hero, focus: model.focus)
+                    let dst = HeroZoomMath.fitRect(imageSize: image.size, in: bounds)
+                    let img = HeroZoomMath.lerp(src, dst, p)
+                    let clip = HeroZoomMath.lerp(hero, bounds, p)
+                    ZStack(alignment: .topLeading) {
+                        Image(uiImage: image)
+                            .resizable()
+                            .frame(width: img.width, height: img.height)
+                            .offset(x: img.minX, y: img.minY)
+                    }
+                    .frame(width: geo.size.width, height: geo.size.height,
+                           alignment: .topLeading)
+                    .mask(alignment: .topLeading) {
+                        RoundedRectangle(cornerRadius: (1 - p) * Brand.Radius.card)
+                            .frame(width: clip.width, height: clip.height)
+                            .offset(x: clip.minX, y: clip.minY)
+                    }
+                    // PRIVACY: the user's own photo, mid-morph — masked
+                    // from session replay like every other render site.
+                    .catchPhotoReplayMask()
+
+                    // The hero's rarity border, on the morph's own edge,
+                    // fading out as the photo grows and back in as it lands.
+                    if let rarity = model.heroRarity {
+                        CatchRarityBorder(rarity: rarity,
+                                          cornerRadius: (1 - p) * Brand.Radius.card,
+                                          emphasis: 0.55)
+                            .frame(width: clip.width, height: clip.height)
+                            .offset(x: clip.minX, y: clip.minY)
+                            .opacity(Double(1 - p))
                     }
                 }
+                // Starts a queued tap-open / close spring now that the
+                // morph is on screen at its start value.
+                .onAppear { model.morphAppeared() }
             }
         }
         .ignoresSafeArea()
-        .allowsHitTesting(model.phase == .open)
+        // The morph never takes touches: an in-flight pinch keeps flowing
+        // to the hero underneath.
+        .allowsHitTesting(false)
     }
 }
 
@@ -281,6 +357,9 @@ struct CatchPhotoViewer: View {
     /// fallback below rather than a broken screen.
     let image: UIImage?
     let onClose: () -> Void
+    /// The X fades in rather than popping when the viewer takes over from
+    /// the morph (whose last frame is the same photo with no X).
+    @State private var closeShown = false
 
     init(image: UIImage?, onClose: @escaping () -> Void) {
         self.image = image
@@ -317,6 +396,10 @@ struct CatchPhotoViewer: View {
             ChromeButton(.close, action: onClose)
                 .padding(.top, 8)
                 .padding(.trailing, 16)
+                .opacity(closeShown ? 1 : 0)
+        }
+        .onAppear {
+            withAnimation(.easeOut(duration: 0.2)) { closeShown = true }
         }
     }
 }

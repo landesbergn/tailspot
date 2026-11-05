@@ -3,8 +3,10 @@
 //  TailspotTests
 //
 //  Visual-pass harness for the full-res pinch-zoom catch-photo viewer
-//  (ProfileSettingsSnapshotTests pattern). NOT an assertion test: writes
-//  PNGs to /private/tmp/tailspot_snaps and passes — review the images.
+//  (ProfileSettingsSnapshotTests pattern): writes PNGs to
+//  /private/tmp/tailspot_snaps for review. The render tests always pass;
+//  `revealViewerFillsScreen` and `sheetViewerFillsScreen` are REAL
+//  regression assertions.
 //
 //  The viewer's zoom host is a UIScrollView (UIViewRepresentable), which
 //  ImageRenderer can't draw, so this hosts the screen in a real UIWindow
@@ -126,6 +128,126 @@ struct CatchPhotoViewerSnapshotTests {
         try? await Task.sleep(for: .seconds(0.3))
         snapshotWindow(host, as: "photo_viewer_entry_card")
         window.isHidden = true
+    }
+    /// Regression (tester reports 2026-11-04). The open viewer must own the
+    /// WHOLE screen wherever the card lives:
+    ///  - On the post-catch reveal (a clear full-screen cover) the X sat
+    ///    under the status bar, dead to taps.
+    ///  - On the Hangar detail (a sheet) the viewer stopped at the sheet's
+    ///    rounded top, with the screen behind showing above it.
+    /// Both hosts are mirrored below; each must end with the viewer in its
+    /// own cover, black to the top edge, the X below the status bar.
+    private struct RevealHarness: View {
+        let model: HeroZoomModel
+        @State private var shown = false
+        var body: some View {
+            Color.black.ignoresSafeArea()
+                .onAppear { shown = true }
+                .fullScreenCover(isPresented: $shown) {
+                    GeometryReader { _ in
+                        ZStack {
+                            Color.gray.ignoresSafeArea()
+                            HeroZoomOverlay(model: model)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+                    .presentationBackground(.clear)
+                }
+        }
+    }
+
+    private struct SheetHarness: View {
+        let model: HeroZoomModel
+        @State private var shown = false
+        var body: some View {
+            Color.gray.ignoresSafeArea()
+                .onAppear { shown = true }
+                .sheet(isPresented: $shown) {
+                    ZStack {
+                        Color.gray.ignoresSafeArea()
+                        HeroZoomOverlay(model: model)
+                    }
+                }
+        }
+    }
+
+    @Test func revealViewerFillsScreen() async throws {
+        let model = HeroZoomModel()
+        try await assertViewerFillsScreen(
+            UIHostingController(rootView: RevealHarness(model: model)), model: model,
+            snapshot: "photo_viewer_from_reveal")
+    }
+
+    @Test func sheetViewerFillsScreen() async throws {
+        let model = HeroZoomModel()
+        try await assertViewerFillsScreen(
+            UIHostingController(rootView: SheetHarness(model: model)), model: model,
+            snapshot: "photo_viewer_from_sheet")
+    }
+
+    private func assertViewerFillsScreen(_ host: UIViewController, model: HeroZoomModel,
+                                         snapshot: String) async throws {
+        let url = try fixturePhotoURL()
+        _ = RevealPhoto.cachedDecode(url: url)
+        let window = UIWindow(frame: Self.bounds)
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        try? await Task.sleep(for: .seconds(1.0))   // host's cover/sheet presents
+        let screenHost = try #require(host.presentedViewController, "host screen never presented")
+        model.openByTap(url: url, focus: nil)
+        // The open morph settles in ~340 ms, then the viewer's cover
+        // presents. Poll: a loaded MainActor (full suite) runs late.
+        for _ in 0..<50 where !(model.phase == .open && screenHost.presentedViewController != nil) {
+            try? await Task.sleep(for: .seconds(0.1))
+        }
+        try #require(model.phase == .open)
+        let viewer = try #require(screenHost.presentedViewController?.view,
+                                  "viewer was not presented full screen")
+        let topInset = viewer.safeAreaInsets.top
+        #expect(topInset > 0, "test window has no safe area: \(topInset)")
+
+        // The hosted window exposes no accessibility tree, so probe pixels:
+        // the X's white glyph is the only bright thing in its column above
+        // the photo. Polled: a loaded MainActor can lay the viewer out late.
+        var glyphY: Int? = nil
+        var px = [UInt8]()
+        var w = 0
+        for _ in 0..<30 {
+            let fmt = UIGraphicsImageRendererFormat()
+            fmt.scale = 1
+            let shot = UIGraphicsImageRenderer(bounds: Self.bounds, format: fmt).image { _ in
+                viewer.drawHierarchy(in: Self.bounds, afterScreenUpdates: true)
+            }
+            try? FileManager.default.createDirectory(at: Self.snapDir, withIntermediateDirectories: true)
+            try? shot.pngData()?.write(to: Self.snapDir.appendingPathComponent("\(snapshot).png"))
+            let cg = try #require(shot.cgImage)
+            w = cg.width
+            let h = cg.height
+            px = [UInt8](repeating: 0, count: w * h * 4)
+            let ctx = try #require(CGContext(
+                data: &px, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
+                space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+            ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
+            let glyphX = Int(Self.bounds.width - 16 - 22)   // trailing pad + half the disc
+            outer: for y in 0..<150 {
+                for x in (glyphX - 8)...(glyphX + 8) {
+                    let o = (y * w + x) * 4
+                    if px[o] > 200, px[o + 1] > 200, px[o + 2] > 200 { glyphY = y; break outer }
+                }
+            }
+            if glyphY != nil { break }
+            try? await Task.sleep(for: .seconds(0.1))
+        }
+        let y = try #require(glyphY, "no X glyph found above the photo")
+        #expect(CGFloat(y) >= topInset, "Close X glyph at y=\(y), status bar inset \(topInset)")
+        // Black to the very top: no gray host showing above the viewer.
+        for (x, y) in [(4, 4), (Int(Self.bounds.midX), 4), (4, Int(topInset) + 4)] {
+            let o = (y * w + x) * 4
+            #expect(px[o] < 20 && px[o + 1] < 20 && px[o + 2] < 20,
+                    "ground not black at (\(x),\(y)): \(px[o]),\(px[o + 1]),\(px[o + 2])")
+        }
     }
 }
 #endif
