@@ -5,6 +5,11 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-11-04 — Card back: full airline list (branch `claude/airline-table-clarity-expand-681562`)
+
+- The catch log's "+N MORE" row on the card back now ends in "SEE ALL ›" and opens a sheet listing every airline you've caught that type with, with counts. Same tap and swipe handling as the Wikipedia "MORE ›".
+- A "YOUR CATCHES BY AIRLINE" label over the rows was tried and removed on the device pass; the sheet keeps it as its header.
+
 ## 2026-11-01 — Aircraft tier audit, two rounds (PR #406, branch `fix/full-aircraft-tier-audit`)
 
 - Round 1 (2026-10-25), curated: 309 tier changes and 187 category corrections across 348 entries. BelugaXL and Dreamlifter Legendary; A300-600 Epic → Rare, 727-200 Legendary → Epic. Fixed over-broad airliner prefixes and military-role omissions; removed dead overrides.
