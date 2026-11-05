@@ -258,6 +258,25 @@ struct CatchPhotoViewerSnapshotTests {
             try? await Task.sleep(for: .seconds(0.1))
         }
         let y = try #require(topGlyphY, "no X glyph found above the photo")
+        // The black ground must reach the very top edge, under the status
+        // bar — not stop at the safe area and let the reveal's background
+        // show through as a band (tester screenshot 2026-11-04).
+        let probe = UIGraphicsImageRenderer(bounds: Self.bounds).image { _ in
+            host.presentedViewController?.view.drawHierarchy(in: Self.bounds, afterScreenUpdates: true)
+        }
+        for (px, py) in [(4, 4), (Int(Self.bounds.midX), 4), (4, Int(topInset) + 4)] {
+            var rgba = [UInt8](repeating: 0, count: 4)
+            let c1 = try #require(CGContext(
+                data: &rgba, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4,
+                space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+            let s = probe.scale
+            c1.draw(try #require(probe.cgImage),
+                    in: CGRect(x: -CGFloat(px) * s, y: -(probe.size.height - CGFloat(py) - 1) * s,
+                               width: probe.size.width * s, height: probe.size.height * s))
+            #expect(rgba[0] < 20 && rgba[1] < 20 && rgba[2] < 20,
+                    "ground not black at (\(px),\(py)): \(rgba)")
+        }
         #expect(topInset > 0, "test window has no safe area: \(topInset)")
         #expect(CGFloat(y) >= topInset, "Close X glyph at y=\(y), window inset \(topInset)")
         window.isHidden = true
