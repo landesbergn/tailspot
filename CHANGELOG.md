@@ -5,6 +5,12 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-11-05 — Hangar detail opens the catch you tapped (branch `claude/swa503-picture-misalignment-6ca661`)
+
+- Field report: tapping today's SWA503 in the Hangar opened SWA4842 from Jul 23, with a different photo, route and date. Both were catches of the same Southwest 737, so they share one Hangar row.
+- The cell renders the row's most recent catch, but the detail rendered its earliest (`row.firstCatch`). The detail now renders `row.mostRecent`, so the card always matches the cell. No "first caught" line was added (Noah's call).
+- `CatchDetailViewTests` pins the detail's catch to the cell's.
+
 ## 2026-11-05 — Full-screen catch photo: working X, true full screen, smooth zoom (PR #411)
 
 - Tester report: after a catch, the full-screen photo's X sat under the status bar and did nothing. The open viewer was hosted inside the morph layer's `.ignoresSafeArea()`, which removed its top inset.
