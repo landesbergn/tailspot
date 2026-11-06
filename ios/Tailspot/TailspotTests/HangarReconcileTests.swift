@@ -116,6 +116,7 @@ struct HangarReconcileTests {
         var sent: [[String]] = []
         var events: [(String, [String: AnalyticsValue])] = []
         var fetches = 0
+        var uploads = 0
     }
 
     private func makeDefaults() -> UserDefaults {
@@ -125,7 +126,8 @@ struct HangarReconcileTests {
         return d
     }
 
-    private func makeContext(localUuids: [String], caughtAt: [Double]) throws -> ModelContext {
+    private func makeContext(localUuids: [String], caughtAt: [Double],
+                             uploaded: Bool = true) throws -> ModelContext {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: Catch.self, configurations: config)
         TestContainerRetention.retain(container)
@@ -135,6 +137,7 @@ struct HangarReconcileTests {
                           caughtAt: Date(timeIntervalSince1970: t),
                           observerLat: 0, observerLon: 0, slantDistanceMeters: 0)
             c.serverUuid = u.uppercased()
+            if uploaded { c.uploadedAt = Date(timeIntervalSince1970: t + 1) }
             context.insert(c)
         }
         try context.save()
@@ -160,7 +163,8 @@ struct HangarReconcileTests {
             },
             deletedLedger: { ledger },
             sendDeletes: { recorder.sent.append($0) },
-            capture: { recorder.events.append(($0, $1)) }
+            capture: { recorder.events.append(($0, $1)) },
+            uploadPending: { _ in recorder.uploads += 1 }
         )
     }
 
@@ -180,7 +184,11 @@ struct HangarReconcileTests {
         #expect(recorder.events.first?.1["outcome"]?.jsonValue as? String == "deleted")
         #expect(recorder.events.first?.1["server_total"]?.jsonValue as? Int == 4)
         #expect(recorder.events.first?.1["local_total"]?.jsonValue as? Int == 3)
+        #expect(recorder.events.first?.1["resent"]?.jsonValue as? Int == 0)
+        #expect(recorder.uploads == 0)
         #expect(defaults.bool(forKey: HangarReconcileManager.doneKey))
+        // Policy: a run never removes a catch from the phone.
+        #expect(try context.fetchCount(FetchDescriptor<Catch>()) == 3)
 
         // A second manager on the same install does nothing.
         let again = makeManager(defaults: defaults, server: server, recorder: recorder)
@@ -271,6 +279,56 @@ struct HangarReconcileTests {
         await manager.runIfNeeded(context: context, restorePresenting: { false }, tokenWaitSeconds: 0)
 
         #expect(recorder.sent == [[uuid(4)]])
+    }
+
+    @Test func phoneCatchesMissingFromTheServerAreResent() async throws {
+        // uuid(2) and uuid(3) are on the phone, marked uploaded, but the
+        // server doesn't have them: they go back to pending and upload again.
+        let defaults = makeDefaults()
+        let recorder = Recorder()
+        let server = [Row(uuid: uuid(1), caughtAt: 101), Row(uuid: uuid(4), caughtAt: 104)]
+        let context = try makeContext(localUuids: [uuid(1), uuid(2), uuid(3), uuid(4)],
+                                      caughtAt: [101, 102, 103, 104])
+        let manager = makeManager(defaults: defaults, server: server, recorder: recorder)
+
+        await manager.runIfNeeded(context: context, restorePresenting: { false }, tokenWaitSeconds: 0)
+
+        let pending = try context.fetch(FetchDescriptor<Catch>(predicate: CatchUploader.pendingPredicate))
+        #expect(Set(pending.compactMap { $0.serverUuid?.lowercased() }) == [uuid(2), uuid(3)])
+        #expect(recorder.uploads == 1)
+        #expect(recorder.sent.isEmpty)
+        #expect(recorder.events.first?.1["resent"]?.jsonValue as? Int == 2)
+        #expect(try context.fetchCount(FetchDescriptor<Catch>()) == 4)
+        #expect(defaults.bool(forKey: HangarReconcileManager.doneKey))
+    }
+
+    @Test func pendingCatchesAreLeftToTheUploader() async throws {
+        // Never uploaded: the uploader already owns these; nothing to resend.
+        let defaults = makeDefaults()
+        let recorder = Recorder()
+        let context = try makeContext(localUuids: [uuid(1), uuid(2)], caughtAt: [101, 102], uploaded: false)
+        let manager = makeManager(defaults: defaults, server: [], recorder: recorder)
+
+        await manager.runIfNeeded(context: context, restorePresenting: { false }, tokenWaitSeconds: 0)
+
+        #expect(recorder.uploads == 0)
+        #expect(recorder.events.first?.1["resent"]?.jsonValue as? Int == 0)
+    }
+
+    @Test func tooManyStillResends() async throws {
+        // The half rule only blocks deletes; adding missing catches is safe.
+        let defaults = makeDefaults()
+        let recorder = Recorder()
+        let server = (2...5).map { Row(uuid: uuid($0), caughtAt: Double(100 + $0)) }
+        let context = try makeContext(localUuids: [uuid(1), uuid(2)], caughtAt: [101, 102])
+        let manager = makeManager(defaults: defaults, server: server, recorder: recorder)
+
+        await manager.runIfNeeded(context: context, restorePresenting: { false }, tokenWaitSeconds: 0)
+
+        #expect(recorder.sent.isEmpty)
+        #expect(recorder.events.first?.1["outcome"]?.jsonValue as? String == "too_many")
+        #expect(recorder.events.first?.1["resent"]?.jsonValue as? Int == 1)
+        #expect(recorder.uploads == 1)
     }
 
     @Test func tooManyReportsLatchesAndDeletesNothing() async throws {

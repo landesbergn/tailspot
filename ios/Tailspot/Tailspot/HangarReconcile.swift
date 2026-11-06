@@ -13,6 +13,14 @@
 //  so the fix runs on the phone: list the server's catches, compare with
 //  the Hangar, and send a delete for each one the Hangar no longer has.
 //
+//  The policy (Noah, 2026-11-05): the phone is the source of truth.
+//    - Every catch on the phone must be on the server. A phone catch marked
+//      uploaded that the server doesn't have is marked pending again, and
+//      the uploader re-sends it under its original uuid. (POST is
+//      idempotent per uuid, so a false "missing" just comes back duplicate.)
+//    - Nothing here ever deletes a catch on the phone. Only server rows the
+//      user already deleted on the phone are removed.
+//
 //  What counts as deleted (`HangarReconcile.plan`): a server row whose uuid
 //  is not in the Hangar, caught AT OR AFTER the oldest catch still in the
 //  Hangar. The time floor protects one case: a reinstall where the user
@@ -96,6 +104,21 @@ enum HangarReconcile {
     }
 }
 
+extension HangarReconcile {
+    /// Phone catches the server doesn't have: marked uploaded, but their
+    /// uuid isn't in the server's list (or they have no uuid at all).
+    /// Pending rows (`uploadedAt == nil`) are left out — the uploader
+    /// already owns them.
+    static func missingFromServer(_ local: [Catch], serverUuids: Set<String>) -> [Catch] {
+        let server = Set(serverUuids.map { $0.lowercased() })
+        return local.filter { c in
+            guard c.uploadedAt != nil else { return false }
+            guard let uuid = c.serverUuid?.lowercased() else { return true }
+            return !server.contains(uuid)
+        }
+    }
+}
+
 // MARK: - The launch run
 
 @MainActor
@@ -111,6 +134,7 @@ final class HangarReconcileManager {
     private let deletedLedger: () -> Set<String>
     private let sendDeletes: ([String]) -> Void
     private let capture: (String, [String: AnalyticsValue]) -> Void
+    private let uploadPending: (ModelContext) async -> Void
     private var ranThisLaunch = false
 
     init(
@@ -120,7 +144,8 @@ final class HangarReconcileManager {
         fetchPage: FetchPage? = nil,
         deletedLedger: @escaping () -> Set<String> = { CatchDeletionSync().deletedSet },
         sendDeletes: @escaping ([String]) -> Void = { CatchDeletionSync.deleteRemotely($0) },
-        capture: @escaping (String, [String: AnalyticsValue]) -> Void = { Analytics.capture($0, $1) }
+        capture: @escaping (String, [String: AnalyticsValue]) -> Void = { Analytics.capture($0, $1) },
+        uploadPending: @escaping (ModelContext) async -> Void = { await CatchUploader().uploadPending(context: $0) }
     ) {
         self.defaults = defaults
         self.hasToken = hasToken ?? { client.storedToken != nil }
@@ -131,6 +156,7 @@ final class HangarReconcileManager {
         self.deletedLedger = deletedLedger
         self.sendDeletes = sendDeletes
         self.capture = capture
+        self.uploadPending = uploadPending
     }
 
     /// Launch entry. Waits (bounded) for TailspotApp's launch registration
@@ -195,8 +221,25 @@ final class HangarReconcileManager {
             props["orphans"] = .int(n)
             props["outcome"] = .string("too_many")
         }
+
+        // The other direction: every phone catch must be on the server.
+        // Runs whatever the delete plan said (even `tooMany`): it only adds.
+        let missing = HangarReconcile.missingFromServer(local, serverUuids: Set(server.map(\.uuid)))
+        props["resent"] = .int(missing.count)
+        var saved = true
+        if !missing.isEmpty {
+            for c in missing { c.uploadedAt = nil }
+            do { try context.save() } catch {
+                // The reset still holds in memory, so the upload below can
+                // run; without the flag, the next launch tries again.
+                saved = false
+                Log.ui.error("HangarReconcile: save failed: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+
         capture("hangar_reconciled", props)
-        Log.ui.info("HangarReconcile: \(String(describing: plan), privacy: .public)")
-        defaults.set(true, forKey: Self.doneKey)
+        Log.ui.info("HangarReconcile: \(String(describing: plan), privacy: .public); resending \(missing.count, privacy: .public)")
+        if saved { defaults.set(true, forKey: Self.doneKey) }
+        if !missing.isEmpty { await uploadPending(context) }
     }
 }
