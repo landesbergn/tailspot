@@ -391,36 +391,21 @@ struct CatchDetailView: View {
 
     private var deleteTitle: String {
         let cs = shown.callsign?.trimmedNonEmpty ?? shown.icao24.uppercased()
-        if row.count == 1 { return "Delete catch of \(cs)?" }
-        return "Delete all \(row.count) catches of \(cs)?"
+        return "Delete catch of \(cs)?"
     }
 
-    /// Drops every catch in the row AND each catch's photo file —
-    /// rows referencing dead files would render placeholder stripes
-    /// and the orphaned JPEGs would pile up in Documents/catches.
+    /// Deletes only the catch on screen. Earlier catches of the same
+    /// airframe stay in the Hangar (see CatchDeletion).
     private func performDelete() {
         // Catch-confirmation telemetry (north-star): a delete is the
-        // strongest "didn't keep/trust it" signal. Fire once per delete
-        // action before the rows go away.
+        // strongest "didn't keep/trust it" signal. Fire before the row goes.
         CatchTelemetry.fireDeleted(
             icao24: row.icao24,
-            count: row.count,
-            rarity: row.allCatches.first?.resolvedRarity.rawValue,
+            count: 1,
+            rarity: shown.resolvedRarity.rawValue,
             source: .hangarDelete
         )
-        // Capture the server ids BEFORE the delete — a deleted model's
-        // properties can't be read afterwards.
-        let serverUuids = row.allCatches.compactMap(\.serverUuid)
-        for c in row.allCatches {
-            CatchPhotoStore.delete(filename: c.photoFilename)
-            modelContext.delete(c)
-        }
-        do { try modelContext.save() } catch {
-            Log.adsb.error("Detail delete failed for \(row.icao24, privacy: .public): \(error.localizedDescription, privacy: .public)")
-        }
-        // …and off the server, so it stops counting toward the leaderboard
-        // and challenge scores.
-        CatchDeletionSync.deleteRemotely(serverUuids)
+        CatchDeletion.delete(shown, in: modelContext)
         dismiss()
     }
 

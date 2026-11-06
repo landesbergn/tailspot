@@ -10,6 +10,7 @@ Git history + PLAN.md §9 remain the authoritative record.
 - Field report: tapping today's SWA503 in the Hangar opened SWA4842 from Jul 23, with a different photo, route and date. Both were catches of the same Southwest 737, so they share one Hangar row.
 - The cell renders the row's most recent catch, but the detail rendered its earliest (`row.firstCatch`). The detail now renders `row.mostRecent`, so the card always matches the cell. No "first caught" line was added (Noah's call).
 - `CatchDetailViewTests` pins the detail's catch to the cell's.
+- Delete (the detail's trash button and the row's long-press menu) now removes only the catch on screen: its photo, its row and its server copy. It used to remove every catch of the airframe, including ones the screen never showed. Both sites share `CatchDeletion.delete`; `CatchDeletionTests` cover it.
 
 ## 2026-11-05 — Full-screen catch photo: working X, true full screen, smooth zoom (PR #411)
 
