@@ -171,16 +171,13 @@ struct HangarRecentView: View {
         let cs = row.mostRecent.callsign?
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .nonEmpty ?? row.icao24
-        if row.count == 1 {
-            return "Delete catch of \(cs)?"
-        }
-        return "Delete all \(row.count) catches of \(cs)?"
+        return "Delete catch of \(cs)?"
     }
 
+    /// Deletes only the catch the cell shows (`mostRecent`); earlier
+    /// catches of the same airframe stay (see CatchDeletion).
     private func performDelete(row: HangarRow) {
-        do { try HangarRowDeletion.delete(row, context: modelContext) } catch {
-            Log.adsb.error("Hangar delete failed for \(row.icao24, privacy: .public): \(error.localizedDescription, privacy: .public)")
-        }
+        CatchDeletion.delete(row.mostRecent, in: modelContext)
         rowToDelete = nil
     }
 }
