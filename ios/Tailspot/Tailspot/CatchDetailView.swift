@@ -396,28 +396,11 @@ struct CatchDetailView: View {
     /// rows referencing dead files would render placeholder stripes
     /// and the orphaned JPEGs would pile up in Documents/catches.
     private func performDelete() {
-        // Catch-confirmation telemetry (north-star): a delete is the
-        // strongest "didn't keep/trust it" signal. Fire once per delete
-        // action before the rows go away.
-        CatchTelemetry.fireDeleted(
-            icao24: row.icao24,
-            count: row.count,
-            rarity: row.allCatches.first?.resolvedRarity.rawValue,
-            source: .hangarDelete
-        )
-        // Capture the server ids BEFORE the delete — a deleted model's
-        // properties can't be read afterwards.
-        let serverUuids = row.allCatches.compactMap(\.serverUuid)
-        for c in row.allCatches {
-            CatchPhotoStore.delete(filename: c.photoFilename)
-            modelContext.delete(c)
-        }
-        do { try modelContext.save() } catch {
+        // Catch-confirmation telemetry, photo cleanup and the server delete
+        // all live in the shared helper (same path as the Hangar list).
+        do { try HangarRowDeletion.delete(row, context: modelContext) } catch {
             Log.adsb.error("Detail delete failed for \(row.icao24, privacy: .public): \(error.localizedDescription, privacy: .public)")
         }
-        // …and off the server, so it stops counting toward the leaderboard
-        // and challenge scores.
-        CatchDeletionSync.deleteRemotely(serverUuids)
         dismiss()
     }
 

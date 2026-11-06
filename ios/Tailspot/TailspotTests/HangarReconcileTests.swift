@@ -212,6 +212,7 @@ struct HangarReconcileTests {
 
         await manager.runIfNeeded(context: context, restorePresenting: { false }, tokenWaitSeconds: 0)
 
+        #expect(recorder.fetches == 0)
         #expect(recorder.sent.isEmpty)
         #expect(recorder.events.isEmpty)
         #expect(!defaults.bool(forKey: HangarReconcileManager.doneKey))

@@ -144,6 +144,10 @@ final class HangarReconcileManager {
             if Task.isCancelled { return }
         }
         guard hasToken(), !restorePresenting() else { return }
+        // Cheap local check before any network: an empty Hangar skips without
+        // setting the flag, so without this it would page the whole server
+        // list on every launch (a reinstall that said "Not now" to restore).
+        guard ((try? context.fetchCount(FetchDescriptor<Catch>())) ?? 0) > 0 else { return }
 
         // Server first, Hangar second: a catch uploaded while we page is
         // already in the Hangar by the time we read it, so it can't look
