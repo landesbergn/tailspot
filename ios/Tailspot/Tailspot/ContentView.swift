@@ -269,6 +269,9 @@ struct ContentView: View {
     /// state — it just needs somewhere to live — so a plain `let`, not a
     /// `@StateObject`.
     private let missedCatchRepair = MissedCatchRepairRunner()
+    /// One-time delete of server catches removed from the Hangar before
+    /// deletes synced (HangarReconcile.swift).
+    private let hangarReconcile = HangarReconcileManager()
     /// Counter that triggers `sensoryFeedback(.success)` once per
     /// catch (Bool trigger collapses repeats; a counter doesn't).
     @State private var catchHaptic = 0
@@ -817,6 +820,10 @@ struct ContentView: View {
         // so a fresh install can't race two POST /v1/devices calls.
         .task {
             await restoreManager.checkIfNeeded(context: modelContext)
+            // Same task, after the restore check, so a fresh restore offer is
+            // already up (and skips this) before the reconcile reads the Hangar.
+            await hangarReconcile.runIfNeeded(context: modelContext,
+                                              restorePresenting: { restoreManager.isPresenting })
         }
         // One-shot recovery of two catches that never reached the server (see
         // MissedCatchRepair). Double-gated on device id + a fixed uuid

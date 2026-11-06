@@ -5,6 +5,12 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-11-05 — Leaderboard catch count matches the Hangar (branch `claude/catch-count-discrepancy-61f350`)
+
+- Noah's Hangar showed 588 catches and the all-time leaderboard 605. The 17 extra were catches deleted before #295, when a Hangar delete never reached the server.
+- New one-time launch reconcile (`HangarReconcile.swift`) deletes those server rows for every user: server catches missing from the Hangar, caught on or after the oldest Hangar catch. It skips on an empty Hangar or a restore prompt, refuses if more than half would go, and reports `hangar_reconciled`.
+- The Hangar list's long-press delete now fires `catch_deleted`; before, only deletes from the catch detail screen were counted.
+
 ## 2026-11-05 — Full-screen catch photo: working X, true full screen, smooth zoom (PR #411)
 
 - Tester report: after a catch, the full-screen photo's X sat under the status bar and did nothing. The open viewer was hosted inside the morph layer's `.ignoresSafeArea()`, which removed its top inset.

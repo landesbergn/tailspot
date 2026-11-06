@@ -178,6 +178,15 @@ struct HangarRecentView: View {
     }
 
     private func performDelete(row: HangarRow) {
+        // Same `catch_deleted` the detail screen's delete fires. This path
+        // (the card's long-press menu) sent nothing until 2026-11-05, so the
+        // delete metric missed most real deletes (one phone: 7 events vs 21).
+        CatchTelemetry.fireDeleted(
+            icao24: row.icao24,
+            count: row.count,
+            rarity: row.allCatches.first?.resolvedRarity.rawValue,
+            source: .hangarDelete
+        )
         // Capture the server ids BEFORE the delete (see CatchDeletionSync).
         let serverUuids = row.allCatches.compactMap(\.serverUuid)
         for c in row.allCatches {
