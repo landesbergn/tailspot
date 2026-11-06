@@ -20,8 +20,10 @@
 //  back's closeup wants the exact airframe even when the front shows the
 //  user's own photo. The Wikipedia summary waits for the first turn-over.
 //
-//  Dates pulled from `row.firstCatch` (earliest), not `row.mostRecent`,
-//  so CAUGHT reads as a fact about the tail, not the latest tap.
+//  The card shows `row.mostRecent`, the same catch the tapped Hangar cell
+//  shows (2026-11-05). It used to show `row.firstCatch`, so tapping a
+//  re-caught airframe (Southwest flies one 737 under many flight numbers)
+//  opened a different catch: another callsign, date, route and photo.
 //
 
 import SwiftUI
@@ -81,10 +83,11 @@ struct CatchDetailView: View {
     /// predates this one).
     @Query private var allCatches: [Catch]
 
-    private var first: Catch { row.firstCatch }
+    /// The catch the card renders. Internal for CatchDetailViewTests.
+    var shown: Catch { row.mostRecent }
     private var rarity: Rarity { row.rarity }
     private var type: AircraftType { row.aircraftType }
-    private var hasCatchPhoto: Bool { first.photoFilename != nil }
+    private var hasCatchPhoto: Bool { shown.photoFilename != nil }
 
     var body: some View {
         GeometryReader { geo in
@@ -111,7 +114,7 @@ struct CatchDetailView: View {
                                 ? "View photo full screen"
                                 : "View photo on Planespotters.net",
                             heroZoom: hasCatchPhoto ? heroZoom : nil,
-                            caughtAt: first.caughtAt
+                            caughtAt: shown.caughtAt
                         )
                     } back: {
                         CatchCardBack(model: backModel, width: cardWidth,
@@ -172,7 +175,7 @@ struct CatchDetailView: View {
             // the backfill just recovered.
             computeTypeFacts()
             // Only when the backfill filled a field the type facts read.
-            let factsKey = { [first.typecode, first.manufacturer, first.model, first.operatorName] }
+            let factsKey = { [shown.typecode, shown.manufacturer, shown.model, shown.operatorName] }
             let before = factsKey()
             await backfillIfNeeded()
             if factsKey() != before { computeTypeFacts() }
@@ -182,7 +185,7 @@ struct CatchDetailView: View {
             // closeup always wants the exact airframe.
             guard !didFetchPhoto else { return }
             didFetchPhoto = true
-            let fetched = await PlanespottersClient.shared.photo(for: first.icao24)
+            let fetched = await PlanespottersClient.shared.photo(for: shown.icao24)
             withAnimation(.easeInOut(duration: 0.25)) {
                 planespottersPhoto = fetched
                 planespottersResolved = true
@@ -208,7 +211,7 @@ struct CatchDetailView: View {
     private var backModel: CardBackModel {
         CardBackModel(
             modelName: detailPlane.model ?? "Unknown aircraft",
-            registration: first.registration,
+            registration: shown.registration,
             rarity: rarity,
             closeup: .resolve(planespotters: planespottersPhoto,
                               lookupDone: planespottersResolved,
@@ -227,13 +230,13 @@ struct CatchDetailView: View {
                                   hasTypeInfo: typeInfo != nil,
                                   // The card stands for every catch of this
                                   // airframe in the group; its own one first.
-                                  rows: [first] + row.allCatches.filter { $0 !== first },
-                                  icao24: first.icao24)
+                                  rows: [shown] + row.allCatches.filter { $0 !== shown },
+                                  icao24: shown.icao24)
     }
 
     private func computeTypeFacts() {
-        typeInfo = TypeInfoStore.info(for: first)
-        typeHistory = TypeHistory.compute(for: first, in: allCatches)
+        typeInfo = TypeInfoStore.info(for: shown)
+        typeHistory = TypeHistory.compute(for: shown, in: allCatches)
     }
 
     /// One Wikipedia request per screen visit, on the first turn-over.
@@ -257,31 +260,31 @@ struct CatchDetailView: View {
     /// Planespotters thumbnail (once loaded) → the card's placeholder.
     private var detailPlane: CardPlane {
         let canonical = AircraftNaming.canonical(
-            typecode: first.typecode,
-            manufacturer: first.manufacturer,
-            model: first.model
+            typecode: shown.typecode,
+            manufacturer: shown.manufacturer,
+            model: shown.model
         )
         let photoURL = hasCatchPhoto
-            ? first.photoFilename.flatMap { CatchPhotoStore.url(forFilename: $0) }
+            ? shown.photoFilename.flatMap { CatchPhotoStore.url(forFilename: $0) }
             : planespottersPhoto?.thumbnailLargeURL
         return CardPlane(
-            callsign: first.callsign,
-            model: canonical.displayName ?? first.model,
-            carrier: Airlines.operatorLabel(operatorName: first.operatorName,
-                                            callsign: first.callsign),
+            callsign: shown.callsign,
+            model: canonical.displayName ?? shown.model,
+            carrier: Airlines.operatorLabel(operatorName: shown.operatorName,
+                                            callsign: shown.callsign),
             rarity: rarity,
             type: type,
-            altText: CardPlane.altText(fromMeters: first.altitudeMeters),
-            speedText: CardPlane.speedText(fromMps: first.velocityMps),
-            distText: CardPlane.distText(fromMeters: first.slantDistanceMeters),
+            altText: CardPlane.altText(fromMeters: shown.altitudeMeters),
+            speedText: CardPlane.speedText(fromMps: shown.velocityMps),
+            distText: CardPlane.distText(fromMeters: shown.slantDistanceMeters),
             photoURL: photoURL,
-            photoFocus: hasCatchPhoto ? first.photoFocus : nil,
-            originIcao: first.displayOrigin,
-            destIcao: first.displayDest,
-            originName: first.originName,
-            destName: first.destName,
+            photoFocus: hasCatchPhoto ? shown.photoFocus : nil,
+            originIcao: shown.displayOrigin,
+            destIcao: shown.displayDest,
+            originName: shown.originName,
+            destName: shown.destName,
             isFirstOfType: wasFirstOfType,
-            icao24: first.icao24
+            icao24: shown.icao24
         )
     }
 
@@ -295,7 +298,7 @@ struct CatchDetailView: View {
     /// Full-res file URL of the user's own catch photo, when there is one —
     /// the tap-to-zoom subject.
     private var catchPhotoURL: URL? {
-        hasCatchPhoto ? first.photoFilename.flatMap { CatchPhotoStore.url(forFilename: $0) } : nil
+        hasCatchPhoto ? shown.photoFilename.flatMap { CatchPhotoStore.url(forFilename: $0) } : nil
     }
 
     /// What tapping the hero does: user catch photo → play the zoom morph
@@ -303,18 +306,18 @@ struct CatchDetailView: View {
     /// page; placeholder → nothing (nil).
     private var heroTapAction: (() -> Void)? {
         if let url = catchPhotoURL {
-            let focus = first.photoFocus
+            let focus = shown.photoFocus
             return { heroZoom.openByTap(url: url, focus: focus) }
         }
         return heroPhotoLink.map { url in { openURL(url) } }
     }
 
     /// Historical first-of-type: no catch of this typecode predates the
-    /// row's earliest. Mirrors the +50% the backend awarded at catch time
+    /// shown catch. Mirrors the +50% the backend awarded at catch time
     /// (re-derived, like `resolvedRarity` — no stored flag needed).
     private var wasFirstOfType: Bool {
-        guard let tc = first.typecode else { return false }
-        return !allCatches.contains { $0.typecode == tc && $0.caughtAt < first.caughtAt }
+        guard let tc = shown.typecode else { return false }
+        return !allCatches.contains { $0.typecode == tc && $0.caughtAt < shown.caughtAt }
     }
 
     // MARK: - Floating chrome pills
@@ -387,37 +390,22 @@ struct CatchDetailView: View {
     // MARK: - Delete
 
     private var deleteTitle: String {
-        let cs = first.callsign?.trimmedNonEmpty ?? first.icao24.uppercased()
-        if row.count == 1 { return "Delete catch of \(cs)?" }
-        return "Delete all \(row.count) catches of \(cs)?"
+        let cs = shown.callsign?.trimmedNonEmpty ?? shown.icao24.uppercased()
+        return "Delete catch of \(cs)?"
     }
 
-    /// Drops every catch in the row AND each catch's photo file —
-    /// rows referencing dead files would render placeholder stripes
-    /// and the orphaned JPEGs would pile up in Documents/catches.
+    /// Deletes only the catch on screen. Earlier catches of the same
+    /// airframe stay in the Hangar (see CatchDeletion).
     private func performDelete() {
         // Catch-confirmation telemetry (north-star): a delete is the
-        // strongest "didn't keep/trust it" signal. Fire once per delete
-        // action before the rows go away.
+        // strongest "didn't keep/trust it" signal. Fire before the row goes.
         CatchTelemetry.fireDeleted(
             icao24: row.icao24,
-            count: row.count,
-            rarity: row.allCatches.first?.resolvedRarity.rawValue,
+            count: 1,
+            rarity: shown.resolvedRarity.rawValue,
             source: .hangarDelete
         )
-        // Capture the server ids BEFORE the delete — a deleted model's
-        // properties can't be read afterwards.
-        let serverUuids = row.allCatches.compactMap(\.serverUuid)
-        for c in row.allCatches {
-            CatchPhotoStore.delete(filename: c.photoFilename)
-            modelContext.delete(c)
-        }
-        do { try modelContext.save() } catch {
-            Log.adsb.error("Detail delete failed for \(row.icao24, privacy: .public): \(error.localizedDescription, privacy: .public)")
-        }
-        // …and off the server, so it stops counting toward the leaderboard
-        // and challenge scores.
-        CatchDeletionSync.deleteRemotely(serverUuids)
+        CatchDeletion.delete(shown, in: modelContext)
         dismiss()
     }
 
@@ -435,27 +423,27 @@ struct CatchDetailView: View {
     private func backfillIfNeeded() async {
         var dirty = false
 
-        if CatchBackfill.needsMetadata(first) {
-            if let meta = (try? await CatchBackfill.client.aircraftMetadata(icao24: first.icao24)) ?? nil {
+        if CatchBackfill.needsMetadata(shown) {
+            if let meta = (try? await CatchBackfill.client.aircraftMetadata(icao24: shown.icao24)) ?? nil {
                 if CatchBackfill.applyMetadata(meta, to: row.allCatches) { dirty = true }
             }
             // FAA fallback: if OpenSky gave nothing (typecode + model still
             // nil), try the bundled FAA snapshot for US-registered aircraft.
-            if first.typecode == nil && first.model == nil {
-                if CatchBackfill.applyFAAFallback(to: row.allCatches, icao24: first.icao24) { dirty = true }
+            if shown.typecode == nil && shown.model == nil {
+                if CatchBackfill.applyFAAFallback(to: row.allCatches, icao24: shown.icao24) { dirty = true }
             }
         }
 
         // Place + country are both properties of the observer location, so
         // one geocode fills whichever is still nil (fill-if-nil; never
         // overwrites a recorded value).
-        if (first.placeName == nil || first.country == nil),
-           first.observerLat != 0 || first.observerLon != 0 {
+        if (shown.placeName == nil || shown.country == nil),
+           shown.observerLat != 0 || shown.observerLon != 0 {
             let (place, country) = await ReverseGeocode.placeAndCountry(
-                lat: first.observerLat, lon: first.observerLon
+                lat: shown.observerLat, lon: shown.observerLon
             )
-            if first.placeName == nil, let place { first.placeName = place; dirty = true }
-            if first.country == nil, let country { first.country = country; dirty = true }
+            if shown.placeName == nil, let place { shown.placeName = place; dirty = true }
+            if shown.country == nil, let country { shown.country = country; dirty = true }
         }
 
         if dirty { try? modelContext.save() }
