@@ -20,12 +20,25 @@ enum CatchDeletion {
     /// Removes `c`'s photo file, its SwiftData row, and (queued, retried
     /// offline) its server copy. Returns false if the local save failed.
     /// `deleteRemotely` is injectable so tests don't touch the network.
+    /// `fireEvent` is a test seam; nil sends the real `catch_deleted`.
     @discardableResult
     static func delete(
         _ c: Catch,
         in context: ModelContext,
-        deleteRemotely: ([String]) -> Void = CatchDeletionSync.deleteRemotely
+        deleteRemotely: ([String]) -> Void = CatchDeletionSync.deleteRemotely,
+        fireEvent: ((Catch) -> Void)? = nil
     ) -> Bool {
+        // Catch-confirmation telemetry (north-star): a delete is the
+        // strongest "didn't keep/trust it" signal. It lives here so both
+        // delete buttons send it; until 2026-11-05 the long-press menu
+        // didn't, and the metric missed most deletes (one phone: 7 of 21).
+        if let fireEvent {
+            fireEvent(c)
+        } else {
+            CatchTelemetry.fireDeleted(icao24: c.icao24, count: 1,
+                                       rarity: c.resolvedRarity.rawValue,
+                                       source: .hangarDelete)
+        }
         // Read everything we need BEFORE the delete — a deleted model's
         // properties can't be read afterwards.
         let serverUuid = c.serverUuid

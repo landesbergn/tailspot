@@ -80,4 +80,27 @@ struct CatchDeletionTests {
         #expect(try context.fetch(FetchDescriptor<Catch>()).isEmpty)
         #expect(remote.isEmpty)
     }
+
+    @Test func deleteFiresTheEventForTheDeletedCatch() throws {
+        // Both delete buttons go through here, so the event can't be
+        // forgotten on one of them again (the long-press menu sent none).
+        let container = try ModelContainer(
+            for: Catch.self,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+        )
+        TestContainerRetention.retain(container)
+        let context = ModelContext(container)
+        let c = makeCatch(callsign: "SWA503",
+                          caughtAt: Date(timeIntervalSince1970: 1_793_900_000),
+                          serverUuid: "NOV-UUID")
+        context.insert(c)
+        try context.save()
+
+        var fired: [String] = []
+        CatchDeletion.delete(c, in: context,
+                             deleteRemotely: { _ in },
+                             fireEvent: { fired.append($0.callsign ?? "") })
+
+        #expect(fired == ["SWA503"])
+    }
 }

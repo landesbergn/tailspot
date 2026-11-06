@@ -5,6 +5,14 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-11-05 — Leaderboard catch count matches the Hangar (branch `claude/catch-count-discrepancy-61f350`)
+
+- Noah's Hangar showed 588 catches and the all-time leaderboard 605. The 17 extra were catches deleted before #295, when a Hangar delete never reached the server.
+- New one-time launch reconcile (`HangarReconcile.swift`) deletes those server rows for every user: server catches missing from the Hangar, caught on or after the oldest Hangar catch. It skips on an empty Hangar or a restore prompt, refuses if more than half would go, and reports `hangar_reconciled`.
+- Policy: the phone is the source of truth. The same run re-sends phone catches the server is missing, and never deletes a catch on the phone.
+- The Hangar list's long-press delete now fires `catch_deleted` (the event moved into `CatchDeletion.delete`); before, only deletes from the catch detail screen were counted.
+- Tested on Noah's phone: prod went from 605 to 588, matching the Hangar.
+
 ## 2026-11-05 — Hangar detail opens the catch you tapped (branch `claude/swa503-picture-misalignment-6ca661`)
 
 - Field report: tapping today's SWA503 in the Hangar opened SWA4842 from Jul 23, with a different photo, route and date. Both were catches of the same Southwest 737, so they share one Hangar row.

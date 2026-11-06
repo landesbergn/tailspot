@@ -397,14 +397,7 @@ struct CatchDetailView: View {
     /// Deletes only the catch on screen. Earlier catches of the same
     /// airframe stay in the Hangar (see CatchDeletion).
     private func performDelete() {
-        // Catch-confirmation telemetry (north-star): a delete is the
-        // strongest "didn't keep/trust it" signal. Fire before the row goes.
-        CatchTelemetry.fireDeleted(
-            icao24: row.icao24,
-            count: 1,
-            rarity: shown.resolvedRarity.rawValue,
-            source: .hangarDelete
-        )
+        // CatchDeletion also fires `catch_deleted`, for both delete buttons.
         CatchDeletion.delete(shown, in: modelContext)
         dismiss()
     }
