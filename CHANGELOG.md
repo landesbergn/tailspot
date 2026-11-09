@@ -5,6 +5,14 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-11-09 — Weekly recap in the Hangar (branch `claude/weekly-recap`)
+
+- New banner above the Hangar's segment switcher: "YOUR WEEK · NOV 2 – 8 / 9 planes caught", shown all week for the previous Monday-to-Sunday week when it has catches. X hides it until the next week.
+- Tap opens the recap card: catches per day, new tails, the standout catch, points, new types, best run, highest altitude. "Share my week" sends a 9:16 image plus text with the "Weekly Recap" App Store campaign link.
+- Computed on the device from the Hangar with the streak engine's frozen day keys; no backend change.
+- Events: `weekly_recap_shown`, `weekly_recap_opened`, `weekly_recap_dismissed`, `weekly_recap_shared`.
+- Tests: `WeeklyRecapTests` (week math, new counts, standout, points, copy, presentation) and a `WeeklyRecapSnapshotTests` visual pass.
+
 ## 2026-11-05 — Leaderboard catch count matches the Hangar (branch `claude/catch-count-discrepancy-61f350`)
 
 - Noah's Hangar showed 588 catches and the all-time leaderboard 605. The 17 extra were catches deleted before #295, when a Hangar delete never reached the server.

@@ -41,6 +41,29 @@ struct HangarView: View {
     /// so a future source cell can opt back in. See `HangarZoomNamespace.swift`.
     @Namespace private var zoomNamespace
 
+    /// Weekly recap (WeeklyRecap.swift): the week the user closed, and the
+    /// week whose banner already sent `weekly_recap_shown`.
+    @AppStorage(WeeklyRecapPresentation.dismissedWeekKey) private var dismissedRecapWeek = ""
+    @AppStorage(WeeklyRecapPresentation.shownWeekKey) private var shownRecapWeek = ""
+    @State private var showingRecap = false
+    /// Memoized like the Recent feed's rows: the recap walks the whole
+    /// Hangar, so it is recomputed only when a catch changes or the day does.
+    @State private var recapCache = DerivedCacheBox<WeeklyRecap?>()
+
+    private var weeklyRecap: WeeklyRecap? {
+        let now = Date()
+        var hasher = Hasher()
+        hasher.combine(CatchFingerprint.of(catches))
+        hasher.combine(Streaks.dayKey(for: now))
+        for c in catches {
+            hasher.combine(c.guessCorrect)
+            hasher.combine(c.photoFilename)
+        }
+        return recapCache.value(for: hasher.finalize()) {
+            WeeklyRecap.lastWeek(catches: catches, now: now)
+        }
+    }
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
@@ -138,6 +161,7 @@ struct HangarView: View {
             emptyState
         } else {
             VStack(spacing: 0) {
+                recapBanner
                 HangarSegmentedSwitcher(selection: segment)
                 // A paged TabView keeps every segment alive (no @Query re-run
                 // or List rebuild on switch — that was the original lag) AND
@@ -158,6 +182,38 @@ struct HangarView: View {
                 .tabViewStyle(.page(indexDisplayMode: .never))
             }
             .background(Brand.Color.bgPrimary)
+        }
+    }
+
+    // MARK: - Weekly recap
+
+    /// Last week's recap, above the switcher so it shows on every segment.
+    /// Present all week until closed; a new week brings the next one back.
+    @ViewBuilder
+    private var recapBanner: some View {
+        if let recap = weeklyRecap,
+           WeeklyRecapPresentation.shouldShow(weekStartKey: recap.weekStartKey,
+                                              dismissedWeek: dismissedRecapWeek) {
+            WeeklyRecapBanner(
+                recap: recap,
+                onOpen: {
+                    WeeklyRecapTelemetry.fire(WeeklyRecapTelemetry.openedEvent, recap)
+                    showingRecap = true
+                },
+                onDismiss: {
+                    WeeklyRecapTelemetry.fire(WeeklyRecapTelemetry.dismissedEvent, recap)
+                    withAnimation(.snappy) { dismissedRecapWeek = recap.weekStartKey }
+                }
+            )
+            .transition(.opacity.combined(with: .move(edge: .top)))
+            .onAppear {
+                guard shownRecapWeek != recap.weekStartKey else { return }
+                shownRecapWeek = recap.weekStartKey
+                WeeklyRecapTelemetry.fire(WeeklyRecapTelemetry.shownEvent, recap)
+            }
+            .sheet(isPresented: $showingRecap) {
+                WeeklyRecapScreen(recap: recap)
+            }
         }
     }
 
