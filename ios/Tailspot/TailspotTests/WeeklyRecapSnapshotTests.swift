@@ -51,7 +51,7 @@ struct WeeklyRecapSnapshotTests {
 
     /// A busy week: nine catches over five days, a rare bizjet with a real
     /// photo as the standout.
-    private func sampleWeek() -> WeeklyRecap {
+    private func sampleWeek() -> (WeeklyRecap, String?) {
         let repo = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
@@ -78,11 +78,13 @@ struct WeeklyRecapSnapshotTests {
             mk("2026-11-07", "SWA22", "B738", alt: 900),
             mk("2026-11-07", "AAL1", "A21N", alt: 4000),
         ]
-        return WeeklyRecap.lastWeek(catches: rows, now: Self.noonUTC("2026-11-09"), timeZone: .gmt)!
+        return (WeeklyRecap.lastWeek(catches: rows, now: Self.noonUTC("2026-11-09"), timeZone: .gmt)!, photo)
     }
 
     @Test func renderWeeklyRecap() async throws {
-        let recap = sampleWeek()
+        let (recap, photo) = sampleWeek()
+        // The sample photo lives in the test host's catches folder; remove it.
+        defer { CatchPhotoStore.delete(filename: photo) }
 
         await snapshot(
             VStack(spacing: 0) {

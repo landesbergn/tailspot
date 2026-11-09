@@ -46,22 +46,14 @@ struct HangarView: View {
     @AppStorage(WeeklyRecapPresentation.dismissedWeekKey) private var dismissedRecapWeek = ""
     @AppStorage(WeeklyRecapPresentation.shownWeekKey) private var shownRecapWeek = ""
     @State private var showingRecap = false
-    /// Memoized like the Recent feed's rows: the recap walks the whole
-    /// Hangar, so it is recomputed only when a catch changes or the day does.
-    @State private var recapCache = DerivedCacheBox<WeeklyRecap?>()
+    /// Last week's recap, recomputed off the body path: when the Hangar
+    /// opens, when the catch count changes, and when the day rolls over.
+    /// (Hashing every catch per body pass is what made the Recent list
+    /// stutter on big Hangars.)
+    @State private var weeklyRecap: WeeklyRecap?
 
-    private var weeklyRecap: WeeklyRecap? {
-        let now = Date()
-        var hasher = Hasher()
-        hasher.combine(CatchFingerprint.of(catches))
-        hasher.combine(Streaks.dayKey(for: now))
-        for c in catches {
-            hasher.combine(c.guessCorrect)
-            hasher.combine(c.photoFilename)
-        }
-        return recapCache.value(for: hasher.finalize()) {
-            WeeklyRecap.lastWeek(catches: catches, now: now)
-        }
+    private var recapTaskID: String {
+        "\(catches.count)|\(Streaks.dayKey(for: Date()))"
     }
 
     var body: some View {
@@ -182,6 +174,14 @@ struct HangarView: View {
                 .tabViewStyle(.page(indexDisplayMode: .never))
             }
             .background(Brand.Color.bgPrimary)
+            .task(id: recapTaskID) {
+                weeklyRecap = WeeklyRecap.lastWeek(catches: catches)
+            }
+            // On the stable container, not the banner: the banner can vanish
+            // (week rolls over) while the recap or its share sheet is up.
+            .sheet(isPresented: $showingRecap) {
+                if let weeklyRecap { WeeklyRecapScreen(recap: weeklyRecap) }
+            }
         }
     }
 
@@ -210,9 +210,6 @@ struct HangarView: View {
                 guard shownRecapWeek != recap.weekStartKey else { return }
                 shownRecapWeek = recap.weekStartKey
                 WeeklyRecapTelemetry.fire(WeeklyRecapTelemetry.shownEvent, recap)
-            }
-            .sheet(isPresented: $showingRecap) {
-                WeeklyRecapScreen(recap: recap)
             }
         }
     }

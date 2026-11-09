@@ -218,16 +218,26 @@ struct WeeklyRecap {
     func rangeLabel(locale: Locale = .current) -> String {
         guard let first = dayKeys.first, let last = dayKeys.last,
               let a = Self.anchor(first), let b = Self.anchor(last) else { return "" }
-        let month = DateFormatter()
-        month.locale = locale
-        month.timeZone = Self.utc.timeZone
-        month.setLocalizedDateFormatFromTemplate("MMM")
+        let month = Self.monthFormatter(locale)
         let sameMonth = Self.utc.component(.month, from: a) == Self.utc.component(.month, from: b)
         let dayA = Self.utc.component(.day, from: a)
         let dayB = Self.utc.component(.day, from: b)
         let left = "\(month.string(from: a)) \(dayA)"
         let right = sameMonth ? "\(dayB)" : "\(month.string(from: b)) \(dayB)"
         return "\(left) – \(right)".uppercased(with: locale)
+    }
+
+    /// "MMM" formatters, one per locale; building a DateFormatter is costly
+    /// and the banner asks on every Hangar body pass.
+    private static var monthFormatters: [String: DateFormatter] = [:]
+    private static func monthFormatter(_ locale: Locale) -> DateFormatter {
+        if let cached = monthFormatters[locale.identifier] { return cached }
+        let f = DateFormatter()
+        f.locale = locale
+        f.timeZone = utc.timeZone
+        f.setLocalizedDateFormatFromTemplate("MMM")
+        monthFormatters[locale.identifier] = f
+        return f
     }
 
     /// One-letter weekday labels, Monday first ("M T W T F S S").

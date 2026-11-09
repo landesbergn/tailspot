@@ -152,7 +152,8 @@ struct WeeklyRecapStandout {
         default: route = nil
         }
         rarity = c.resolvedRarity
-        photoURL = c.photoFilename.flatMap { CatchPhotoStore.url(forFilename: $0) }
+        // fileURL: no exists-check per body; a missing file renders the placeholder.
+        photoURL = c.photoFilename.flatMap { CatchPhotoStore.fileURL(forFilename: $0) }
         focus = c.photoFocus
     }
 }
@@ -227,10 +228,10 @@ struct WeeklyRecapCard: View {
 
     private func standoutRow(_ s: WeeklyRecapStandout) -> some View {
         HStack(spacing: 12) {
-            RevealPhoto(url: s.photoURL, focus: s.focus)
-                .frame(width: 64, height: 64)
+            // Thumbnail-size decode off the main actor; RevealPhoto would
+            // decode the full camera still for a 64 pt square.
+            FocusThumbnail(url: s.photoURL, focus: s.focus, side: 64)
                 .clipShape(.rect(cornerRadius: Brand.Radius.row))
-                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
                 Text(s.eyebrow)
                     .font(Brand.Font.mono(size: 10, weight: .bold, relativeTo: .caption2))
