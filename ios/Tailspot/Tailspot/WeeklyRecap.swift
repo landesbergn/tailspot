@@ -288,7 +288,7 @@ enum WeeklyRecapTelemetry {
             "catch_count": .int(r.catchCount),
             "new_airframes": .int(r.newAirframes),
             "active_days": .int(r.dayCounts.filter { $0 > 0 }.count),
-            "rarest_rarity": .string(r.rarest.resolvedRarity.rawValue),
+            "rarest_rarity": .string(r.rarest.isDeleted ? "deleted" : r.rarest.resolvedRarity.rawValue),
         ]
     }
 

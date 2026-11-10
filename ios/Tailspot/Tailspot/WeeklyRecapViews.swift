@@ -193,7 +193,7 @@ struct WeeklyRecapCard: View {
     var weeklyRank: Int? = nil
 
     var body: some View {
-        let standout = WeeklyRecapStandout(recap.rarest)
+        let standout = recap.rarest.isDeleted ? nil : WeeklyRecapStandout(recap.rarest)
         VStack(alignment: .leading, spacing: 18) {
             VStack(alignment: .leading, spacing: 6) {
                 Text("YOUR WEEK · \(recap.rangeLabel())")
@@ -210,11 +210,16 @@ struct WeeklyRecapCard: View {
 
             WeeklyRecapDayBars(counts: recap.dayCounts)
 
-            // Opens the catch's detail (WeeklyRecapScreen's stack).
-            NavigationLink(value: recap.rarestRow) {
-                standoutRow(standout)
+            // Opens the catch's detail (WeeklyRecapScreen's stack). Skipped
+            // if that catch was just deleted from its own detail: reading a
+            // deleted SwiftData model crashes, and the Hangar recomputes the
+            // recap on the next count change.
+            if let standout {
+                NavigationLink(value: recap.rarestRow) {
+                    standoutRow(standout)
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
 
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible())], spacing: 10) {
                 ForEach(WeeklyRecapStat.all(recap, weeklyRank: weeklyRank)) { stat in
@@ -402,6 +407,7 @@ struct WeeklyRecapShareImage: View {
 
     @MainActor
     static func render(_ r: WeeklyRecap, weeklyRank: Int? = nil) -> UIImage? {
+        guard !r.rarest.isDeleted else { return nil } // see WeeklyRecapCard
         let renderer = ImageRenderer(
             content: WeeklyRecapShareImage(recap: r, weeklyRank: weeklyRank)
                 .frame(width: canvas.width, height: canvas.height)
