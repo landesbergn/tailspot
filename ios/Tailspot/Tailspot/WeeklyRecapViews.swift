@@ -87,11 +87,20 @@ struct WeeklyRecapBanner: View {
 /// short dim stub so the week's shape still reads.
 struct WeeklyRecapDayBars: View {
     let counts: [Int]
-    var height: CGFloat = 56
+    var height: CGFloat = 88
     var labelFont: Font = Brand.Font.mono(size: 10, weight: .bold, relativeTo: .caption2)
 
     /// Shortest bar that still holds its count label.
     static let minCountedBar: CGFloat = 18
+
+    /// Bars grow from the label's minimum height, not from zero: a pure
+    /// proportional bar clamped to the minimum made 1, 2 and 3 the same
+    /// height whenever the week's peak was large (Noah, 2026-11-10).
+    static func barHeight(count n: Int, peak: Int, height: CGFloat) -> CGFloat {
+        guard n > 0 else { return 3 }
+        let room = max(height - minCountedBar, 0)
+        return minCountedBar + room * CGFloat(n) / CGFloat(max(peak, 1))
+    }
 
     var body: some View {
         let peak = max(counts.max() ?? 0, 1)
@@ -104,7 +113,7 @@ struct WeeklyRecapDayBars: View {
                     // Empty days stay a blank stub so the busy days read first.
                     RoundedRectangle(cornerRadius: 3)
                         .fill(n > 0 ? Brand.Color.cyan : Brand.Color.textPrimary.opacity(0.12))
-                        .frame(height: n > 0 ? max(Self.minCountedBar, height * CGFloat(n) / CGFloat(peak)) : 3)
+                        .frame(height: Self.barHeight(count: n, peak: peak, height: height))
                         .overlay(alignment: .top) {
                             if n > 0 {
                                 Text("\(n)")
@@ -496,7 +505,7 @@ struct WeeklyRecapShareImage: View {
 
             WeeklyRecapDayBars(
                 counts: recap.dayCounts,
-                height: 54,
+                height: 76,
                 labelFont: Brand.Font.mono(fixedSize: 10, weight: .bold)
             )
             .padding(.top, 22)

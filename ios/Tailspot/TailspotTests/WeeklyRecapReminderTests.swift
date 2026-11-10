@@ -101,3 +101,17 @@ struct WeeklyRecapReminderTests {
         #expect(c?.minute == nil)
     }
 }
+
+@MainActor
+@Suite("Weekly recap bar heights")
+struct WeeklyRecapBarHeightTests {
+    @Test func smallCountsStayDistinctUnderABigPeak() {
+        let h = { (n: Int) in WeeklyRecapDayBars.barHeight(count: n, peak: 8, height: 88) }
+        #expect(h(1) < h(2))
+        #expect(h(2) < h(3))
+        #expect(h(2) - h(1) >= 8)
+        #expect(h(8) == 88)
+        #expect(h(1) > WeeklyRecapDayBars.minCountedBar)
+        #expect(h(0) == 3)
+    }
+}
