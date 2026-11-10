@@ -5,6 +5,13 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-11-10 — Card-back descriptions for the rare tail (branch `claude/missing-back-description-d34937`)
+
+- Tester report: an EDRA Paturi card back had no description. Only the 302 family-set variants had a Wikipedia article bundled; everything outside the sets showed none.
+- The TypeInfo generator now matches every other typecode in `AircraftTypes.json` to its article, with strict checks (aircraft short description, matching designator or numbers, no disambiguation pages). 886 of 2,312 now have one.
+- The card back uses the family article when there is one, else the typecode's. Family records are unchanged.
+- The Paturi stays blank: Wikipedia has no article on it.
+
 ## 2026-11-05 — Leaderboard catch count matches the Hangar (branch `claude/catch-count-discrepancy-61f350`)
 
 - Noah's Hangar showed 588 catches and the all-time leaderboard 605. The 17 extra were catches deleted before #295, when a Hangar delete never reached the server.

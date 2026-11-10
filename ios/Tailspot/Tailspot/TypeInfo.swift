@@ -5,7 +5,12 @@
 //  Bundled "about this plane" facts for the back of a catch card: the
 //  English Wikipedia article, Wikidata specs (first flight, number built,
 //  wingspan, length) and a freely licensed Wikimedia Commons photo, one
-//  record per family-set variant (`CardSetEntry.id`).
+//  record per family-set variant (`CardSetEntry.id`), plus one record per
+//  ICAO typecode for every other type in AircraftTypes.json (the rare tail:
+//  most GA, military and oddball types), so their card backs get the
+//  Wikipedia description too. A family record always wins over a typecode
+//  record; the typecode record only fills in when the family has no article
+//  or the catch fills no family slot.
 //
 //  TypeInfo.json is generated at BUILD time by tools/generate-type-info.py
 //  (re-run it when families are added to Sets.swift) — nothing here talks
@@ -37,8 +42,9 @@ nonisolated struct TypePhoto: Equatable, Sendable, Decodable {
 /// Bundled facts for one family-set variant. Every fact is optional: the
 /// card back omits what's missing rather than guessing.
 nonisolated struct TypeInfo: Equatable, Sendable, Decodable {
-    /// CardSetEntry.id (Sets.swift), e.g. "f737-800". "" for a dims-only
-    /// record built for a catch that fills no family slot.
+    /// CardSetEntry.id (Sets.swift), e.g. "f737-800". "" for a per-typecode
+    /// record, or a dims-only record built for a catch that fills no family
+    /// slot.
     let entryId: String
     /// English Wikipedia article title after redirects. Several variants
     /// can share their family's article ("Boeing 737 Next Generation").
@@ -56,7 +62,12 @@ nonisolated enum TypeInfoStore {
 
     /// Lazy one-time decode of the bundled TypeInfo.json.
     static func info(forEntryId id: String) -> TypeInfo? {
-        bundled[id]
+        bundled.entries[id]
+    }
+
+    /// Lazy one-time lookup of a per-typecode record (case-insensitive).
+    static func info(forTypecode tc: String) -> TypeInfo? {
+        bundled.typecodes[tc.uppercased()]
     }
 
     /// The family set + variant entry this catch fills, using the SAME
@@ -90,8 +101,11 @@ nonisolated enum TypeInfoStore {
 
     /// `info(forEntryId:)` for `entry(for:)`, with wingspan/length filled
     /// from AircraftTypes.json (feet → metres) when the bundled value is
-    /// nil. When no entry matches but the typecode has dimensions, returns a
-    /// TypeInfo carrying only those (entryId = ""). nil when there's nothing.
+    /// nil. When the family record has no article (or no family slot
+    /// matches), the per-typecode record supplies the article, specs and
+    /// photo instead. With neither, a typecode that has dimensions still
+    /// gets a TypeInfo carrying only those (entryId = ""). nil when there's
+    /// nothing.
     static func info(for c: Catch) -> TypeInfo? {
         let match = entry(for: c)
         // The catch's own typecode first; a token-matched catch with no
@@ -101,15 +115,26 @@ nonisolated enum TypeInfoStore {
             ?? match.flatMap { $0.entry.ambiguousTypecode ? nil : $0.entry.representativeTypecode }
         let dims = AircraftNaming.dimensionsFeet(forTypecode: typecode)
 
+        // The family record when it names an article; otherwise the
+        // typecode's own record (the catch's real typecode only — never a
+        // borrowed representative one, which the family already covers).
+        let family = match.flatMap { info(forEntryId: $0.entry.id) }
+        let own = c.typecode?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+            .flatMap { info(forTypecode: $0) }
+        let base = family?.wikipediaTitle != nil ? family : (own ?? family)
+
         guard let match else {
-            guard let dims, dims.wingspan != nil || dims.length != nil else { return nil }
-            return TypeInfo(entryId: "", wikipediaTitle: nil, wikidataId: nil,
-                            firstFlightYear: nil, numberBuilt: nil,
-                            wingspanMeters: dims.wingspan.map(metres),
-                            lengthMeters: dims.length.map(metres),
-                            photo: nil)
+            if base == nil {
+                guard let dims, dims.wingspan != nil || dims.length != nil else { return nil }
+            }
+            return TypeInfo(entryId: "", wikipediaTitle: base?.wikipediaTitle,
+                            wikidataId: base?.wikidataId,
+                            firstFlightYear: base?.firstFlightYear,
+                            numberBuilt: base?.numberBuilt,
+                            wingspanMeters: base?.wingspanMeters ?? dims?.wingspan.map(metres),
+                            lengthMeters: base?.lengthMeters ?? dims?.length.map(metres),
+                            photo: base?.photo)
         }
-        let base = info(forEntryId: match.entry.id)
         guard base != nil || dims != nil else { return nil }
         return TypeInfo(
             entryId: match.entry.id,
@@ -144,21 +169,31 @@ nonisolated enum TypeInfoStore {
     private struct File: Decodable {
         let version: Int
         let entries: [String: TypeInfo]
+        /// ICAO typecode (uppercase) → facts. Optional so an older file
+        /// without the typecode pass still decodes.
+        let typecodes: [String: TypeInfo]?
     }
 
-    /// entryId → facts. Decoded once on first touch; a missing or corrupt
-    /// resource degrades to an empty table (the back just shows less).
-    private static let bundled: [String: TypeInfo] = {
+    private struct Tables {
+        var entries: [String: TypeInfo] = [:]
+        var typecodes: [String: TypeInfo] = [:]
+    }
+
+    /// entryId → facts and typecode → facts. Decoded once on first touch; a
+    /// missing or corrupt resource degrades to empty tables (the back just
+    /// shows less).
+    private static let bundled: Tables = {
         guard let url = Bundle.main.url(forResource: "TypeInfo", withExtension: "json") else {
             Log.ui.error("TypeInfo.json missing from bundle")
-            return [:]
+            return Tables()
         }
         do {
             let data = try Data(contentsOf: url)
-            return try JSONDecoder().decode(File.self, from: data).entries
+            let file = try JSONDecoder().decode(File.self, from: data)
+            return Tables(entries: file.entries, typecodes: file.typecodes ?? [:])
         } catch {
             Log.ui.error("TypeInfo.json decode failed: \(error.localizedDescription, privacy: .public)")
-            return [:]
+            return Tables()
         }
     }()
 }

@@ -28,7 +28,14 @@ What it does
    image is tried, then the other photos in the article (`article_photos`:
    file names that mention the type, never cockpits, logos or diagrams),
    all through the same licence check.
-6. Writes TypeInfo.json (sorted, pretty-printed) and prints a report.
+6. Typecode pass: every AircraftTypes.json typecode that is not a family
+   entry's representative typecode gets its own record under "typecodes",
+   so rare types outside the sets still have a description. "make model" is
+   tried as an exact title, then the top 3 search hits; a hit is kept only
+   when its short description names an aircraft type, it is no
+   disambiguation page, and its designators/numbers agree with the model
+   (`typecode_article_ok`). Missing beats wrong. Same specs and photo rules.
+7. Writes TypeInfo.json (sorted, pretty-printed) and prints a report.
 
 Missing facts are omitted, never guessed: a field Wikidata lacks is simply
 absent, and the app falls back to AircraftTypes.json for wingspan/length.
@@ -37,6 +44,9 @@ Re-running
 ----------
     python3 -I tools/generate-type-info.py            # fetch + write JSON
     python3 -I tools/generate-type-info.py --dry-run  # fetch + report only
+    TYPEINFO_CACHE_DIR=/tmp/ti-cache python3 -I tools/generate-type-info.py
+        # cache responses: the typecode pass is ~35 min uncached
+    ... --typecode-limit 150  # only the first N typecodes (matcher tuning)
 
 Stdlib only; needs network. It is polite: batched requests, ~1 s apart, with an
 identifying User-Agent. Re-run whenever families are added to Sets.swift, then
@@ -47,8 +57,10 @@ to None to deliberately leave it without an article (no facts, no photo).
 """
 
 import datetime
+import hashlib
 import html
 import json
+import os
 import re
 import sys
 import time
@@ -59,6 +71,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 SETS_SWIFT = ROOT / "ios/Tailspot/Tailspot/Sets.swift"
 OUT_JSON = ROOT / "ios/Tailspot/Tailspot/TypeInfo.json"
+AIRCRAFT_TYPES = ROOT / "ios/Tailspot/Tailspot/AircraftTypes.json"
 
 USER_AGENT = "Tailspot/1.0 (+https://tailspot.app) generate-type-info"
 WIKI_API = "https://en.wikipedia.org/w/api.php"
@@ -383,8 +396,17 @@ _last_request = 0.0
 
 
 def get_json(base, params):
-    """GET base?params as JSON, ~1 s after the previous request."""
+    """GET base?params as JSON, ~1 s after the previous request. With
+    TYPEINFO_CACHE_DIR set, responses are cached there by URL so a re-run
+    (e.g. after tuning OVERRIDES or the matcher) costs no requests."""
     global _last_request
+    cache_dir = os.environ.get("TYPEINFO_CACHE_DIR")
+    cache_file = None
+    if cache_dir:
+        key = hashlib.sha256((base + json.dumps(params, sort_keys=True)).encode()).hexdigest()
+        cache_file = Path(cache_dir) / f"{key}.json"
+        if cache_file.exists():
+            return json.loads(cache_file.read_text())
     wait = REQUEST_GAP_S - (time.monotonic() - _last_request)
     if wait > 0:
         time.sleep(wait)
@@ -397,7 +419,11 @@ def get_json(base, params):
         try:
             with urllib.request.urlopen(req, timeout=60) as resp:
                 _last_request = time.monotonic()
-                return json.load(resp)
+                data = json.load(resp)
+                if cache_file:
+                    cache_file.parent.mkdir(parents=True, exist_ok=True)
+                    cache_file.write_text(json.dumps(data))
+                return data
         except Exception as exc:  # noqa: BLE001 — retry any transient failure
             _last_request = time.monotonic()
             if attempt == 3:
@@ -450,7 +476,8 @@ def candidate_title(family_id, canonical):
 # MARK: - Wikipedia
 
 def resolve_titles(titles):
-    """title -> (final_title, qid, is_disambiguation) or None if missing."""
+    """title -> (final_title, qid, is_disambiguation, short_description) or
+    None if missing."""
     result = {}
     for batch in chunks(sorted(set(titles)), 50):
         data = get_json(WIKI_API, {
@@ -458,7 +485,7 @@ def resolve_titles(titles):
             "titles": "|".join(batch),
             "redirects": "1",
             "prop": "pageprops",
-            "ppprop": "wikibase_item|disambiguation",
+            "ppprop": "wikibase_item|disambiguation|wikibase-shortdesc",
         })
         q = data.get("query", {})
         mapping = {t: t for t in batch}
@@ -478,7 +505,8 @@ def resolve_titles(titles):
                 continue
             props = page.get("pageprops", {})
             result[original] = (final, props.get("wikibase_item"),
-                                "disambiguation" in props)
+                                "disambiguation" in props,
+                                props.get("wikibase-shortdesc", ""))
     return result
 
 
@@ -748,10 +776,155 @@ def looks_wrong(canonical, final_title, is_disambig):
     return None
 
 
+# MARK: - Typecode pass
+
+# A typecode's article must describe an aircraft TYPE, not a maker, airline
+# or anything else the name search turns up.
+AIRCRAFT_DESC = re.compile(
+    r"aircraft|airplane|aeroplane|helicopter|airliner|glider|gyro|autogiro|"
+    r"airship|seaplane|flying boat|biplane|monoplane|ultralight|microlight|"
+    r"fighter|bomber|trainer|airlifter|tiltrotor|rotorcraft|jet\b|"
+    r"business jet|light-sport|amphibian|unmanned aerial|uav|drone|"
+    r"transport plane|cargo plane",
+    re.IGNORECASE)
+NOT_A_TYPE_DESC = re.compile(
+    r"manufacturer|\bcompany\b|corporation|\bairlines?\b|\bairports?\b|"
+    r"air force|squadron|aircraft engine|piston engine|turbofan|turbojet engine|"
+    r"turboprop engine|turboshaft|\bperson\b|family of|list of|disambiguation|"
+    r"\baccident\b|\bcrash\b|\bincident\b|\bmissile\b",
+    re.IGNORECASE)
+
+ROMAN = {"i": "1", "ii": "2", "iii": "3", "iv": "4", "v": "5", "vi": "6",
+         "vii": "7", "viii": "8", "x": "10"}
+
+
+def _alnum(text):
+    return re.sub(r"[^a-z0-9]", "", text.lower())
+
+
+def designator_tokens(text):
+    """Digit-bearing designators, alnum-squashed, at word level: "M-3 Falcon
+    Major" -> {"m", "3", "m3"} minus non-designators = {"m3"}; "727-200RE
+    Super 27" -> {"727", "200re", "727200re"}. Pure numbers under 3 digits
+    are dropped ("27" would match almost anything). Compared by EQUALITY
+    against the title's own tokens, so "AC-4" never matches "AC-47"."""
+    out = set()
+    for word in re.split(r"[\s/,()]+", text.lower()):
+        parts = [x for x in re.split(r"[-.]", word) if x]
+        for tok in parts + ["".join(parts)]:
+            tok = _alnum(tok)
+            if not re.search(r"\d", tok):
+                continue
+            if tok.isdigit() and len(tok) < 3:
+                continue
+            out.add(tok)
+    return out
+
+
+def numbers(text):
+    """Every number in a name, with standalone roman numerals (I-VIII, X)
+    read as digits, so "Citation X" differs from "Citation VII"."""
+    words = re.findall(r"[a-z]+", text.lower())
+    return set(re.findall(r"\d+", text)) | {ROMAN[w] for w in words if w in ROMAN}
+
+
+def word_tokens(text):
+    return {t for t in re.findall(r"[a-z]{4,}", text.lower())
+            if t not in {"aviation", "aircraft", "aerospace", "industries",
+                         "company", "corporation", "series", "family",
+                         "international", "super", "light", "sport", "aero"}}
+
+
+def typecode_article_ok(make, model, hit):
+    """Whether a resolved article plausibly IS this make+model. Strict on
+    purpose: a missing description is fine, a wrong one is not."""
+    if not hit:
+        return False
+    final, _qid, disambig, desc = hit
+    if disambig or not desc:
+        return False
+    # "Yakovlev Yak-30 (1948)": a dated disambiguator means two aircraft
+    # share the name; we can't tell which one the typecode is.
+    if re.search(r"\(.*\d.*\)", final):
+        return False
+    if not AIRCRAFT_DESC.search(desc) or NOT_A_TYPE_DESC.search(desc):
+        return False
+    # Different numbers = a different type or variant ("Acro-Sport 1" vs
+    # "Acro Sport II", "APM-21" vs "APM 30"); a number only the title has is
+    # a variant too ("Anka" vs "TAI Anka-3").
+    m_nums = numbers(f"{make} {model}")
+    t_nums = numbers(final)
+    if t_nums and not (m_nums & t_nums):
+        return False
+    # A variant article for a base model ("Airbus A310 MRTT"): an all-caps
+    # word in the title, past the maker position, that the model lacks.
+    own = {w.lower() for w in re.findall(r"[A-Za-z]+", f"{make} {model}")}
+    later_caps = re.findall(r"\b[A-Z]{3,}\b", final.split(" ", 1)[1]) \
+        if " " in final else []
+    if any(w.lower() not in own for w in later_caps):
+        return False
+    title_designators = designator_tokens(final)
+    if designator_tokens(model) & title_designators:
+        return True
+    title = _alnum(final)
+    make_words = word_tokens(make) or {_alnum(make)}
+    return bool(word_tokens(model) & word_tokens(final)) and \
+        any(m and m in title for m in make_words)
+
+
+def pick_typecode_articles(types, exclude, limit=None):
+    """typecode -> resolved hit, for AircraftTypes.json typecodes not already
+    a family entry's representative typecode. "make model" as an exact title
+    first, then the top 3 search results, each through typecode_article_ok."""
+    queries = {}
+    for tc in sorted(types):
+        rec = types[tc]
+        if tc.upper() in exclude or not rec.get("make") or not rec.get("model"):
+            continue
+        queries[tc] = (rec["make"], rec["model"],
+                       f"{rec['make']} {rec['model']}".strip())
+    if limit:
+        queries = dict(list(queries.items())[:limit])
+    print(f"Typecode pass: {len(queries)} typecodes")
+
+    exact = resolve_titles([q[2] for q in queries.values()])
+    picks, pending = {}, {}
+    for tc, (make, model, q) in queries.items():
+        hit = exact.get(q)
+        if typecode_article_ok(make, model, hit):
+            picks[tc] = hit
+        else:
+            pending[tc] = (make, model, q)
+    print(f"  exact-title hits: {len(picks)}; searching {len(pending)}")
+
+    candidates = {}
+    for i, (tc, (_make, _model, q)) in enumerate(pending.items()):
+        data = get_json(WIKI_API, {
+            "action": "query", "list": "search", "srsearch": q,
+            "srlimit": "3", "srnamespace": "0", "srprop": "",
+        })
+        candidates[tc] = [r["title"] for r in data.get("query", {}).get("search", [])]
+        if (i + 1) % 100 == 0:
+            print(f"  searched {i + 1}/{len(pending)}", flush=True)
+    found = resolve_titles([t for ts in candidates.values() for t in ts]) \
+        if candidates else {}
+    for tc, titles in candidates.items():
+        make, model, _q = pending[tc]
+        for t in titles:
+            if typecode_article_ok(make, model, found.get(t)):
+                picks[tc] = found[t]
+                break
+    print(f"  typecodes with an article: {len(picks)}/{len(queries)}")
+    return picks
+
+
 # MARK: - Main
 
 def main():
     dry_run = "--dry-run" in sys.argv
+    limit = None
+    if "--typecode-limit" in sys.argv:
+        limit = int(sys.argv[sys.argv.index("--typecode-limit") + 1])
     entries = parse_families()
     print(f"Parsed {len(entries)} family entries from Sets.swift")
 
@@ -763,6 +936,16 @@ def main():
             wanted[entry_id] = candidate_title(fam_id, canonical)
 
     resolved = resolve_titles([t for t in wanted.values() if t])
+
+    # Every other typecode in AircraftTypes.json gets its own record, keyed
+    # by typecode, so the rare tail (most GA, military and odd types) has a
+    # description too. Stored in `resolved` under "tc:<CODE>" so the photo
+    # and Wikidata passes below cover them.
+    types = json.loads(AIRCRAFT_TYPES.read_text())
+    family_tcs = {tc.upper() for *_rest, tc in entries if tc}
+    tc_hits = pick_typecode_articles(types, family_tcs, limit)
+    for tc, hit in tc_hits.items():
+        resolved[f"tc:{tc}"] = hit
 
     qids = [r[1] for r in resolved.values() if r and r[1]]
     entities = fetch_entities(qids) if qids else {}
@@ -804,6 +987,12 @@ def main():
         hit = resolved.get(wanted[eid]) if wanted[eid] else None
         if hit:
             article_users[hit[0]] = article_users.get(hit[0], 0) + 1
+    # Typecode records count sharing separately: a typecode on its family's
+    # article must not strip the FAMILY entry's specs, but a typecode whose
+    # article a family entry or another typecode also uses gets none itself.
+    tc_article_users = dict(article_users)
+    for hit in tc_hits.values():
+        tc_article_users[hit[0]] = tc_article_users.get(hit[0], 0) + 1
 
     # Third source: other photos in the article, for articles still without
     # a usable P18 or lead image.
@@ -822,21 +1011,13 @@ def main():
     from_article = 0
     shared_article = 0
     implausible = []
-    for fam_id, fam_title, entry_id, canonical, _tc in entries:
-        title = wanted[entry_id]
-        hit = resolved.get(title) if title else None
-        if not hit:
-            no_article.append((entry_id, canonical, title))
-            continue
-        final, qid, disambig = hit
-        reason = looks_wrong(canonical, final, disambig)
-        if reason:
-            suspicious.append((entry_id, canonical, final, reason))
+    def build(entry_id, report_id, final, qid, users):
+        nonlocal shared_article, from_lead, from_article
         info = {"entryId": entry_id, "wikipediaTitle": final}
         if qid:
             info["wikidataId"] = qid
             f = facts.get(qid, {})
-            if article_users.get(final, 0) > 1:
+            if users.get(final, 0) > 1:
                 shared_article += 1
             else:
                 for key in ("firstFlightYear", "numberBuilt",
@@ -849,7 +1030,7 @@ def main():
                 # which one is wrong; AircraftTypes.json fills in.
                 w, l = info.get("wingspanMeters"), info.get("lengthMeters")
                 if w and l and not (1 / 3 <= l / w <= 3):
-                    implausible.append((entry_id, w, l))
+                    implausible.append((report_id, w, l))
                     del info["wingspanMeters"], info["lengthMeters"]
             image = f.get("image")
             if image:
@@ -857,14 +1038,14 @@ def main():
                 if photo:
                     info["photo"] = photo
                 else:
-                    dropped.append((entry_id, image, lic))
+                    dropped.append((report_id, image, lic))
         if "photo" not in info and final in leads:
             photo, lic = photos.get(leads[final], (None, "missing"))
             if photo:
                 info["photo"] = photo
                 from_lead += 1
             else:
-                dropped.append((entry_id, leads[final] + " (lead image)", lic))
+                dropped.append((report_id, leads[final] + " (lead image)", lic))
         if "photo" not in info:
             for name in extras.get(final, []):
                 photo, _lic = photos.get(name, (None, "missing"))
@@ -872,12 +1053,29 @@ def main():
                     info["photo"] = photo
                     from_article += 1
                     break
-        out[entry_id] = info
+        return info
+
+    for fam_id, fam_title, entry_id, canonical, _tc in entries:
+        title = wanted[entry_id]
+        hit = resolved.get(title) if title else None
+        if not hit:
+            no_article.append((entry_id, canonical, title))
+            continue
+        final, qid, disambig, _desc = hit
+        reason = looks_wrong(canonical, final, disambig)
+        if reason:
+            suspicious.append((entry_id, canonical, final, reason))
+        out[entry_id] = build(entry_id, entry_id, final, qid, article_users)
+
+    by_typecode = {}
+    for tc, hit in sorted(tc_hits.items()):
+        by_typecode[tc] = build("", tc, hit[0], hit[1], tc_article_users)
 
     doc = {
         "version": 1,
         "generated": datetime.date.today().isoformat(),
         "entries": out,
+        "typecodes": by_typecode,
     }
 
     print()
@@ -915,6 +1113,13 @@ def main():
         info = out.get(entry_id)
         print(f"  {entry_id:28} {canonical!r:40} -> "
               f"{info['wikipediaTitle'] if info else '-'}")
+
+    print(f"\n-- Typecodes ({len(by_typecode)} with an article, "
+          f"{sum(1 for v in by_typecode.values() if 'photo' in v)} with a photo):")
+    for tc, info in sorted(by_typecode.items()):
+        rec = types.get(tc, {})
+        print(f"  {tc:6} {rec.get('make', '')} {rec.get('model', '')!r:40} -> "
+              f"{info['wikipediaTitle']}")
 
     if dry_run:
         print("\n(dry run: TypeInfo.json not written)")
