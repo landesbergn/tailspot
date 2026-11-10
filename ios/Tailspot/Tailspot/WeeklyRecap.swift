@@ -19,6 +19,7 @@
 //
 
 import Foundation
+import SwiftData
 
 struct WeeklyRecap {
     /// "yyyy-MM-dd" of the recap's Monday. Also the dismiss key: closing the
