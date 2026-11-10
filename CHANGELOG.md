@@ -9,6 +9,7 @@ Git history + PLAN.md §9 remain the authoritative record.
 
 - New banner above the Hangar's segment switcher: "YOUR WEEK · NOV 2 – 8 / 9 planes caught", shown all week for the previous Monday-to-Sunday week when it has catches. X hides it until the next week.
 - A Monday 09:00 notification ("Your week in planes") opens the recap directly. It only goes to people who already allowed notifications and caught something that week, stays quiet on the camera, and has a "Weekly recap" toggle in Settings.
+- The leaderboard's champion banner is now a gold plaque under the podium, and on the WEEK tab it also shows how you finished last week, with a link to your recap.
 - Tap opens the recap card: catches per day with the count on each bar, new tails, the standout catch (tap opens its detail), and last week's final weekly rank, points, new types and the current streak. "Share my week" sends a 9:16 image plus text with the "Weekly Recap" App Store campaign link.
 - Backend: the week leaderboard's `me` adds `lastWeekRank` / `lastWeekPoints` (additive). Until it's deployed the rank shows "—".
 - Everything except the rank is computed on the device from the Hangar, with the streak engine's frozen day keys.
