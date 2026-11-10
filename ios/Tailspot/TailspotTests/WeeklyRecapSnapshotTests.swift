@@ -95,9 +95,9 @@ struct WeeklyRecapSnapshotTests {
             as: "weekly_recap_banner", height: 160
         )
 
-        await snapshot(WeeklyRecapScreen(recap: recap), as: "weekly_recap_screen")
+        await snapshot(WeeklyRecapScreen(recap: recap, weeklyRank: 4), as: "weekly_recap_screen")
 
-        let image = try #require(WeeklyRecapShareImage.render(recap))
+        let image = try #require(WeeklyRecapShareImage.render(recap, weeklyRank: 4))
         #expect(image.size.width * image.scale == 1080)
         #expect(image.size.height * image.scale == 1920)
         try? FileManager.default.createDirectory(at: Self.snapDir, withIntermediateDirectories: true)

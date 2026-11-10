@@ -148,18 +148,56 @@ struct WeeklyRecapTests {
         #expect(r.points == expected)
     }
 
-    @Test func bestRunAndHighest() {
-        let rows = [
-            mk("2026-11-02", altitude: 3000),
-            mk("2026-11-04", altitude: 11000),
-            mk("2026-11-05"),
-            mk("2026-11-06", altitude: 900),
-        ]
+    @Test func streakIsTheLiveStreakAsOfNow() {
+        // Caught Sat + Sun last week and Mon today: a 3-day live streak.
+        let rows = [mk("2026-11-07"), mk("2026-11-08"), mk("2026-11-09")]
         let r = WeeklyRecap.lastWeek(catches: rows, now: Self.noonUTC("2026-11-09"), timeZone: .gmt)!
-        #expect(r.bestRun == 3)
-        #expect(r.highestAltitudeMeters == 11000)
-        #expect(WeeklyRecap.longestRun([1, 1, 0, 1, 1, 1, 1]) == 4)
-        #expect(WeeklyRecap.longestRun([0, 0, 0, 0, 0, 0, 0]) == 0)
+        #expect(r.currentStreak == 3)
+        // A broken streak reads 0 even though last week had catches.
+        let gone = WeeklyRecap.lastWeek(catches: [mk("2026-11-03")], now: Self.noonUTC("2026-11-12"), timeZone: .gmt)!
+        #expect(gone.currentStreak == 0)
+    }
+
+    @Test func standoutRowOpensTheStandoutCatch() {
+        let older = mk("2026-10-01", icao: "aaaaaa", typecode: "A388")
+        let standout = mk("2026-11-04", icao: "aaaaaa", typecode: "A388", photo: "p.jpg")
+        let newer = mk("2026-11-10", icao: "aaaaaa", typecode: "A388")
+        let r = WeeklyRecap.lastWeek(catches: [older, standout, newer], now: Self.noonUTC("2026-11-11"), timeZone: .gmt)!
+        // The detail renders `mostRecent`, so it must be the standout, not
+        // the airframe's newest catch.
+        #expect(r.rarestRow.mostRecent === standout)
+        #expect(r.rarestRow.count == 3)
+    }
+
+    // MARK: - Weekly rank
+
+    private func board(resetsAt: String, lastWeekRank: Int?) -> LeaderboardResponse {
+        LeaderboardResponse(
+            entries: [],
+            me: MyStanding(rank: 1, points: 10, lastWeekRank: lastWeekRank),
+            window: "week",
+            resetsAt: resetsAt
+        )
+    }
+
+    @Test func rankIsUsedOnlyWhenTheBoardsWeekMatches() {
+        // Board resets Mon Nov 16 → its last closed week began Nov 2.
+        let matching = board(resetsAt: "2026-11-16T00:00:00.000Z", lastWeekRank: 4)
+        #expect(WeeklyRecapRank.rank(from: matching, weekStart: "2026-11-02") == 4)
+        // Early Monday east of UTC: the board's week hasn't closed yet.
+        let early = board(resetsAt: "2026-11-09T00:00:00.000Z", lastWeekRank: 4)
+        #expect(WeeklyRecapRank.rank(from: early, weekStart: "2026-11-02") == nil)
+        // Unranked (0) or an old server (nil) shows no rank.
+        #expect(WeeklyRecapRank.rank(from: board(resetsAt: "2026-11-16T00:00:00.000Z", lastWeekRank: 0), weekStart: "2026-11-02") == nil)
+        #expect(WeeklyRecapRank.rank(from: board(resetsAt: "2026-11-16T00:00:00.000Z", lastWeekRank: nil), weekStart: "2026-11-02") == nil)
+    }
+
+    @Test func statsReadRankPointsTypesStreak() {
+        let r = WeeklyRecap.lastWeek(catches: [mk("2026-11-03")], now: Self.noonUTC("2026-11-09"), timeZone: .gmt)!
+        let ranked = WeeklyRecapStat.all(r, weeklyRank: 4).map(\.value)
+        #expect(ranked.first == "#4")
+        #expect(WeeklyRecapStat.all(r, weeklyRank: nil).first?.value == "—")
+        #expect(WeeklyRecapStat.all(r, weeklyRank: 4).map(\.label) == ["WEEKLY RANK", "POINTS", "NEW TYPES", "STREAK"])
     }
 
     // MARK: - Copy

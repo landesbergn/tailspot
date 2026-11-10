@@ -8,8 +8,9 @@ Git history + PLAN.md §9 remain the authoritative record.
 ## 2026-11-09 — Weekly recap in the Hangar (branch `claude/weekly-recap`)
 
 - New banner above the Hangar's segment switcher: "YOUR WEEK · NOV 2 – 8 / 9 planes caught", shown all week for the previous Monday-to-Sunday week when it has catches. X hides it until the next week.
-- Tap opens the recap card: catches per day, new tails, the standout catch, points, new types, best run, highest altitude. "Share my week" sends a 9:16 image plus text with the "Weekly Recap" App Store campaign link.
-- Computed on the device from the Hangar with the streak engine's frozen day keys; no backend change.
+- Tap opens the recap card: catches per day with the count on each bar, new tails, the standout catch (tap opens its detail), and last week's final weekly rank, points, new types and the current streak. "Share my week" sends a 9:16 image plus text with the "Weekly Recap" App Store campaign link.
+- Backend: the week leaderboard's `me` adds `lastWeekRank` / `lastWeekPoints` (additive). Until it's deployed the rank shows "—".
+- Everything except the rank is computed on the device from the Hangar, with the streak engine's frozen day keys.
 - Events: `weekly_recap_shown`, `weekly_recap_opened`, `weekly_recap_dismissed`, `weekly_recap_shared`.
 - Tests: `WeeklyRecapTests` (week math, new counts, standout, points, copy, presentation) and a `WeeklyRecapSnapshotTests` visual pass.
 

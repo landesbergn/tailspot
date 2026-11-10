@@ -38,14 +38,15 @@ struct WeeklyRecap {
     /// The week's display points: base plus first-of-type and correct-guess
     /// bonuses, derived the same way the Hangar's catch cards derive them.
     let points: Int
-    /// Longest run of consecutive catch days inside the week (1...7).
-    let bestRun: Int
-    /// Highest altitude among the week's catches, meters MSL. nil when no
-    /// catch recorded one.
-    let highestAltitudeMeters: Double?
+    /// The LIVE streak as of when the recap was built (Streaks.summary, the
+    /// same number the Profile shows), not a figure frozen inside the week.
+    let currentStreak: Int
     /// The week's standout catch: highest tier, then a photo, then a
     /// first-of-type, then the most recent.
     let rarest: Catch
+    /// The standout as a Hangar row, so the recap can open its detail. The
+    /// row's `mostRecent` IS the standout (the detail renders `mostRecent`).
+    let rarestRow: HangarRow
 
     /// Builds the recap of the last FULL Monday–Sunday week before `now`.
     /// nil when that week has no catches (nothing to show).
@@ -56,7 +57,8 @@ struct WeeklyRecap {
     ) -> WeeklyRecap? {
         let todayKey = Streaks.dayKey(for: now, timeZone: timeZone)
         guard let start = lastWeekStartKey(todayKey: todayKey) else { return nil }
-        return week(startingAt: start, catches: catches, timeZone: timeZone)
+        let streak = Streaks.summary(catches: catches, asOf: now, timeZone: timeZone).current
+        return week(startingAt: start, catches: catches, currentStreak: streak, timeZone: timeZone)
     }
 
     /// The Monday key of the week BEFORE the one `todayKey` falls in.
@@ -82,6 +84,7 @@ struct WeeklyRecap {
     static func week(
         startingAt startKey: String,
         catches: [Catch],
+        currentStreak: Int = 0,
         timeZone: TimeZone = .current
     ) -> WeeklyRecap? {
         let dayKeys = (0..<7).compactMap { Streaks.key(byAdding: $0, to: startKey) }
@@ -111,7 +114,6 @@ struct WeeklyRecap {
         var newAirframes = 0
         var newTypes = 0
         var points = 0
-        var highest: Double?
         var seenTails = Set<String>()
         var seenTypes = Set<String>()
         for c in inWeek {
@@ -121,12 +123,17 @@ struct WeeklyRecap {
             let isFirstOfType = tc.map { firstOfType[$0] == c.caughtAt } ?? false
             if isFirstOfType, let tc, seenTypes.insert(tc).inserted { newTypes += 1 }
             points += displayPoints(c, isFirstOfType: isFirstOfType)
-            if let alt = c.altitudeMeters, alt > (highest ?? -.infinity) { highest = alt }
         }
 
         let rarest = inWeek.max { a, b in
             standoutRank(a, firstOfType: firstOfType) < standoutRank(b, firstOfType: firstOfType)
         }!
+        let tail = rarest.icao24.lowercased()
+        let airframe = catches
+            .filter { $0.icao24.lowercased() == tail }
+            .sorted { $0.caughtAt > $1.caughtAt }
+        let rarestRow = HangarRow(icao24: rarest.icao24, mostRecent: rarest,
+                                  count: airframe.count, allCatches: airframe)
 
         return WeeklyRecap(
             weekStartKey: startKey,
@@ -136,9 +143,9 @@ struct WeeklyRecap {
             newAirframes: newAirframes,
             newTypes: newTypes,
             points: points,
-            bestRun: longestRun(counts),
-            highestAltitudeMeters: highest,
-            rarest: rarest
+            currentStreak: currentStreak,
+            rarest: rarest,
+            rarestRow: rarestRow
         )
     }
 
@@ -183,15 +190,6 @@ struct WeeklyRecap {
         )
     }
 
-    /// Longest run of consecutive non-zero days.
-    static func longestRun(_ counts: [Int]) -> Int {
-        var best = 0, run = 0
-        for n in counts {
-            run = n > 0 ? run + 1 : 0
-            best = max(best, run)
-        }
-        return best
-    }
 
     // MARK: - Copy
 
@@ -296,5 +294,47 @@ enum WeeklyRecapTelemetry {
 
     static func fire(_ event: String, _ r: WeeklyRecap, extra: [String: AnalyticsValue] = [:]) {
         Analytics.capture(event, properties(r).merging(extra) { _, new in new })
+    }
+}
+
+// MARK: - Last week's rank
+
+/// The recap's WEEKLY RANK: this device's final rank in the last closed
+/// week, from `GET /v1/leaderboard?window=week` (`me.lastWeekRank`, server
+/// 2026-11-09). The board's weeks are Monday 00:00 UTC; the recap's are the
+/// local Monday. The rank is used only when the server's last closed week
+/// starts on the same date as the recap's week — east of UTC, early Monday,
+/// the board's week hasn't closed yet and the rank would be the week before.
+enum WeeklyRecapRank {
+    static let cacheKey = "tailspot.weeklyRecap.rank"
+
+    /// "yyyy-MM-dd" of the server's last closed week: `resetsAt` (the NEXT
+    /// week start) minus 14 days.
+    nonisolated static func lastClosedWeekStart(_ response: LeaderboardResponse) -> String? {
+        guard let next = response.resetsAtDate else { return nil }
+        return Streaks.dayKey(for: next.addingTimeInterval(-14 * 86_400), timeZone: .gmt)
+    }
+
+    /// The rank to show for `weekStart`, or nil (unknown, unranked, or the
+    /// board's week doesn't match the recap's).
+    nonisolated static func rank(from response: LeaderboardResponse, weekStart: String) -> Int? {
+        guard lastClosedWeekStart(response) == weekStart,
+              let rank = response.me?.lastWeekRank, rank >= 1 else { return nil }
+        return rank
+    }
+
+    static func cached(weekStart: String, defaults: UserDefaults = .standard) -> Int? {
+        guard let raw = defaults.string(forKey: cacheKey) else { return nil }
+        let parts = raw.split(separator: "|")
+        guard parts.count == 2, parts[0] == weekStart, let rank = Int(parts[1]) else { return nil }
+        return rank
+    }
+
+    /// Fetches and caches the rank. nil on any failure (offline, old server).
+    static func fetch(weekStart: String, client: TailspotAccountClient = TailspotAccountClient()) async -> Int? {
+        guard let response = try? await client.leaderboard(window: .week, limit: 1),
+              let rank = rank(from: response, weekStart: weekStart) else { return nil }
+        UserDefaults.standard.set("\(weekStart)|\(rank)", forKey: cacheKey)
+        return rank
     }
 }

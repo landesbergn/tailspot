@@ -95,6 +95,12 @@ struct WeeklyRecapDayBars: View {
         HStack(alignment: .bottom, spacing: 8) {
             ForEach(Array(counts.enumerated()), id: \.offset) { i, n in
                 VStack(spacing: 6) {
+                    // The day's count sits on its bar; empty days stay blank
+                    // so the busy days read first.
+                    Text(n > 0 ? "\(n)" : " ")
+                        .font(labelFont)
+                        .foregroundStyle(Brand.Color.textPrimary)
+                        .padding(.bottom, -2)
                     RoundedRectangle(cornerRadius: 3)
                         .fill(n > 0 ? Brand.Color.cyan : Brand.Color.textPrimary.opacity(0.12))
                         .frame(height: n > 0 ? max(6, height * CGFloat(n) / CGFloat(peak)) : 3)
@@ -164,14 +170,17 @@ struct WeeklyRecapStat: Identifiable {
     let value: String
     var id: String { label }
 
-    static func all(_ r: WeeklyRecap, units: UnitPreferences = .shared) -> [WeeklyRecapStat] {
+    /// `weeklyRank`: the final rank on last week's board (server, may be
+    /// nil while loading / offline / unranked → "—").
+    static func all(_ r: WeeklyRecap, weeklyRank: Int?) -> [WeeklyRecapStat] {
         [
+            WeeklyRecapStat(label: "WEEKLY RANK", value: weeklyRank.map { "#\($0.formatted())" } ?? "—"),
             WeeklyRecapStat(label: "POINTS", value: r.points.formatted()),
             WeeklyRecapStat(label: "NEW TYPES", value: r.newTypes.formatted()),
-            WeeklyRecapStat(label: "BEST RUN", value: CountCopy.phrase(r.bestRun, singular: "day")),
             WeeklyRecapStat(
-                label: "HIGHEST",
-                value: r.highestAltitudeMeters.map { units.altitude.format(meters: $0) } ?? "—"
+                label: "STREAK",
+                // A lapsed streak shows a dash, not a "0 days" on a share image.
+                value: r.currentStreak > 0 ? CountCopy.phrase(r.currentStreak, singular: "day") : "—"
             ),
         ]
     }
@@ -181,6 +190,7 @@ struct WeeklyRecapStat: Identifiable {
 
 struct WeeklyRecapCard: View {
     let recap: WeeklyRecap
+    var weeklyRank: Int? = nil
 
     var body: some View {
         let standout = WeeklyRecapStandout(recap.rarest)
@@ -200,10 +210,14 @@ struct WeeklyRecapCard: View {
 
             WeeklyRecapDayBars(counts: recap.dayCounts)
 
-            standoutRow(standout)
+            // Opens the catch's detail (WeeklyRecapScreen's stack).
+            NavigationLink(value: recap.rarestRow) {
+                standoutRow(standout)
+            }
+            .buttonStyle(.plain)
 
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible())], spacing: 10) {
-                ForEach(WeeklyRecapStat.all(recap)) { stat in
+                ForEach(WeeklyRecapStat.all(recap, weeklyRank: weeklyRank)) { stat in
                     VStack(alignment: .leading, spacing: 4) {
                         Text(stat.label)
                             .font(Brand.Font.mono(size: 10, weight: .bold, relativeTo: .caption2))
@@ -253,14 +267,20 @@ struct WeeklyRecapCard: View {
                 }
             }
             Spacer(minLength: 0)
+            Image(systemName: "chevron.right")
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(Brand.Color.textTertiary)
+                .accessibilityHidden(true)
         }
         .padding(12)
+        .contentShape(.rect)
         .background(Brand.Color.bgSurface, in: .rect(cornerRadius: Brand.Radius.row))
         .overlay(
             RoundedRectangle(cornerRadius: Brand.Radius.row)
                 .strokeBorder(s.rarity.tint.opacity(0.45), lineWidth: 1)
         )
         .accessibilityElement(children: .combine)
+        .accessibilityHint("Opens this catch")
     }
 }
 
@@ -271,6 +291,14 @@ struct WeeklyRecapScreen: View {
     @Environment(\.dismiss) private var dismiss
     @State private var shareItems: ShareItems?
     @State private var rendering = false
+    /// Last week's final rank, from the server (WeeklyRecapRank). Seeded from
+    /// the on-device cache so a reopen shows it at once, offline included.
+    @State private var weeklyRank: Int?
+
+    init(recap: WeeklyRecap, weeklyRank: Int? = nil) {
+        self.recap = recap
+        _weeklyRank = State(initialValue: weeklyRank ?? WeeklyRecapRank.cached(weekStart: recap.weekStartKey))
+    }
 
     private struct ShareItems: Identifiable {
         let id = UUID()
@@ -278,6 +306,23 @@ struct WeeklyRecapScreen: View {
     }
 
     var body: some View {
+        // Its own stack so the standout catch can push its detail inside
+        // the sheet (the Hangar's stack sits under the sheet).
+        NavigationStack {
+            content
+                .toolbar(.hidden, for: .navigationBar)
+                .navigationDestination(for: HangarRow.self) { row in
+                    CatchDetailView(row: row)
+                }
+        }
+        .task {
+            if let rank = await WeeklyRecapRank.fetch(weekStart: recap.weekStartKey) {
+                weeklyRank = rank
+            }
+        }
+    }
+
+    private var content: some View {
         VStack(spacing: 0) {
             HStack {
                 Spacer()
@@ -287,7 +332,7 @@ struct WeeklyRecapScreen: View {
             .padding(.top, 10)
             ScrollView {
                 VStack(spacing: 16) {
-                    WeeklyRecapCard(recap: recap)
+                    WeeklyRecapCard(recap: recap, weeklyRank: weeklyRank)
                     Button(action: share) {
                         HStack(spacing: 8) {
                             if rendering {
@@ -330,7 +375,7 @@ struct WeeklyRecapScreen: View {
         Task {
             await Task.yield()
             var items: [Any] = []
-            if let image = WeeklyRecapShareImage.render(recap) { items.append(image) }
+            if let image = WeeklyRecapShareImage.render(recap, weeklyRank: weeklyRank) { items.append(image) }
             items.append(WeeklyRecapShareImage.message(recap))
             rendering = false
             shareItems = ShareItems(items: items)
@@ -342,6 +387,7 @@ struct WeeklyRecapScreen: View {
 
 struct WeeklyRecapShareImage: View {
     let recap: WeeklyRecap
+    var weeklyRank: Int? = nil
     /// Points; rendered at scale 3 → 1080 × 1920 px.
     static let canvas = CGSize(width: 360, height: 640)
 
@@ -355,9 +401,9 @@ struct WeeklyRecapShareImage: View {
     }
 
     @MainActor
-    static func render(_ r: WeeklyRecap) -> UIImage? {
+    static func render(_ r: WeeklyRecap, weeklyRank: Int? = nil) -> UIImage? {
         let renderer = ImageRenderer(
-            content: WeeklyRecapShareImage(recap: r)
+            content: WeeklyRecapShareImage(recap: r, weeklyRank: weeklyRank)
                 .frame(width: canvas.width, height: canvas.height)
                 .environment(\.replayMaskingDisabled, true)
                 .environment(\.dynamicTypeSize, .large)
@@ -397,7 +443,7 @@ struct WeeklyRecapShareImage: View {
             VStack(alignment: .leading, spacing: 0) {
                 RevealPhoto(url: s.photoURL, focus: s.focus)
                     .frame(maxWidth: .infinity)
-                    .frame(height: 200)
+                    .frame(height: 180)
                     .clipped()
                 VStack(alignment: .leading, spacing: 3) {
                     Text(s.eyebrow)
@@ -439,7 +485,7 @@ struct WeeklyRecapShareImage: View {
             .padding(.top, 22)
 
             HStack(spacing: 0) {
-                ForEach(WeeklyRecapStat.all(recap)) { stat in
+                ForEach(WeeklyRecapStat.all(recap, weeklyRank: weeklyRank)) { stat in
                     VStack(alignment: .leading, spacing: 3) {
                         Text(stat.label)
                             .font(Brand.Font.mono(fixedSize: 8, weight: .bold))
