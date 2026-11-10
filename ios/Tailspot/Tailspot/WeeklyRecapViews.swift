@@ -90,21 +90,31 @@ struct WeeklyRecapDayBars: View {
     var height: CGFloat = 56
     var labelFont: Font = Brand.Font.mono(size: 10, weight: .bold, relativeTo: .caption2)
 
+    /// Shortest bar that still holds its count label.
+    static let minCountedBar: CGFloat = 18
+
     var body: some View {
         let peak = max(counts.max() ?? 0, 1)
         let letters = WeeklyRecap.weekdayLetters()
         HStack(alignment: .bottom, spacing: 8) {
             ForEach(Array(counts.enumerated()), id: \.offset) { i, n in
                 VStack(spacing: 6) {
-                    // The day's count sits on its bar; empty days stay blank
-                    // so the busy days read first.
-                    Text(n > 0 ? "\(n)" : " ")
-                        .font(labelFont)
-                        .foregroundStyle(Brand.Color.textPrimary)
-                        .padding(.bottom, -2)
+                    // The day's count sits inside the top of its bar (dark on
+                    // cyan), so a counted bar is never shorter than its label.
+                    // Empty days stay a blank stub so the busy days read first.
                     RoundedRectangle(cornerRadius: 3)
                         .fill(n > 0 ? Brand.Color.cyan : Brand.Color.textPrimary.opacity(0.12))
-                        .frame(height: n > 0 ? max(6, height * CGFloat(n) / CGFloat(peak)) : 3)
+                        .frame(height: n > 0 ? max(Self.minCountedBar, height * CGFloat(n) / CGFloat(peak)) : 3)
+                        .overlay(alignment: .top) {
+                            if n > 0 {
+                                Text("\(n)")
+                                    .font(labelFont)
+                                    .foregroundStyle(Brand.Color.bgPrimary)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.6)
+                                    .padding(.top, 3)
+                            }
+                        }
                         .frame(height: height, alignment: .bottom)
                     Text(i < letters.count ? letters[i] : "")
                         .font(labelFont)
