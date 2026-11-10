@@ -45,8 +45,9 @@ Re-running
     python3 -I tools/generate-type-info.py            # fetch + write JSON
     python3 -I tools/generate-type-info.py --dry-run  # fetch + report only
     TYPEINFO_CACHE_DIR=/tmp/ti-cache python3 -I tools/generate-type-info.py
-        # cache responses: the typecode pass is ~35 min uncached
-    ... --typecode-limit 150  # only the first N typecodes (matcher tuning)
+        # cache responses (the typecode pass is ~35 min uncached). The
+        # cache never expires: use a fresh directory for a real refresh.
+    ... --typecode-limit 150  # first N typecodes only; implies --dry-run
 
 Stdlib only; needs network. It is polite: batched requests, ~1 s apart, with an
 identifying User-Agent. Re-run whenever families are added to Sets.swift, then
@@ -439,6 +440,10 @@ def chunks(seq, n):
 
 # MARK: - Sets.swift parsing
 
+# Every typecode a family entry claims through `exactTypecodes:`, filled by
+# parse_families(). The typecode pass skips these (the family article wins).
+EXACT_TYPECODES = set()
+
 def parse_families():
     """[(family_id, family_title, entry_id, canonical_name, typecode)]."""
     src = SETS_SWIFT.read_text()
@@ -459,6 +464,9 @@ def parse_families():
         nxt = rest.find(".init(")
         segment = rest if nxt < 0 else rest[:nxt]
         tc = re.search(r'representativeTypecode:\s*"([^"]+)"', segment)
+        exact = re.search(r'exactTypecodes:\s*\[([^\]]*)\]', segment)
+        if exact:
+            EXACT_TYPECODES.update(re.findall(r'"([^"]+)"', exact.group(1)))
         out.append((family[0], family[1], m.group(1), m.group(3),
                     tc.group(1) if tc else None))
     return [e for e in out if e[0] != "fam-unidentified"]
@@ -791,7 +799,9 @@ NOT_A_TYPE_DESC = re.compile(
     r"manufacturer|\bcompany\b|corporation|\bairlines?\b|\bairports?\b|"
     r"air force|squadron|aircraft engine|piston engine|turbofan|turbojet engine|"
     r"turboprop engine|turboshaft|\bperson\b|family of|list of|disambiguation|"
-    r"\baccident\b|\bcrash\b|\bincident\b|\bmissile\b",
+    r"\baccident\b|\bcrash\b|\bincident\b|\bmissile\b|"
+    r"\bengines?\b(?! aircraft| airplane| light| plane| monoplane| biplane)|"
+    r"^turbojet$|^turbofan$",
     re.IGNORECASE)
 
 ROMAN = {"i": "1", "ii": "2", "iii": "3", "iv": "4", "v": "5", "vi": "6",
@@ -847,7 +857,11 @@ def typecode_article_ok(make, model, hit):
     # share the name; we can't tell which one the typecode is.
     if re.search(r"\(.*\d.*\)", final):
         return False
-    if not AIRCRAFT_DESC.search(desc) or NOT_A_TYPE_DESC.search(desc):
+    # "Twin engine light aircraft" is a plane; "Jet engine" is not. Count
+    # engines only when not part of "<n>-engine"/"<n> engine".
+    plain = re.sub(r"[\w-]+-engined?\b|\b(single|twin|two|three|four|multi) engined?\b",
+                   "", desc, flags=re.IGNORECASE)
+    if not AIRCRAFT_DESC.search(desc) or NOT_A_TYPE_DESC.search(plain):
         return False
     # Different numbers = a different type or variant ("Acro-Sport 1" vs
     # "Acro Sport II", "APM-21" vs "APM 30"); a number only the title has is
@@ -870,6 +884,19 @@ def typecode_article_ok(make, model, hit):
     make_words = word_tokens(make) or {_alnum(make)}
     return bool(word_tokens(model) & word_tokens(final)) and \
         any(m and m in title for m in make_words)
+
+
+def names_the_variant(model, final):
+    """Whether the article title carries the model's FULL designator, i.e.
+    is about this variant and not its base model or family ("Antonov An-124
+    Ruslan" for An-124: yes; "Airbus A340" for A340-500: no). Models with no
+    designator ("Aircruiser") count as named. Only then are the article's
+    Wikidata specs the variant's own."""
+    full = {_alnum(w) for w in re.split(r"[\s/,()]+", model)
+            if re.search(r"\d", w) and not (w.isdigit() and len(w) < 3)}
+    if not full:
+        return True
+    return bool(full & designator_tokens(final))
 
 
 def pick_typecode_articles(types, exclude, limit=None):
@@ -925,6 +952,8 @@ def main():
     limit = None
     if "--typecode-limit" in sys.argv:
         limit = int(sys.argv[sys.argv.index("--typecode-limit") + 1])
+        # A partial typecode pass must never overwrite the shipped file.
+        dry_run = True
     entries = parse_families()
     print(f"Parsed {len(entries)} family entries from Sets.swift")
 
@@ -942,7 +971,8 @@ def main():
     # description too. Stored in `resolved` under "tc:<CODE>" so the photo
     # and Wikidata passes below cover them.
     types = json.loads(AIRCRAFT_TYPES.read_text())
-    family_tcs = {tc.upper() for *_rest, tc in entries if tc}
+    family_tcs = {tc.upper() for *_rest, tc in entries if tc} \
+        | {tc.upper() for tc in EXACT_TYPECODES}
     tc_hits = pick_typecode_articles(types, family_tcs, limit)
     for tc, hit in tc_hits.items():
         resolved[f"tc:{tc}"] = hit
@@ -1011,13 +1041,13 @@ def main():
     from_article = 0
     shared_article = 0
     implausible = []
-    def build(entry_id, report_id, final, qid, users):
+    def build(entry_id, report_id, final, qid, users, specs_ok=True):
         nonlocal shared_article, from_lead, from_article
         info = {"entryId": entry_id, "wikipediaTitle": final}
         if qid:
             info["wikidataId"] = qid
             f = facts.get(qid, {})
-            if users.get(final, 0) > 1:
+            if users.get(final, 0) > 1 or not specs_ok:
                 shared_article += 1
             else:
                 for key in ("firstFlightYear", "numberBuilt",
@@ -1069,7 +1099,9 @@ def main():
 
     by_typecode = {}
     for tc, hit in sorted(tc_hits.items()):
-        by_typecode[tc] = build("", tc, hit[0], hit[1], tc_article_users)
+        rec = types.get(tc, {})
+        by_typecode[tc] = build("", tc, hit[0], hit[1], tc_article_users,
+                                specs_ok=names_the_variant(rec.get("model", ""), hit[0]))
 
     doc = {
         "version": 1,

@@ -4041,9 +4041,6 @@
     },
     "A748": {
       "entryId": "",
-      "firstFlightYear": 1960,
-      "lengthMeters": 20.42,
-      "numberBuilt": 380,
       "photo": {
         "artist": "Ken Fielding",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/7d/C-FYDU_HS.748_Srs_2A%28F%29_Air_North_YVR_18JUL13_%289323744804%29.jpg/960px-C-FYDU_HS.748_Srs_2A%28F%29_Air_North_YVR_18JUL13_%289323744804%29.jpg",
@@ -4051,8 +4048,7 @@
         "pageURL": "https://commons.wikimedia.org/wiki/File:C-FYDU_HS.748_Srs_2A(F)_Air_North_YVR_18JUL13_(9323744804).jpg"
       },
       "wikidataId": "Q791468",
-      "wikipediaTitle": "Hawker Siddeley HS 748",
-      "wingspanMeters": 30.02
+      "wikipediaTitle": "Hawker Siddeley HS 748"
     },
     "A9": {
       "entryId": "",
@@ -4169,7 +4165,6 @@
     },
     "ADVE": {
       "entryId": "",
-      "firstFlightYear": 1947,
       "photo": {
         "artist": "RuthAS",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/cc/Auster_J5_Adventurer_ZK-AXJ_Ardmore_NZ_26.02.92R.jpg/960px-Auster_J5_Adventurer_ZK-AXJ_Ardmore_NZ_26.02.92R.jpg",
@@ -4219,9 +4214,6 @@
     },
     "AIRD": {
       "entryId": "",
-      "firstFlightYear": 1961,
-      "lengthMeters": 8.03,
-      "numberBuilt": 43,
       "photo": {
         "artist": "YSSYguy at English Wikipedia",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/2/28/Beagle_190_Airedale_%28VH-UEH%29_at_HMAS_Albatross.jpg/960px-Beagle_190_Airedale_%28VH-UEH%29_at_HMAS_Albatross.jpg",
@@ -4229,8 +4221,7 @@
         "pageURL": "https://commons.wikimedia.org/wiki/File:Beagle_190_Airedale_(VH-UEH)_at_HMAS_Albatross.jpg"
       },
       "wikidataId": "Q2892802",
-      "wikipediaTitle": "Beagle Airedale",
-      "wingspanMeters": 11.08
+      "wikipediaTitle": "Beagle Airedale"
     },
     "AKOY": {
       "entryId": "",
@@ -4267,7 +4258,6 @@
     },
     "ALIG": {
       "entryId": "",
-      "firstFlightYear": 2006,
       "photo": {
         "artist": "FlugKerl2",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/ab/Arion_Lightning.jpg/960px-Arion_Lightning.jpg",
@@ -4485,9 +4475,6 @@
     },
     "ANSN": {
       "entryId": "",
-      "firstFlightYear": 1935,
-      "lengthMeters": 12.88,
-      "numberBuilt": 11029,
       "photo": {
         "artist": "",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/61/Avro.anson.arp.jpg/960px-Avro.anson.arp.jpg",
@@ -4495,8 +4482,7 @@
         "pageURL": "https://commons.wikimedia.org/wiki/File:Avro.anson.arp.jpg"
       },
       "wikidataId": "Q791469",
-      "wikipediaTitle": "Avro Anson",
-      "wingspanMeters": 17.22
+      "wikipediaTitle": "Avro Anson"
     },
     "ANST": {
       "entryId": "",
@@ -4558,7 +4544,6 @@
     },
     "APM3": {
       "entryId": "",
-      "firstFlightYear": 2005,
       "photo": {
         "artist": "Sovxx",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/d/d5/APM_30_Lion_-_Paris_air_show_2009.jpg/960px-APM_30_Lion_-_Paris_air_show_2009.jpg",
@@ -4608,9 +4593,6 @@
     },
     "ARVA": {
       "entryId": "",
-      "firstFlightYear": 1969,
-      "lengthMeters": 13.03,
-      "numberBuilt": 103,
       "photo": {
         "artist": "Bob Adams from George, South Africa",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/6f/Swazi_DF_Arava_201_3D-DAA_%286547913823%29.jpg/960px-Swazi_DF_Arava_201_3D-DAA_%286547913823%29.jpg",
@@ -4618,8 +4600,7 @@
         "pageURL": "https://commons.wikimedia.org/wiki/File:Swazi_DF_Arava_201_3D-DAA_(6547913823).jpg"
       },
       "wikidataId": "Q373807",
-      "wikipediaTitle": "IAI Arava",
-      "wingspanMeters": 20.96
+      "wikipediaTitle": "IAI Arava"
     },
     "ASTO": {
       "entryId": "",
@@ -4832,8 +4813,6 @@
     },
     "B209": {
       "entryId": "",
-      "firstFlightYear": 1967,
-      "numberBuilt": 100,
       "photo": {
         "artist": "Alan Wilson from Stilton, Peterborough, Cambs, UK",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/2/21/MBB_Bo209-150FF_Monsun_%E2%80%98G-AZTA%E2%80%99_%2843983983110%29.jpg/960px-MBB_Bo209-150FF_Monsun_%E2%80%98G-AZTA%E2%80%99_%2843983983110%29.jpg",
@@ -5046,7 +5025,6 @@
     },
     "B60": {
       "entryId": "",
-      "firstFlightYear": 1949,
       "photo": {
         "artist": "Dirk Buytaert",
         "imageURL": "https://upload.wikimedia.org/wikipedia/commons/7/79/OO-KLO.jpg",
@@ -5126,8 +5104,6 @@
     },
     "B732": {
       "entryId": "",
-      "firstFlightYear": 1967,
-      "numberBuilt": 10510,
       "photo": {
         "artist": "Photographed by Adrian Pingstone and released to the public domain. Public domainPublic domainfalsefalse This work has been released into the public domain by its author, Arpingstone. This applies worldwide. In some countries this may not be legally possible; if so: Arpingstone grants anyone the right to use this work for any purpose, without any conditions, unless such conditions are required by law",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/d/d9/Aviogenex_b737-200_yu-anp_arp.jpg/960px-Aviogenex_b737-200_yu-anp_arp.jpg",
@@ -5135,8 +5111,7 @@
         "pageURL": "https://commons.wikimedia.org/wiki/File:Aviogenex_b737-200_yu-anp_arp.jpg"
       },
       "wikidataId": "Q6387",
-      "wikipediaTitle": "Boeing 737",
-      "wingspanMeters": 34.3
+      "wikipediaTitle": "Boeing 737"
     },
     "B733": {
       "entryId": "",
@@ -5206,8 +5181,6 @@
     },
     "BA11": {
       "entryId": "",
-      "firstFlightYear": 1963,
-      "numberBuilt": 244,
       "photo": {
         "artist": "Aero Icarus from Zürich, Switzerland",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/1/1f/TAROM_BAC_1-11-500%3B_YR-BCI%40ZRH%3B02.10.1995_%288353902456%29.jpg/960px-TAROM_BAC_1-11-500%3B_YR-BCI%40ZRH%3B02.10.1995_%288353902456%29.jpg",
@@ -5311,8 +5284,6 @@
     },
     "BE22": {
       "entryId": "",
-      "firstFlightYear": 2021,
-      "lengthMeters": 14.86,
       "photo": {
         "artist": "ZLEA",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/01/Beechcraft_220_Denali_%28N222NT%2C_cn_220-0002%29_%287-28-2023%29.jpg/960px-Beechcraft_220_Denali_%28N222NT%2C_cn_220-0002%29_%287-28-2023%29.jpg",
@@ -5508,9 +5479,6 @@
     },
     "BFIT": {
       "entryId": "",
-      "firstFlightYear": 1916,
-      "lengthMeters": 7.87,
-      "numberBuilt": 5329,
       "photo": {
         "artist": "Alan Wilson from Stilton, Peterborough, Cambs, UK",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/d/d5/Bristol_F2b_Fighter_%E2%80%98D8096_D%E2%80%99_%28G-AEPH%29_%2830273241577%29.jpg/960px-Bristol_F2b_Fighter_%E2%80%98D8096_D%E2%80%99_%28G-AEPH%29_%2830273241577%29.jpg",
@@ -5518,8 +5486,7 @@
         "pageURL": "https://commons.wikimedia.org/wiki/File:Bristol_F2b_Fighter_%E2%80%98D8096_D%E2%80%99_(G-AEPH)_(30273241577).jpg"
       },
       "wikidataId": "Q629425",
-      "wikipediaTitle": "Bristol F.2 Fighter",
-      "wingspanMeters": 12.0
+      "wikipediaTitle": "Bristol F.2 Fighter"
     },
     "BIPL": {
       "entryId": "",
@@ -5550,9 +5517,6 @@
     },
     "BLEN": {
       "entryId": "",
-      "firstFlightYear": 1935,
-      "lengthMeters": 12.98,
-      "numberBuilt": 4422,
       "photo": {
         "artist": "Canadian Forces Expired crown copyright. All images made by canadian forces more than 50 years ago",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/d/d3/Bristol_Blenheim_ExCC.jpg/960px-Bristol_Blenheim_ExCC.jpg",
@@ -5560,13 +5524,10 @@
         "pageURL": "https://commons.wikimedia.org/wiki/File:Bristol_Blenheim_ExCC.jpg"
       },
       "wikidataId": "Q330417",
-      "wikipediaTitle": "Bristol Blenheim",
-      "wingspanMeters": 17.17
+      "wikipediaTitle": "Bristol Blenheim"
     },
     "BN2T": {
       "entryId": "",
-      "firstFlightYear": 1970,
-      "lengthMeters": 12.2,
       "photo": {
         "artist": "Jerry Gunner",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/73/Britten-Norman_Defender_AL.2.jpg/960px-Britten-Norman_Defender_AL.2.jpg",
@@ -5574,8 +5535,7 @@
         "pageURL": "https://commons.wikimedia.org/wiki/File:Britten-Norman_Defender_AL.2.jpg"
       },
       "wikidataId": "Q2259823",
-      "wikipediaTitle": "Britten-Norman Defender",
-      "wingspanMeters": 16.15
+      "wikipediaTitle": "Britten-Norman Defender"
     },
     "BOLT": {
       "entryId": "",
@@ -5590,7 +5550,6 @@
     },
     "BOOM": {
       "entryId": "",
-      "firstFlightYear": 1996,
       "photo": {
         "artist": "Ken Mist from Brampton, Canada",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/b4/Rutan_Model_202_Boomerang.jpg/960px-Rutan_Model_202_Boomerang.jpg",
@@ -6069,7 +6028,6 @@
     },
     "C550": {
       "entryId": "",
-      "firstFlightYear": 1977,
       "photo": {
         "artist": "Adrian Pingstone",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/2/25/Cessna_550b_citation_bravo_cs-dhr_arp.jpg/960px-Cessna_550b_citation_bravo_cs-dhr_arp.jpg",
@@ -6092,7 +6050,6 @@
     },
     "C68A": {
       "entryId": "",
-      "firstFlightYear": 2014,
       "photo": {
         "artist": "Pasci23456",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/3c/CS-LTE_EHAM_4_%28cropped%29.jpg/960px-CS-LTE_EHAM_4_%28cropped%29.jpg",
@@ -6219,8 +6176,6 @@
     },
     "CARV": {
       "entryId": "",
-      "firstFlightYear": 1961,
-      "numberBuilt": 21,
       "photo": {
         "artist": "Eduard Marmet",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/2/29/British_Air_Ferries_Carvair_G-ASHZ.jpg/960px-British_Air_Ferries_Carvair_G-ASHZ.jpg",
@@ -6483,8 +6438,6 @@
     },
     "COUR": {
       "entryId": "",
-      "firstFlightYear": 1949,
-      "lengthMeters": 9.45,
       "photo": {
         "artist": "RuthAS",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/79/Helio_H295_Courier_Valle_AZ_22.10.05R.jpg/960px-Helio_H295_Courier_Valle_AZ_22.10.05R.jpg",
@@ -6492,8 +6445,7 @@
         "pageURL": "https://commons.wikimedia.org/wiki/File:Helio_H295_Courier_Valle_AZ_22.10.05R.jpg"
       },
       "wikidataId": "Q5705406",
-      "wikipediaTitle": "Helio Courier",
-      "wingspanMeters": 11.89
+      "wikipediaTitle": "Helio Courier"
     },
     "COY2": {
       "entryId": "",
@@ -6519,7 +6471,6 @@
     },
     "CP23": {
       "entryId": "",
-      "firstFlightYear": 1997,
       "photo": {
         "artist": "Guillaume Paumier (user:guillom)",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/5/50/CAP_232_-_AirExpo_Muret_2007_0018_2007-05-12.jpg/960px-CAP_232_-_AirExpo_Muret_2007_0018_2007-05-12.jpg",
@@ -6704,7 +6655,6 @@
     },
     "D31": {
       "entryId": "",
-      "firstFlightYear": 1950,
       "photo": {
         "artist": "Tony Hisgett from Birmingham, UK",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c0/D31_Turbulent_176_%283631536777%29.jpg/960px-D31_Turbulent_176_%283631536777%29.jpg",
@@ -6736,7 +6686,6 @@
     },
     "D6CR": {
       "entryId": "",
-      "firstFlightYear": 1955,
       "photo": {
         "artist": "Ian Kirk from Broadstone, Dorset, UK",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/0e/1969_Rollason_D.62B_Condor_G-AXGS_%288707192417%29.jpg/960px-1969_Rollason_D.62B_Condor_G-AXGS_%288707192417%29.jpg",
@@ -6853,8 +6802,6 @@
     },
     "DH80": {
       "entryId": "",
-      "firstFlightYear": 1929,
-      "numberBuilt": 284,
       "photo": {
         "artist": "User:MilborneOne",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/5/5c/G-abls.jpg/960px-G-abls.jpg",
@@ -6866,7 +6813,6 @@
     },
     "DH83": {
       "entryId": "",
-      "firstFlightYear": 1932,
       "photo": {
         "artist": "RuthAS",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a4/DH.83_Fox_Moth_ZK-AGM_Sywell_05.09.15R.jpg/960px-DH.83_Fox_Moth_ZK-AGM_Sywell_05.09.15R.jpg",
@@ -6878,9 +6824,6 @@
     },
     "DH84": {
       "entryId": "",
-      "firstFlightYear": 1932,
-      "lengthMeters": 10.52,
-      "numberBuilt": 202,
       "photo": {
         "artist": "Nigel Ish",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/2/2b/De_Havilland_Dragon_Sywell_2006.jpg/960px-De_Havilland_Dragon_Sywell_2006.jpg",
@@ -6888,8 +6831,7 @@
         "pageURL": "https://commons.wikimedia.org/wiki/File:De_Havilland_Dragon_Sywell_2006.jpg"
       },
       "wikidataId": "Q285270",
-      "wikipediaTitle": "De Havilland Dragon",
-      "wingspanMeters": 14.43
+      "wikipediaTitle": "De Havilland Dragon"
     },
     "DH85": {
       "entryId": "",
@@ -6904,7 +6846,6 @@
     },
     "DH87": {
       "entryId": "",
-      "firstFlightYear": 1934,
       "photo": {
         "artist": "Adrian Pingstone (Arpingstone)",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/9/9d/Hornet_moth_dh87b_g-admt_arp.jpg/960px-Hornet_moth_dh87b_g-admt_arp.jpg",
@@ -6931,9 +6872,6 @@
     },
     "DH89": {
       "entryId": "",
-      "firstFlightYear": 1934,
-      "lengthMeters": 10.52,
-      "numberBuilt": 731,
       "photo": {
         "artist": "Alan Wilson from Stilton, Peterborough, Cambs, UK",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/69/De_Havilland_DH89A_Dragon_Rapide_%E2%80%98G-AKIF%E2%80%99_%2844840910175%29.jpg/960px-De_Havilland_DH89A_Dragon_Rapide_%E2%80%98G-AKIF%E2%80%99_%2844840910175%29.jpg",
@@ -6941,13 +6879,10 @@
         "pageURL": "https://commons.wikimedia.org/wiki/File:De_Havilland_DH89A_Dragon_Rapide_%E2%80%98G-AKIF%E2%80%99_(44840910175).jpg"
       },
       "wikidataId": "Q1050763",
-      "wikipediaTitle": "De Havilland Dragon Rapide",
-      "wingspanMeters": 14.63
+      "wikipediaTitle": "De Havilland Dragon Rapide"
     },
     "DH90": {
       "entryId": "",
-      "firstFlightYear": 1935,
-      "numberBuilt": 67,
       "photo": {
         "artist": "Royal Air Force Official Photographer",
         "imageURL": "https://upload.wikimedia.org/wikipedia/commons/5/55/De_Havilland_DH90_Dragonfly.jpg",
@@ -6959,7 +6894,6 @@
     },
     "DH94": {
       "entryId": "",
-      "firstFlightYear": 1937,
       "photo": {
         "artist": "RuthAS",
         "imageURL": "https://upload.wikimedia.org/wikipedia/commons/8/88/DH.94_Moth_Minor_Coupe_Portsmouth_1954.jpg",
@@ -7031,9 +6965,6 @@
     },
     "DOVE": {
       "entryId": "",
-      "firstFlightYear": 1945,
-      "lengthMeters": 11.96,
-      "numberBuilt": 542,
       "photo": {
         "artist": "Raimond Spekking",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/8b/De_Havilland_DH-104_Dove_%28D-IFSA%29.jpg/960px-De_Havilland_DH-104_Dove_%28D-IFSA%29.jpg",
@@ -7041,8 +6972,7 @@
         "pageURL": "https://commons.wikimedia.org/wiki/File:De_Havilland_DH-104_Dove_(D-IFSA).jpg"
       },
       "wikidataId": "Q921436",
-      "wikipediaTitle": "De Havilland Dove",
-      "wingspanMeters": 17.4
+      "wikipediaTitle": "De Havilland Dove"
     },
     "DR1": {
       "entryId": "",
@@ -7064,7 +6994,6 @@
     },
     "DSA1": {
       "entryId": "",
-      "firstFlightYear": 1956,
       "photo": {
         "artist": "Ahunt",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/bb/Smith_Mini-Plane_Amateur_Built_C-GADB_03.JPG/960px-Smith_Mini-Plane_Amateur_Built_C-GADB_03.JPG",
@@ -7114,9 +7043,6 @@
     },
     "E110": {
       "entryId": "",
-      "firstFlightYear": 1968,
-      "lengthMeters": 15.08,
-      "numberBuilt": 501,
       "photo": {
         "artist": "Flickr user Shawn from Airdrie, Canada",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/6b/SKL_in_flight_cropped_%28105091729%29.jpg/960px-SKL_in_flight_cropped_%28105091729%29.jpg",
@@ -7124,14 +7050,10 @@
         "pageURL": "https://commons.wikimedia.org/wiki/File:SKL_in_flight_cropped_(105091729).jpg"
       },
       "wikidataId": "Q1335137",
-      "wikipediaTitle": "Embraer EMB 110 Bandeirante",
-      "wingspanMeters": 15.32
+      "wikipediaTitle": "Embraer EMB 110 Bandeirante"
     },
     "E121": {
       "entryId": "",
-      "firstFlightYear": 1976,
-      "lengthMeters": 12.25,
-      "numberBuilt": 106,
       "photo": {
         "artist": "MAROT Lucas",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/74/EMB-121_marine.JPG/960px-EMB-121_marine.JPG",
@@ -7139,8 +7061,7 @@
         "pageURL": "https://commons.wikimedia.org/wiki/File:EMB-121_marine.JPG"
       },
       "wikidataId": "Q1335151",
-      "wikipediaTitle": "Embraer EMB 121 Xingu",
-      "wingspanMeters": 14.05
+      "wikipediaTitle": "Embraer EMB 121 Xingu"
     },
     "E275": {
       "entryId": "",
@@ -7155,9 +7076,6 @@
     },
     "E390": {
       "entryId": "",
-      "firstFlightYear": 2015,
-      "lengthMeters": 35.2,
-      "numberBuilt": 13,
       "photo": {
         "artist": "Steve Lynes from Sandshurst, United Kingdom",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/4b/EGLF_-_Embraer_KC-390_-_For%C3%A7a_A%C3%A9rea_Brasileira_-_PT-ZNJ_%2842759650754%29.jpg/960px-EGLF_-_Embraer_KC-390_-_For%C3%A7a_A%C3%A9rea_Brasileira_-_PT-ZNJ_%2842759650754%29.jpg",
@@ -7165,8 +7083,7 @@
         "pageURL": "https://commons.wikimedia.org/wiki/File:EGLF_-_Embraer_KC-390_-_For%C3%A7a_A%C3%A9rea_Brasileira_-_PT-ZNJ_(42759650754).jpg"
       },
       "wikidataId": "Q975281",
-      "wikipediaTitle": "Embraer C-390 Millennium",
-      "wingspanMeters": 35.05
+      "wikipediaTitle": "Embraer C-390 Millennium"
     },
     "E3CF": {
       "entryId": "",
@@ -7520,17 +7437,6 @@
       "wikipediaTitle": "General Dynamics F-16 Fighting Falcon",
       "wingspanMeters": 9.96
     },
-    "F18H": {
-      "entryId": "",
-      "photo": {
-        "artist": "DN-SC-04-08946",
-        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/0e/F-18_overflying_water_-_%28USN%2C_USDoD%29.jpg/960px-F-18_overflying_water_-_%28USN%2C_USDoD%29.jpg",
-        "license": "Public domain",
-        "pageURL": "https://commons.wikimedia.org/wiki/File:F-18_overflying_water_-_(USN,_USDoD).jpg"
-      },
-      "wikidataId": "Q46397",
-      "wikipediaTitle": "McDonnell Douglas F/A-18 Hornet"
-    },
     "F2": {
       "entryId": "",
       "firstFlightYear": 1995,
@@ -7694,8 +7600,6 @@
     },
     "FALM": {
       "entryId": "",
-      "firstFlightYear": 1934,
-      "numberBuilt": 36,
       "photo": {
         "artist": "TSRL",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/80/Miles_Falconc.jpg/960px-Miles_Falconc.jpg",
@@ -7754,9 +7658,6 @@
     },
     "FH11": {
       "entryId": "",
-      "firstFlightYear": 1963,
-      "lengthMeters": 9.08,
-      "numberBuilt": 259,
       "photo": {
         "artist": "RuthAS",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/9/93/Fairchild-Hiller_FH1100_Le_Bourget_03.06.67.jpg/960px-Fairchild-Hiller_FH1100_Le_Bourget_03.06.67.jpg",
@@ -7813,9 +7714,6 @@
     },
     "FREL": {
       "entryId": "",
-      "firstFlightYear": 1962,
-      "lengthMeters": 19.4,
-      "numberBuilt": 110,
       "photo": {
         "artist": "Guillaume Rueda",
         "imageURL": "https://upload.wikimedia.org/wikipedia/commons/8/89/Super_Frelon_4.jpg",
@@ -7880,7 +7778,6 @@
     },
     "G115": {
       "entryId": "",
-      "lengthMeters": 7.36,
       "photo": {
         "artist": "Alice Humphreys - Transatracurium",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c2/Grob_G_115E_EA-3.JPG/960px-Grob_G_115E_EA-3.JPG",
@@ -7888,14 +7785,10 @@
         "pageURL": "https://commons.wikimedia.org/wiki/File:Grob_G_115E_EA-3.JPG"
       },
       "wikidataId": "Q671321",
-      "wikipediaTitle": "Grob G 115",
-      "wingspanMeters": 10.0
+      "wikipediaTitle": "Grob G 115"
     },
     "G120": {
       "entryId": "",
-      "firstFlightYear": 1999,
-      "lengthMeters": 8.11,
-      "numberBuilt": 533,
       "photo": {
         "artist": "user:Fschmidt12",
         "imageURL": "https://upload.wikimedia.org/wikipedia/commons/9/9a/Grob_G_120A_Take_Off.jpg",
@@ -7903,12 +7796,10 @@
         "pageURL": "https://commons.wikimedia.org/wiki/File:Grob_G_120A_Take_Off.jpg"
       },
       "wikidataId": "Q375655",
-      "wikipediaTitle": "Grob G 120",
-      "wingspanMeters": 10.18
+      "wikipediaTitle": "Grob G 120"
     },
     "G12T": {
       "entryId": "",
-      "firstFlightYear": 2010,
       "photo": {
         "artist": "Alan Wilson",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/0f/Grob_120_TP-A_%E2%80%98D-ETPX%E2%80%99.jpg/960px-Grob_120_TP-A_%E2%80%98D-ETPX%E2%80%99.jpg",
@@ -8110,8 +8001,6 @@
     },
     "GEMI": {
       "entryId": "",
-      "firstFlightYear": 1945,
-      "numberBuilt": 170,
       "photo": {
         "artist": "TSRL",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/5/55/Miles_Gemini_in_flight.JPG/960px-Miles_Gemini_in_flight.JPG",
@@ -8163,8 +8052,6 @@
     },
     "GNAT": {
       "entryId": "",
-      "firstFlightYear": 1955,
-      "numberBuilt": 449,
       "photo": {
         "artist": "RuthAS",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/45/Folland_Fo.141_Gnat_F.1_XK739_Le_Bourget_29.05.57_edited-2.jpg/960px-Folland_Fo.141_Gnat_F.1_XK739_Le_Bourget_29.05.57_edited-2.jpg",
@@ -8277,7 +8164,6 @@
     },
     "H43B": {
       "entryId": "",
-      "firstFlightYear": 1953,
       "photo": {
         "artist": "Nehrams2020",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/e/e6/Kaman_HH-43B_HuskieCAM07.jpg/960px-Kaman_HH-43B_HuskieCAM07.jpg",
@@ -8369,9 +8255,6 @@
     },
     "HERN": {
       "entryId": "",
-      "firstFlightYear": 1950,
-      "lengthMeters": 14.8,
-      "numberBuilt": 150,
       "photo": {
         "artist": "Ken Fielding",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/70/G-AOXL_DH114_Heron_1_BUIA_LGW_29APR69_%286812537759%29.jpg/960px-G-AOXL_DH114_Heron_1_BUIA_LGW_29APR69_%286812537759%29.jpg",
@@ -8379,14 +8262,10 @@
         "pageURL": "https://commons.wikimedia.org/wiki/File:G-AOXL_DH114_Heron_1_BUIA_LGW_29APR69_(6812537759).jpg"
       },
       "wikidataId": "Q176111",
-      "wikipediaTitle": "De Havilland Heron",
-      "wingspanMeters": 21.8
+      "wikipediaTitle": "De Havilland Heron"
     },
     "HF20": {
       "entryId": "",
-      "firstFlightYear": 1964,
-      "lengthMeters": 16.61,
-      "numberBuilt": 47,
       "photo": {
         "artist": "Eduard Marmet",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/e/e5/Luftwaffe_Hansa_Jet_at_Basle_-_May_1984.jpg/960px-Luftwaffe_Hansa_Jet_at_Basle_-_May_1984.jpg",
@@ -8394,12 +8273,10 @@
         "pageURL": "https://commons.wikimedia.org/wiki/File:Luftwaffe_Hansa_Jet_at_Basle_-_May_1984.jpg"
       },
       "wikidataId": "Q643927",
-      "wikipediaTitle": "HFB 320 Hansa Jet",
-      "wingspanMeters": 14.49
+      "wikipediaTitle": "HFB 320 Hansa Jet"
     },
     "HI27": {
       "entryId": "",
-      "firstFlightYear": 1970,
       "photo": {
         "artist": "Alf van Beem",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c0/HB-MSK_%28aircraft%29%2C_Hirth_Hi-27_Akrostar_Mk2_pic4.JPG/960px-HB-MSK_%28aircraft%29%2C_Hirth_Hi-27_Akrostar_Mk2_pic4.JPG",
@@ -8424,7 +8301,6 @@
     },
     "HN70": {
       "entryId": "",
-      "firstFlightYear": 1962,
       "photo": {
         "artist": "RuthAS",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/d/d3/Nicollier_HN434_S._Menestrel_F-PECQ_Sywell_4.9.10R_edited-3.jpg/960px-Nicollier_HN434_S._Menestrel_F-PECQ_Sywell_4.9.10R_edited-3.jpg",
@@ -8634,9 +8510,6 @@
     },
     "IA58": {
       "entryId": "",
-      "firstFlightYear": 1969,
-      "lengthMeters": 14.25,
-      "numberBuilt": 160,
       "photo": {
         "artist": "Aeroprints.com",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/5/58/AX-01_IA58_Pucara_Fuerza_Aerea_Argentina_%287307048254%29.jpg/960px-AX-01_IA58_Pucara_Fuerza_Aerea_Argentina_%287307048254%29.jpg",
@@ -8644,14 +8517,10 @@
         "pageURL": "https://commons.wikimedia.org/wiki/File:AX-01_IA58_Pucara_Fuerza_Aerea_Argentina_(7307048254).jpg"
       },
       "wikidataId": "Q212172",
-      "wikipediaTitle": "FMA IA 58 Pucará",
-      "wingspanMeters": 14.5
+      "wikipediaTitle": "FMA IA 58 Pucará"
     },
     "IA63": {
       "entryId": "",
-      "firstFlightYear": 1984,
-      "lengthMeters": 10.93,
-      "numberBuilt": 33,
       "photo": {
         "artist": "Government of Argentina",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/ad/IA-63_Pampa_Ejercicio_Integrador_%28cropped%29.jpg/960px-IA-63_Pampa_Ejercicio_Integrador_%28cropped%29.jpg",
@@ -8659,8 +8528,7 @@
         "pageURL": "https://commons.wikimedia.org/wiki/File:IA-63_Pampa_Ejercicio_Integrador_(cropped).jpg"
       },
       "wikidataId": "Q175445",
-      "wikipediaTitle": "FMA IA-63 Pampa",
-      "wingspanMeters": 9.69
+      "wikipediaTitle": "FMA IA-63 Pampa"
     },
     "IL38": {
       "entryId": "",
@@ -8749,8 +8617,6 @@
     },
     "IR23": {
       "entryId": "",
-      "firstFlightYear": 1974,
-      "numberBuilt": 78,
       "photo": {
         "artist": "FlugKerl2",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/2/24/IAR823.jpg/960px-IAR823.jpg",
@@ -8762,7 +8628,6 @@
     },
     "IR24": {
       "entryId": "",
-      "firstFlightYear": 1971,
       "photo": {
         "artist": "RuthAS",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a1/IAR_824_YR-ISB_LEB_02.06.73_edited-4.jpg/960px-IAR_824_YR-ISB_LEB_02.06.73_edited-4.jpg",
@@ -8888,7 +8753,6 @@
     },
     "JT2": {
       "entryId": "",
-      "firstFlightYear": 1967,
       "wikidataId": "Q7690146",
       "wikipediaTitle": "Taylor Titch"
     },
@@ -9058,8 +8922,6 @@
     },
     "KL07": {
       "entryId": "",
-      "firstFlightYear": 1960,
-      "numberBuilt": 92,
       "photo": {
         "artist": "Mike Burdett from CROMER, UK",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/70/D-EFQE_%2837019204072%29.jpg/960px-D-EFQE_%2837019204072%29.jpg",
@@ -9113,8 +8975,6 @@
     },
     "L10": {
       "entryId": "",
-      "firstFlightYear": 1934,
-      "numberBuilt": 149,
       "photo": {
         "artist": "Originally uploaded by w:User:Logawi",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/36/Earhart-electra_10.jpg/960px-Earhart-electra_10.jpg",
@@ -9313,9 +9173,6 @@
     },
     "LANC": {
       "entryId": "",
-      "firstFlightYear": 1941,
-      "lengthMeters": 21.11,
-      "numberBuilt": 7377,
       "photo": {
         "artist": "Royal Air Force official photographer",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f5/The_Royal_Air_Force_in_Britain%2C_29_September_1942_TR197.jpg/960px-The_Royal_Air_Force_in_Britain%2C_29_September_1942_TR197.jpg",
@@ -9323,8 +9180,7 @@
         "pageURL": "https://commons.wikimedia.org/wiki/File:The_Royal_Air_Force_in_Britain,_29_September_1942_TR197.jpg"
       },
       "wikidataId": "Q203622",
-      "wikipediaTitle": "Avro Lancaster",
-      "wingspanMeters": 31.09
+      "wikipediaTitle": "Avro Lancaster"
     },
     "LARK": {
       "entryId": "",
@@ -9415,8 +9271,6 @@
     },
     "LYNX": {
       "entryId": "",
-      "firstFlightYear": 1971,
-      "lengthMeters": 12.06,
       "photo": {
         "artist": "Julian Herzog (Website)",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/e/e9/British_Army_Westland_WG-13_Lynx_AH7_ZX616_Royal_International_Air_Tattoo_2024_01.jpg/960px-British_Army_Westland_WG-13_Lynx_AH7_ZX616_Royal_International_Air_Tattoo_2024_01.jpg",
@@ -9488,7 +9342,6 @@
     },
     "M2HK": {
       "entryId": "",
-      "firstFlightYear": 1934,
       "photo": {
         "artist": "RuthAS",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/2/2d/Miles_M.2H_Hawk_Major_G-ACYO_W.Waltham_03.06.53.jpg/960px-Miles_M.2H_Hawk_Major_G-ACYO_W.Waltham_03.06.53.jpg",
@@ -9626,8 +9479,6 @@
     },
     "MAGI": {
       "entryId": "",
-      "firstFlightYear": 1937,
-      "numberBuilt": 1303,
       "photo": {
         "artist": "Royal Air Force official photographer",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/b8/Aircraft_of_the_Royal_Air_Force_1939-1945-_Miles_M.14_Magister._CH140.jpg/960px-Aircraft_of_the_Royal_Air_Force_1939-1945-_Miles_M.14_Magister._CH140.jpg",
@@ -9667,7 +9518,6 @@
     },
     "MD3": {
       "entryId": "",
-      "firstFlightYear": 1983,
       "wikidataId": "Q7391152",
       "wikipediaTitle": "SME Aero Tiga"
     },
@@ -9686,9 +9536,6 @@
     },
     "ME62": {
       "entryId": "",
-      "firstFlightYear": 1942,
-      "lengthMeters": 10.58,
-      "numberBuilt": 1433,
       "photo": {
         "artist": "USAF museum",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/b2/Messerschmitt_Me_262A_at_the_National_Museum_of_the_USAF_%28cropped%29.jpg/960px-Messerschmitt_Me_262A_at_the_National_Museum_of_the_USAF_%28cropped%29.jpg",
@@ -9696,8 +9543,7 @@
         "pageURL": "https://commons.wikimedia.org/wiki/File:Messerschmitt_Me_262A_at_the_National_Museum_of_the_USAF_(cropped).jpg"
       },
       "wikidataId": "Q140254",
-      "wikipediaTitle": "Messerschmitt Me 262",
-      "wingspanMeters": 12.5
+      "wikipediaTitle": "Messerschmitt Me 262"
     },
     "MEL2": {
       "entryId": "",
@@ -9713,7 +9559,6 @@
     },
     "MESS": {
       "entryId": "",
-      "firstFlightYear": 1942,
       "photo": {
         "artist": "Walter Bowles",
         "imageURL": "https://upload.wikimedia.org/wikipedia/commons/5/5f/Miles_M38_Messenger_2A_G-AKBN.jpg",
@@ -10079,9 +9924,6 @@
     },
     "MOSQ": {
       "entryId": "",
-      "firstFlightYear": 1940,
-      "lengthMeters": 13.57,
-      "numberBuilt": 7781,
       "photo": {
         "artist": "Royal Air Force official photographer : Forward (Fg Off)",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/03/RAF_Mosquito_with_Molins_gun_WWII_IWM_CH_14114.jpg/960px-RAF_Mosquito_with_Molins_gun_WWII_IWM_CH_14114.jpg",
@@ -10089,8 +9931,7 @@
         "pageURL": "https://commons.wikimedia.org/wiki/File:RAF_Mosquito_with_Molins_gun_WWII_IWM_CH_14114.jpg"
       },
       "wikidataId": "Q221344",
-      "wikipediaTitle": "De Havilland Mosquito",
-      "wingspanMeters": 16.52
+      "wikipediaTitle": "De Havilland Mosquito"
     },
     "MOTO": {
       "entryId": "",
@@ -10201,7 +10042,6 @@
     },
     "N110": {
       "entryId": "",
-      "firstFlightYear": 1944,
       "photo": {
         "artist": "RuthAS",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/9/9c/Nord_1101_Noralpha_Coventry_12.08.00R.jpg/960px-Nord_1101_Noralpha_Coventry_12.08.00R.jpg",
@@ -10297,7 +10137,6 @@
     },
     "ND1T": {
       "entryId": "",
-      "firstFlightYear": 1977,
       "photo": {
         "artist": "Steve Ryle",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/9/95/Norman_NDN-1_Firecracker.jpg/960px-Norman_NDN-1_Firecracker.jpg",
@@ -10353,9 +10192,6 @@
     },
     "NOMA": {
       "entryId": "",
-      "firstFlightYear": 1971,
-      "lengthMeters": 14.35,
-      "numberBuilt": 172,
       "photo": {
         "artist": "YSSYguy at English Wikipedia",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/4b/GAF_Nomad_VH-ATO.JPG/960px-GAF_Nomad_VH-ATO.JPG",
@@ -10363,8 +10199,7 @@
         "pageURL": "https://commons.wikimedia.org/wiki/File:GAF_Nomad_VH-ATO.JPG"
       },
       "wikidataId": "Q205628",
-      "wikipediaTitle": "GAF Nomad",
-      "wingspanMeters": 16.46
+      "wikipediaTitle": "GAF Nomad"
     },
     "NORS": {
       "entryId": "",
@@ -10441,8 +10276,6 @@
     },
     "OSCR": {
       "entryId": "",
-      "firstFlightYear": 1965,
-      "lengthMeters": 7.23,
       "photo": {
         "artist": "RuthAS",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f2/Partenavia_P.64_Oscar_I-LRAS_LEB_19.06.65_edited-3.jpg/960px-Partenavia_P.64_Oscar_I-LRAS_LEB_19.06.65_edited-3.jpg",
@@ -10450,8 +10283,7 @@
         "pageURL": "https://commons.wikimedia.org/wiki/File:Partenavia_P.64_Oscar_I-LRAS_LEB_19.06.65_edited-3.jpg"
       },
       "wikidataId": "Q7140192",
-      "wikipediaTitle": "Partenavia Oscar",
-      "wingspanMeters": 9.99
+      "wikipediaTitle": "Partenavia Oscar"
     },
     "P06T": {
       "entryId": "",
@@ -10534,7 +10366,6 @@
     },
     "P32R": {
       "entryId": "",
-      "lengthMeters": 8.44,
       "photo": {
         "artist": "FlugKerl2",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/82/PiperSaragtogaIITC.jpg/960px-PiperSaragtogaIITC.jpg",
@@ -10542,8 +10373,7 @@
         "pageURL": "https://commons.wikimedia.org/wiki/File:PiperSaragtogaIITC.jpg"
       },
       "wikidataId": "Q912903",
-      "wikipediaTitle": "Piper PA-32R",
-      "wingspanMeters": 10.0
+      "wikipediaTitle": "Piper PA-32R"
     },
     "P337": {
       "entryId": "",
@@ -10599,7 +10429,6 @@
     },
     "P57": {
       "entryId": "",
-      "firstFlightYear": 1958,
       "photo": {
         "artist": "RuthAS",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/8d/Partenavia_P57_Fachiro_Milan_Bresso_07.65_edited-2.jpg/960px-Partenavia_P57_Fachiro_Milan_Bresso_07.65_edited-2.jpg",
@@ -10821,9 +10650,6 @@
     },
     "PEMB": {
       "entryId": "",
-      "firstFlightYear": 1952,
-      "lengthMeters": 14.02,
-      "numberBuilt": 128,
       "photo": {
         "artist": "Arpingstone",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/6c/Hunting_percival_p-66_pembroke_c1_takeoff_arp.jpg/960px-Hunting_percival_p-66_pembroke_c1_takeoff_arp.jpg",
@@ -10831,8 +10657,7 @@
         "pageURL": "https://commons.wikimedia.org/wiki/File:Hunting_percival_p-66_pembroke_c1_takeoff_arp.jpg"
       },
       "wikidataId": "Q539354",
-      "wikipediaTitle": "Percival Pembroke",
-      "wingspanMeters": 19.66
+      "wikipediaTitle": "Percival Pembroke"
     },
     "PGEE": {
       "entryId": "",
@@ -10869,8 +10694,6 @@
     },
     "PILL": {
       "entryId": "",
-      "firstFlightYear": 1981,
-      "numberBuilt": 140,
       "photo": {
         "artist": "U.S. Navy photo by Mass Communication Specialist 2nd Class Lolita Lewis",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/1/11/US_Navy_070901-N-1713L-013_2nd_Lt._Hanz_Zimmermann%2C_a_Panamanian_T-35_pilot%2C_stands_near_his_aircraft_after_returning_to_Tocumen_International_Airport_from_maritime_surveillance_as_part_of_the_Combined_Forces_Air_Combatant_Comm.jpg/960px-thumbnail.jpg",
@@ -10918,7 +10741,6 @@
     },
     "PIT4": {
       "entryId": "",
-      "firstFlightYear": 2002,
       "photo": {
         "artist": "Curimedia",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f2/Pipistrel_Taurus_I-8599.jpg/960px-Pipistrel_Taurus_I-8599.jpg",
@@ -10926,8 +10748,7 @@
         "pageURL": "https://commons.wikimedia.org/wiki/File:Pipistrel_Taurus_I-8599.jpg"
       },
       "wikidataId": "Q541588",
-      "wikipediaTitle": "Pipistrel Taurus",
-      "wingspanMeters": 14.97
+      "wikipediaTitle": "Pipistrel Taurus"
     },
     "PIVE": {
       "entryId": "",
@@ -11072,7 +10893,6 @@
     },
     "PPRO": {
       "entryId": "",
-      "firstFlightYear": 1950,
       "photo": {
         "artist": "neillanwarne",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/9/91/Percival_Provost_NL.jpg/960px-Percival_Provost_NL.jpg",
@@ -11084,7 +10904,6 @@
     },
     "PRCE": {
       "entryId": "",
-      "firstFlightYear": 1948,
       "photo": {
         "artist": "RuthAS",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c9/Percival_Sea_Prince_T.1_WF118_727_Sqn_FAA_09.56.jpg/960px-Percival_Sea_Prince_T.1_WF118_727_Sqn_FAA_09.56.jpg",
@@ -11107,8 +10926,6 @@
     },
     "PROC": {
       "entryId": "",
-      "firstFlightYear": 1939,
-      "numberBuilt": 1268,
       "photo": {
         "artist": "http://www.jaapteeuwen.com/ww2aircraft/html%20pages/PERCIVAL%20PROCTOR.htm",
         "imageURL": "https://upload.wikimedia.org/wikipedia/commons/9/97/Percival_proctor.jpg",
@@ -11642,7 +11459,6 @@
     },
     "S360": {
       "entryId": "",
-      "firstFlightYear": 1972,
       "photo": {
         "artist": "Björn Strey",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/e/ef/D-HOPQ_%282872896222%29.jpg/960px-D-HOPQ_%282872896222%29.jpg",
@@ -11698,7 +11514,6 @@
     },
     "S45": {
       "entryId": "",
-      "firstFlightYear": 1996,
       "photo": {
         "artist": "Ahunt",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/d/d5/Partenair_S-45_Mystere_C-GGYY_photo_1.JPG/960px-Partenair_S-45_Mystere_C-GGYY_photo_1.JPG",
@@ -11846,7 +11661,6 @@
     },
     "SAND": {
       "entryId": "",
-      "firstFlightYear": 1943,
       "photo": {
         "artist": "RuthAS",
         "imageURL": "https://upload.wikimedia.org/wikipedia/commons/e/ef/Short_Sandringham_5_at_Poole_1954.jpg",
@@ -12068,8 +11882,6 @@
     },
     "SF28": {
       "entryId": "",
-      "firstFlightYear": 1971,
-      "numberBuilt": 119,
       "photo": {
         "artist": "Planespotter1",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/5/5a/Scheibe_SF-28A_Landing.jpg/960px-Scheibe_SF-28A_Landing.jpg",
@@ -12081,7 +11893,6 @@
     },
     "SF31": {
       "entryId": "",
-      "firstFlightYear": 1969,
       "photo": {
         "artist": "bomberpilot",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/9/9e/Scheibe_SFS_31_Milan_%288735473854%29.jpg/960px-Scheibe_SFS_31_Milan_%288735473854%29.jpg",
@@ -12093,7 +11904,6 @@
     },
     "SG92": {
       "entryId": "",
-      "firstFlightYear": 1993,
       "photo": {
         "artist": "Pholl19",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/31/SMGturbofinist.jpg/960px-SMGturbofinist.jpg",
@@ -12105,9 +11915,6 @@
     },
     "SGUP": {
       "entryId": "",
-      "firstFlightYear": 1965,
-      "lengthMeters": 43.05,
-      "numberBuilt": 1,
       "photo": {
         "artist": "NASA",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/5/57/Super_Guppy_in_flight_%28MSFC-0101141%29_%28cropped%29.jpg/960px-Super_Guppy_in_flight_%28MSFC-0101141%29_%28cropped%29.jpg",
@@ -12115,8 +11922,7 @@
         "pageURL": "https://commons.wikimedia.org/wiki/File:Super_Guppy_in_flight_(MSFC-0101141)_(cropped).jpg"
       },
       "wikidataId": "Q58219",
-      "wikipediaTitle": "Aero Spacelines Super Guppy",
-      "wingspanMeters": 47.62
+      "wikipediaTitle": "Aero Spacelines Super Guppy"
     },
     "SH33": {
       "entryId": "",
@@ -12150,9 +11956,6 @@
     },
     "SHAC": {
       "entryId": "",
-      "firstFlightYear": 1949,
-      "lengthMeters": 26.62,
-      "numberBuilt": 185,
       "photo": {
         "artist": "Photographer's Name: SSgt. Jose Lopez, USAF",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f1/ShackletonAEW2_8Sqn_RAF_1982.jpeg/960px-ShackletonAEW2_8Sqn_RAF_1982.jpeg",
@@ -12160,8 +11963,7 @@
         "pageURL": "https://commons.wikimedia.org/wiki/File:ShackletonAEW2_8Sqn_RAF_1982.jpeg"
       },
       "wikidataId": "Q791508",
-      "wikipediaTitle": "Avro Shackleton",
-      "wingspanMeters": 36.52
+      "wikipediaTitle": "Avro Shackleton"
     },
     "SHRK": {
       "entryId": "",
@@ -12199,7 +12001,6 @@
     },
     "SKIM": {
       "entryId": "",
-      "numberBuilt": 43,
       "photo": {
         "artist": "Greg Goebel",
         "imageURL": "https://upload.wikimedia.org/wikipedia/commons/a/ac/Colonial_Skimmer_three-view_silhouette.png",
@@ -12211,9 +12012,6 @@
     },
     "SLCH": {
       "entryId": "",
-      "firstFlightYear": 2019,
-      "lengthMeters": 72.54,
-      "numberBuilt": 1,
       "photo": {
         "artist": "Saggittarius A",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/5/5d/Scaled_Composites_Stratolaunch_3-view_line_drawing.jpg/960px-Scaled_Composites_Stratolaunch_3-view_line_drawing.jpg",
@@ -12221,8 +12019,7 @@
         "pageURL": "https://commons.wikimedia.org/wiki/File:Scaled_Composites_Stratolaunch_3-view_line_drawing.jpg"
       },
       "wikidataId": "Q7429738",
-      "wikipediaTitle": "Scaled Composites Stratolaunch",
-      "wingspanMeters": 117.35
+      "wikipediaTitle": "Scaled Composites Stratolaunch"
     },
     "SM19": {
       "entryId": "",
@@ -12250,8 +12047,6 @@
     },
     "SMB2": {
       "entryId": "",
-      "firstFlightYear": 1955,
-      "numberBuilt": 180,
       "photo": {
         "artist": "moi-même",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/33/SuperMystereB2.JPG/960px-SuperMystereB2.JPG",
@@ -12338,7 +12133,6 @@
     },
     "SPST": {
       "entryId": "",
-      "firstFlightYear": 1935,
       "photo": {
         "artist": "RuthAS",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/9/96/Rearwin_Sportster_9000_Wangarratta_Victoria_03.88.jpg/960px-Rearwin_Sportster_9000_Wangarratta_Victoria_03.88.jpg",
@@ -12366,8 +12160,6 @@
     },
     "SS2P": {
       "entryId": "",
-      "firstFlightYear": 1956,
-      "lengthMeters": 8.95,
       "photo": {
         "artist": "Ahunt at English Wikipedia",
         "imageURL": "https://upload.wikimedia.org/wikipedia/commons/4/43/AyresThrushC-GVVZ.JPG",
@@ -12375,8 +12167,7 @@
         "pageURL": "https://commons.wikimedia.org/wiki/File:AyresThrushC-GVVZ.JPG"
       },
       "wikidataId": "Q3525993",
-      "wikipediaTitle": "Ayres Thrush",
-      "wingspanMeters": 13.51
+      "wikipediaTitle": "Ayres Thrush"
     },
     "SSAB": {
       "entryId": "",
@@ -12428,9 +12219,6 @@
     },
     "STAR": {
       "entryId": "",
-      "firstFlightYear": 1986,
-      "lengthMeters": 14.05,
-      "numberBuilt": 53,
       "photo": {
         "artist": "http://en.wikipedia.org/wiki/Image:NASA-2000Starship.jpg (en:User:N328KF) & [1]. Credited to NASA",
         "imageURL": "https://upload.wikimedia.org/wikipedia/commons/9/96/NASA-2000Starship.jpg",
@@ -12438,8 +12226,7 @@
         "pageURL": "https://commons.wikimedia.org/wiki/File:NASA-2000Starship.jpg"
       },
       "wikidataId": "Q814015",
-      "wikipediaTitle": "Beechcraft Starship",
-      "wingspanMeters": 16.6
+      "wikipediaTitle": "Beechcraft Starship"
     },
     "STCH": {
       "entryId": "",
@@ -12623,9 +12410,6 @@
     },
     "SU95": {
       "entryId": "",
-      "firstFlightYear": 2008,
-      "lengthMeters": 29.7,
-      "numberBuilt": 186,
       "photo": {
         "artist": "SuperJet International",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/bd/Sukhoi_Superjet_100_%285096752902%29_%28cropped%29.jpg/960px-Sukhoi_Superjet_100_%285096752902%29_%28cropped%29.jpg",
@@ -12633,8 +12417,7 @@
         "pageURL": "https://commons.wikimedia.org/wiki/File:Sukhoi_Superjet_100_(5096752902)_(cropped).jpg"
       },
       "wikidataId": "Q486066",
-      "wikipediaTitle": "Yakovlev SJ-100",
-      "wingspanMeters": 54.0
+      "wikipediaTitle": "Yakovlev SJ-100"
     },
     "SUBA": {
       "entryId": "",
@@ -12708,8 +12491,6 @@
     },
     "SYCA": {
       "entryId": "",
-      "firstFlightYear": 1947,
-      "numberBuilt": 180,
       "photo": {
         "artist": "Stahlkocher",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/7e/Bristol_171_Sycamore_HR52_-cn_13445-_of_Feuerwehr.jpg/960px-Bristol_171_Sycamore_HR52_-cn_13445-_of_Feuerwehr.jpg",
@@ -13030,7 +12811,6 @@
     },
     "TCOU": {
       "entryId": "",
-      "firstFlightYear": 1960,
       "photo": {
         "artist": "Unknown authorUnknown author",
         "imageURL": "https://upload.wikimedia.org/wikipedia/commons/3/39/Helio_U-5A_Twin_Courier.jpg",
@@ -13138,7 +12918,6 @@
     },
     "TNAV": {
       "entryId": "",
-      "firstFlightYear": 1953,
       "photo": {
         "artist": "FlugKerl2",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/cc/Twin_Navion.JPG/960px-Twin_Navion.JPG",
@@ -13187,7 +12966,6 @@
     },
     "TR55": {
       "entryId": "",
-      "firstFlightYear": 1996,
       "photo": {
         "artist": "en:User:Ahunt",
         "imageURL": "https://upload.wikimedia.org/wikipedia/commons/0/0c/3Xtrim3X55TrainerC-IFUF04.jpg",
@@ -13326,8 +13104,6 @@
     },
     "TUTR": {
       "entryId": "",
-      "firstFlightYear": 1929,
-      "numberBuilt": 606,
       "photo": {
         "artist": "TSRL",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/1/19/Avro_Tutor_2008a.JPG/960px-Avro_Tutor_2008a.JPG",
@@ -13368,9 +13144,6 @@
     },
     "UNIV": {
       "entryId": "",
-      "firstFlightYear": 1966,
-      "lengthMeters": 8.6,
-      "numberBuilt": 189,
       "photo": {
         "artist": "TRTPUWU",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/af/1850_%28neiva_universal%29.jpg/960px-1850_%28neiva_universal%29.jpg",
@@ -13378,8 +13151,7 @@
         "pageURL": "https://commons.wikimedia.org/wiki/File:1850_(neiva_universal).jpg"
       },
       "wikidataId": "Q1519116",
-      "wikipediaTitle": "Neiva Universal",
-      "wingspanMeters": 11.0
+      "wikipediaTitle": "Neiva Universal"
     },
     "URRA": {
       "entryId": "",
@@ -13401,8 +13173,6 @@
     },
     "UU12": {
       "entryId": "",
-      "firstFlightYear": 1925,
-      "numberBuilt": 240,
       "photo": {
         "artist": "J.Klank",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/fc/Udet_U_12_Flamingo_D-EOSM.jpg/960px-Udet_U_12_Flamingo_D-EOSM.jpg",
@@ -13414,9 +13184,6 @@
     },
     "V1": {
       "entryId": "",
-      "firstFlightYear": 1959,
-      "lengthMeters": 12.5,
-      "numberBuilt": 380,
       "photo": {
         "artist": "U.S. Army",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/9/90/OV-1_Mohawk.jpg/960px-OV-1_Mohawk.jpg",
@@ -13424,8 +13191,7 @@
         "pageURL": "https://commons.wikimedia.org/wiki/File:OV-1_Mohawk.jpg"
       },
       "wikidataId": "Q728940",
-      "wikipediaTitle": "Grumman OV-1 Mohawk",
-      "wingspanMeters": 14.63
+      "wikipediaTitle": "Grumman OV-1 Mohawk"
     },
     "V10": {
       "entryId": "",
@@ -13465,8 +13231,6 @@
     },
     "VAMP": {
       "entryId": "",
-      "firstFlightYear": 1943,
-      "numberBuilt": 3268,
       "photo": {
         "artist": "Photographed by Adrian Pingstone and released into the the public domain",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/62/Dh115.vampire.t11.june2004.arp.jpg/960px-Dh115.vampire.t11.june2004.arp.jpg",
@@ -13478,8 +13242,6 @@
     },
     "VANT": {
       "entryId": "",
-      "firstFlightYear": 1996,
-      "lengthMeters": 12.4,
       "photo": {
         "artist": "KyleGorczynski",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c4/N247VA_poc.jpg/960px-N247VA_poc.jpg",
@@ -13487,14 +13249,10 @@
         "pageURL": "https://commons.wikimedia.org/wiki/File:N247VA_poc.jpg"
       },
       "wikidataId": "Q7936113",
-      "wikipediaTitle": "VisionAire Vantage",
-      "wingspanMeters": 14.5
+      "wikipediaTitle": "VisionAire Vantage"
     },
     "VAUT": {
       "entryId": "",
-      "firstFlightYear": 1952,
-      "lengthMeters": 15.57,
-      "numberBuilt": 149,
       "photo": {
         "artist": "Rob Schleiffert from Holland",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/5/58/Vautour_IIN_%2823148846455%29.jpg/960px-Vautour_IIN_%2823148846455%29.jpg",
@@ -13542,7 +13300,6 @@
     },
     "VGUL": {
       "entryId": "",
-      "firstFlightYear": 1935,
       "photo": {
         "artist": "MilborneOne",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/72/G-AEZJ-PercivalVegaGull.jpg/960px-G-AEZJ-PercivalVegaGull.jpg",
@@ -13614,8 +13371,6 @@
     },
     "VNOM": {
       "entryId": "",
-      "firstFlightYear": 1949,
-      "numberBuilt": 1488,
       "photo": {
         "artist": "Tony Hisgett from Birmingham, UK",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/03/Venom_3_%284703782203%29.jpg/960px-Venom_3_%284703782203%29.jpg",
@@ -13840,8 +13595,6 @@
     },
     "WW23": {
       "entryId": "",
-      "firstFlightYear": 1965,
-      "lengthMeters": 15.93,
       "photo": {
         "artist": "Eddie Maloney from North Las Vegas, USA",
         "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/ff/IAI_Westwind_%282323424886%29.jpg/960px-IAI_Westwind_%282323424886%29.jpg",
@@ -13849,8 +13602,7 @@
         "pageURL": "https://commons.wikimedia.org/wiki/File:IAI_Westwind_(2323424886).jpg"
       },
       "wikidataId": "Q1653016",
-      "wikipediaTitle": "IAI Westwind",
-      "wingspanMeters": 13.65
+      "wikipediaTitle": "IAI Westwind"
     },
     "X2": {
       "entryId": "",

@@ -111,17 +111,18 @@ nonisolated enum TypeInfoStore {
         // The catch's own typecode first; a token-matched catch with no
         // typecode borrows its slot's representative one (unless that code
         // is shared by unrelated airframes — RV6).
-        let typecode = c.typecode?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        let ownTypecode = c.typecode?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        let typecode = ownTypecode
             ?? match.flatMap { $0.entry.ambiguousTypecode ? nil : $0.entry.representativeTypecode }
         let dims = AircraftNaming.dimensionsFeet(forTypecode: typecode)
 
         // The family record when it names an article; otherwise the
         // typecode's own record (the catch's real typecode only — never a
-        // borrowed representative one, which the family already covers).
+        // borrowed representative one, which the family already covers),
+        // field by field so nothing the family has is lost.
         let family = match.flatMap { info(forEntryId: $0.entry.id) }
-        let own = c.typecode?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
-            .flatMap { info(forTypecode: $0) }
-        let base = family?.wikipediaTitle != nil ? family : (own ?? family)
+        let own = ownTypecode.flatMap { info(forTypecode: $0) }
+        let base = family?.wikipediaTitle != nil ? family : merged(own, over: family)
 
         guard let match else {
             if base == nil {
@@ -149,6 +150,23 @@ nonisolated enum TypeInfoStore {
     }
 
     // MARK: - Internals
+
+    /// `top`'s facts, each missing one filled from `bottom`. The article and
+    /// its Wikidata id travel together (never one article's id under
+    /// another's title).
+    private static func merged(_ top: TypeInfo?, over bottom: TypeInfo?) -> TypeInfo? {
+        guard let top else { return bottom }
+        guard let bottom else { return top }
+        let article = top.wikipediaTitle != nil ? top : bottom
+        return TypeInfo(entryId: bottom.entryId,
+                        wikipediaTitle: article.wikipediaTitle,
+                        wikidataId: article.wikidataId,
+                        firstFlightYear: top.firstFlightYear ?? bottom.firstFlightYear,
+                        numberBuilt: top.numberBuilt ?? bottom.numberBuilt,
+                        wingspanMeters: top.wingspanMeters ?? bottom.wingspanMeters,
+                        lengthMeters: top.lengthMeters ?? bottom.lengthMeters,
+                        photo: top.photo ?? bottom.photo)
+    }
 
     private static let unidentifiedFamilyId = "fam-unidentified"
 
