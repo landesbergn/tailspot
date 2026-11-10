@@ -36,6 +36,9 @@ nonisolated enum PrimarySheet: String, Identifiable {
     /// Every other way in is a push inside Profile or Leaders; a link has
     /// no stack of its own, so it gets a root sheet like those two.
     case challenges
+    /// The weekly recap, opened by its Monday notification
+    /// (`WeeklyRecapRouter`).
+    case weeklyRecap
     var id: String { rawValue }
 }
 
