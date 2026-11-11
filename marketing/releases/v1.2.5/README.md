@@ -9,11 +9,16 @@
   listed 1206 × 2622, 1179 × 2556 (and landscape) as the accepted sizes. This set is
   1206 × 2622. Earlier sets in this folder are 1284 × 2778.
 - Screenshots lock when 1.2.5 is submitted.
+- Creative assets (set in App Store Connect separately from the version's screenshots):
+  `creative/header_21x9_3840x1646.png` (product page header),
+  `creative/search_3x2_3840x2560.png` (search results) and
+  `creative/universal_16x9_5244x2950.png` (either slot). RGB, no alpha.
 
 ## Contents
 
 - `screenshots/01-what-plane.png` … `07-challenges.png`, in upload order
 - `source/deck.html`: the renderer for all seven slides
+- `source/creative.html`: the renderer for the three creative assets (`#header`, `#search`, `#universal`)
 - `source/e6.png`, `source/l39.png`: photo crops for slides 1–2
 - `source/ph/`: `a321_guess.jpg`, slide 3's photo (the area inside the bracket baked into
   `catch-photos/a321_with_route_first.jpg`, crop 256x144+294+212, scaled to 941 × 529),
@@ -71,6 +76,28 @@ set has one look:
 This set is rendered from `source/deck.html`, not from the
 `app-store-screenshots` deck editor. The editor's JSON still holds the 1.2.2
 headlines and layouts.
+
+## Creative assets
+
+Same look as slides 1–2: the dusk gradient, slide 1's headline ("What's that
+plane? Point your phone at it."), and the E-6 and L-39 catch cards fanned on the
+right, with no phone. They replace the 1.2.2 airshow-trio header and the
+phone-plus-E-6 search image, which used the old split-flap cards. The header
+keeps everything inside the 16:9 centre crop App Store Connect shows on iPhone
+(about 2926 of 3840 px); check the Preview tool there after upload.
+
+Render at half size with a device scale factor of 2:
+
+```bash
+src="$PWD/marketing/releases/v1.2.5/source"; out=$(mktemp -d)
+for k in header:1920,823 search:1920,1280 universal:2622,1475; do
+  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new \
+    --hide-scrollbars --force-device-scale-factor=2 --window-size=${k#*:} \
+    --virtual-time-budget=3000 --user-data-dir="$out/profile" \
+    --screenshot="$out/${k%%:*}.png" "file://$src/creative.html#${k%%:*}"
+done
+echo "$out"   # then flatten: magick in.png -alpha off PNG24:out.png
+```
 
 ## Re-render
 

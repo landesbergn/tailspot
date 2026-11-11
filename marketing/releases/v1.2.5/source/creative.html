@@ -1,0 +1,71 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Tailspot creative 1.2.5</title>
+<!-- Header (21:9), search results (3:2) and universal (16:9) creative for the 1.2.5 listing.
+     Same cards, gradient and headline as slides 1-2 of deck.html. Open creative.html#header|#search|#universal
+     and screenshot at half size with --force-device-scale-factor=2 (see the folder README). -->
+<style>
+:root{--cyan:#00D4FF;--app-text:#E8F4FF;--app-text-2:#A0B0C0;--card:#11151F;
+  --sf:-apple-system,"SF Pro Display",system-ui,sans-serif;--sfmono:ui-monospace,"SF Mono",Menlo,monospace}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:#0B1428;width:1206px;height:2622px;overflow:hidden}
+.slide{position:relative;width:1206px;aspect-ratio:1206/2622;container-type:inline-size;overflow:hidden;
+  background:radial-gradient(90% 40% at 15% 0%,#173B55 0%,transparent 70%),linear-gradient(180deg,#0B1428 0%,#141C33 55%,#2B2236 100%);color:#fff;font-family:var(--sf)}
+/* Headline: same size, weight and place on every slide; the second half in cyan. */
+.hl{position:absolute;left:7cqw;right:7cqw;top:9cqw;font-weight:800;letter-spacing:-.02em;line-height:1.02;text-align:center;font-size:11.5cqw;text-wrap:balance}
+.hl em{font-style:normal;color:var(--cyan)}
+/* Catch card (slides 1-2) and UI panel (slides 3-7) share the top line, border and shadow. */
+.idcard{position:absolute;top:56cqw;border:.4cqw solid rgba(0,212,255,.35);box-shadow:0 3cqw 8cqw rgba(0,0,0,.4)}
+.idcard{left:7cqw;right:7cqw;border-radius:5cqw;background:var(--card);overflow:hidden}
+.idcard .ph{position:relative;aspect-ratio:6/5;overflow:hidden}
+.idcard .ph img{width:100%;height:100%;object-fit:cover;display:block}
+.idcard .ph .ret{position:absolute;left:20%;top:14%;width:60%;height:72%;overflow:visible}
+.idcard .meta{padding:5.5cqw 6cqw 6cqw;display:flex;flex-direction:column;gap:2.4cqw}
+.idcard .ty{font-family:var(--sfmono);font-weight:700;font-size:7.2cqw;letter-spacing:.04em;white-space:nowrap}
+.idcard .op{font-family:var(--sfmono);font-size:4cqw;letter-spacing:.12em}
+.idcard .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:2cqw;margin-top:2.4cqw;border-top:.3cqw solid #262C3A;padding-top:4cqw;padding-bottom:1.2cqw}
+.idcard .stats div{display:flex;flex-direction:column;gap:1cqw}
+.idcard .stats small{font-family:var(--sfmono);font-size:3.2cqw;color:var(--app-text-2);letter-spacing:.1em}
+.idcard .stats strong{font-family:var(--sfmono);font-size:5.6cqw;white-space:nowrap;font-variant-numeric:tabular-nums}
+.idcard .stats strong span{font-size:3.4cqw;color:var(--app-text-2)}
+.idcard .earn{display:flex;justify-content:space-between;align-items:baseline;border-top:.3cqw solid #262C3A;padding-top:4cqw;margin-top:1cqw;font-family:var(--sfmono)}
+.idcard .earn small{font-size:3.6cqw;letter-spacing:.12em;color:var(--app-text-2)}
+.idcard .earn strong{font-size:8cqw}
+
+html,body{width:auto;height:auto}
+.stage{position:relative;overflow:hidden;font-family:var(--sf);color:#fff;
+  background:radial-gradient(60% 70% at 10% 0%,#173B55 0%,transparent 70%),linear-gradient(180deg,#0B1428 0%,#141C33 55%,#2B2236 100%)}
+.cw{position:absolute;container-type:inline-size}
+.cw .idcard{position:relative;top:0;left:0;right:0;margin:0 7cqw}
+.hd{position:absolute;font-weight:800;letter-spacing:-.02em;line-height:1.02}
+.hd em{font-style:normal;color:var(--cyan);display:block}
+</style>
+<div id="o"></div>
+<script>
+const arm='M8 26 V8 H26 M74 8 H92 V26 M8 74 V92 H26 M74 92 H92 V74';
+const reticle=`<svg class="ret" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+  <path d="${arm}" fill="none" stroke="#04070D" stroke-width="5.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="${arm}" fill="none" stroke="#00D4FF" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const card=c=>`<div class="idcard">
+  <div class="ph"><img src="${c.img}" alt="">${reticle}</div>
+  <div class="meta"><div class="ty">${c.ty}</div><div class="op" style="color:${c.tint}">${c.op}</div>
+    <div class="stats"><div><small>ALT</small><strong>${c.alt}<span> ft</span></strong></div><div><small>SPD</small><strong>${c.spd}<span> kt</span></strong></div><div><small>DIST</small><strong>${c.dist}<span> km</span></strong></div></div>
+    <div class="earn"><small>CAUGHT</small><strong style="color:${c.tint}">+${c.pts}</strong></div></div></div>`;
+// Real catch rows (Fleet Week 2026). Tier tints and points from GameSystem.swift.
+const E6 ={img:'e6.png', ty:'E-6 MERCURY',  op:'US NAVY · LEGENDARY',      tint:'#FFC74A',alt:'1,801',spd:'135',dist:'1.3',pts:500};
+const L39={img:'l39.png',ty:'L-39 ALBATROS',op:'PATRIOTS JET TEAM · RARE', tint:'#00D4FF',alt:'200',  spd:'252',dist:'0.8',pts:50};
+
+// Layouts in CSS px at half the output size. Header: content stays inside the
+// 16:9 centre crop App Store Connect shows on iPhone (x 228..1692 of 1920).
+const L={
+ header:{w:1920,h:823,hd:{x:262,y:348,size:62},cards:[{c:L39,x:1250,y:128,w:380,rot:7},{c:E6,x:990,y:116,w:380,rot:-4}]},
+ search:{w:1920,h:1280,hd:{x:120,y:548,size:88},cards:[{c:L39,x:1400,y:290,w:450,rot:7},{c:E6,x:1100,y:272,w:450,rot:-4}]},
+ universal:{w:2622,h:1475,hd:{x:180,y:620,size:116},cards:[{c:L39,x:1870,y:330,w:520,rot:7},{c:E6,x:1500,y:310,w:520,rot:-4}]},
+};
+const k=location.hash.slice(1)||'search', l=L[k];
+document.body.style.width=l.w+'px';
+document.getElementById('o').innerHTML=`<div class="stage" style="width:${l.w}px;height:${l.h}px">
+ <div class="hd" style="left:${l.hd.x}px;top:${l.hd.y}px;font-size:${l.hd.size}px">What's that plane?<em>Point your phone at it.</em></div>
+ ${l.cards.map(q=>`<div class="cw" style="left:${q.x}px;top:${q.y}px;width:${q.w/0.86}px;margin-left:${-q.w*0.07/0.86}px;transform:rotate(${q.rot}deg)">${card(q.c)}</div>`).join('')}
+</div>`;
+</script>
