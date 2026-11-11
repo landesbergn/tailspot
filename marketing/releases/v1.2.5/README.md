@@ -84,7 +84,10 @@ the two slots show different images:
 
 - **Search results (and universal):** "What's that plane? Point your phone to
   catch it." with the E-6 and L-39 catch cards fanned on the right. This is the
-  image a searcher sees, so it carries slide 1's hook.
+  image a searcher sees. Its line (Noah's, 2026-11-11) adds "catch". Slide 1
+  keeps "Point your phone at it.": the longer line runs to five lines at
+  slide width and pushes the card down, and the first thumbnail needs a short
+  headline.
 - **Header:** "Catch the planes flying overhead." (the 1.2.2 header line) beside
   the C-27J over the Golden Gate (`catch-photos/fw_c27j_golden_gate.jpg`, copied
   to `source/ph/c27j_gg.jpg`), cropped wide around the bracket the app baked in,
