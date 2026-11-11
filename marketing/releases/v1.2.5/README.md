@@ -1,10 +1,26 @@
 # v1.2.5
 
-**Status:** approved by Noah 2026-11-11, ready to upload. All seven slides rendered 2026-11-10 at 1206 × 2622; slides 3–7 redrawn as illustrations the same day, then slides 3, 4, 6 and 7 revised on 2026-11-11. Not uploaded.
+**Status:** approved by Noah 2026-11-11 and **uploaded to App Store Connect the same day** (by Claude, through the API, at Noah's request). Version 1.2.5 is not submitted. All seven slides rendered 2026-11-10 at 1206 × 2622; slides 3–7 redrawn as illustrations the same day, then slides 3, 4, 6 and 7 revised on 2026-11-11.
 
 ## Upload
 
-- Screenshots: App Store Connect → 1.2.5 → iPhone screenshots → drag `screenshots/` in order.
+What is in App Store Connect for 1.2.5 (en-US), as of 2026-11-11:
+
+- **6.9" (`APP_IPHONE_67`)**: `screenshots-6.9in/`, 1320 × 2868. This set also covers
+  6.5" phones, so the old 1284 × 2778 6.5" set was deleted from 1.2.5 (the live 1.2.4
+  listing keeps its own copy).
+- **6.3" (`APP_IPHONE_61`)**: `screenshots/`, 1206 × 2622.
+- **Header**: `creative/header_21x9_3840x1646.png`. **Search results**:
+  `creative/search_3x2_3840x2560.png`. `universal_16x9_5244x2950.png` is in the asset
+  library but not placed.
+
+The creative slots use the App Store Connect API's asset library: upload with
+`POST /v1/appAssetLibraryImages` (category `CREATIVE_ASSETS`, relationship
+`assetLibrary`), commit with `uploaded: true` (no checksum attribute), then delete
+the localization's old `appAssetLibraryPlacements` of that type (one per slot) and
+`POST` a new placement with the image and `appStoreVersionLocalization`.
+
+To do it by hand instead: App Store Connect → 1.2.5 → iPhone screenshots → drag the folders in order.
 - **Size:** App Store Connect rejected 1284 × 2778 for this slot on 2026-11-10 and
   listed 1206 × 2622, 1179 × 2556 (and landscape) as the accepted sizes. This set is
   1206 × 2622. Earlier sets in this folder are 1284 × 2778.
@@ -16,7 +32,10 @@
 
 ## Contents
 
-- `screenshots/01-what-plane.png` … `07-challenges.png`, in upload order
+- `screenshots/01-what-plane.png` … `07-challenges.png`, in upload order (1206 × 2622)
+- `screenshots-6.9in/`: the same slides at 1320 × 2868, rendered from `deck.html` with
+  `--force-device-scale-factor=1.094527363` (1320 × 2870), then resized to exactly
+  1320 × 2868 and flattened (`magick in.png -resize '1320x2868!' -alpha off PNG24:out.png`)
 - `source/deck.html`: the renderer for all seven slides
 - `source/creative.html`: the renderer for the three creative assets (`#header`, `#search`, `#universal`)
 - `source/e6.png`, `source/l39.png`: photo crops for slides 1–2
