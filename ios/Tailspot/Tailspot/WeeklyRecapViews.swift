@@ -300,12 +300,18 @@ struct WeeklyRecapCard: View {
 
             WeeklyRecapDayBars(counts: recap.dayCounts, tint: accent)
 
-            // Opens the catch's detail (WeeklyRecapScreen's stack). Skipped
-            // if that catch was just deleted from its own detail: reading a
-            // deleted SwiftData model crashes, and the Hangar recomputes the
-            // recap on the next count change.
+            // Opens the catch's detail in whichever stack holds the recap
+            // (its own as a sheet, or the Leaderboard's / Profile's when
+            // pushed), so the destination rides on the link rather than a
+            // registered navigationDestination. Skipped if that catch was
+            // just deleted from its own detail: reading a deleted SwiftData
+            // model crashes, and the host recomputes the recap on the next
+            // count change.
             if let standout {
-                NavigationLink(value: recap.rarestRow) {
+                let row = recap.rarestRow
+                NavigationLink {
+                    CatchDetailView(row: row)
+                } label: {
                     standoutRow(standout)
                 }
                 .buttonStyle(.plain)
@@ -396,8 +402,17 @@ struct WeeklyRecapScreen: View {
     /// the on-device cache so a reopen shows it at once, offline included.
     @State private var weeklyRank: Int?
 
-    init(recap: WeeklyRecap, weeklyRank: Int? = nil) {
+    /// How the recap was opened, which decides its exit (the exit rule,
+    /// ios/CLAUDE.md): `.sheet` puts a screen away with the X top right;
+    /// `.pushed` is one level down from the Leaderboard or Profile, so the
+    /// system back chevron top left takes you back (Noah, 2026-11-11: an X
+    /// on a sheet stacked over another sheet's X never lined up).
+    enum Presentation { case sheet, pushed }
+    let presentation: Presentation
+
+    init(recap: WeeklyRecap, weeklyRank: Int? = nil, presentation: Presentation = .sheet) {
         self.recap = recap
+        self.presentation = presentation
         _weeklyRank = State(initialValue: weeklyRank ?? WeeklyRecapRank.cached(weekStart: recap.weekStartKey))
     }
 
@@ -407,23 +422,25 @@ struct WeeklyRecapScreen: View {
     }
 
     var body: some View {
-        // Its own stack so the standout catch can push its detail inside
-        // the sheet (the Hangar's stack sits under the sheet).
-        NavigationStack {
-            // The native toolbar close (not a ChromeButton row) so the X sits
-            // exactly where the Leaderboard's and Profile's do: the recap
-            // opens on top of those sheets, and a few points of drift read
-            // as a jump on open/close (Noah, 2026-11-11).
-            content
-                .toolbar {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button(role: .close) { dismiss() }
-                            .accessibilityLabel("Close recap")
-                    }
+        Group {
+            switch presentation {
+            case .sheet:
+                // Its own stack so the standout catch can push its detail
+                // inside the sheet (the Hangar's stack sits under the sheet).
+                NavigationStack {
+                    content
+                        .toolbar {
+                            ToolbarItem(placement: .topBarTrailing) {
+                                Button(role: .close) { dismiss() }
+                                    .accessibilityLabel("Close recap")
+                            }
+                        }
                 }
-                .navigationDestination(for: HangarRow.self) { row in
-                    CatchDetailView(row: row)
-                }
+            case .pushed:
+                content
+                    .navigationTitle("Your week")
+                    .navigationBarTitleDisplayMode(.inline)
+            }
         }
         .task {
             if let rank = await WeeklyRecapRank.fetch(weekStart: recap.weekStartKey) {

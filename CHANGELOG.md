@@ -19,6 +19,7 @@ Git history + PLAN.md §9 remain the authoritative record.
 - The leaderboard's champion banner is now a gold plaque under the podium, and on the WEEK tab it also shows how you finished last week, with a link to your recap.
 - The plaque shows the champion's final points (frozen on the server when the week or month closed). The recap's X now sits exactly where the leaderboard's does, so it no longer jumps when the recap opens.
 - Champion and your week are now one plaque row: the champion on the left, your finish ("#12 · your week") as a chip on the right Until the rank is known, the chip is just a "Your week ›" button.
+- From the Leaderboard or Profile the recap now opens one level down with the back chevron (titled "Your week"), not as a second sheet whose X never quite lined up with the one under it. The Hangar banner and the Monday notification still open it as a sheet with the X.
 - Finish 1st, 2nd or 3rd and your recap turns gold, silver or bronze, with a medal, "You won the week" / "Second place" / "Third place", and a matching share image.
 - Tap opens the recap card: catches per day with the count on each bar, new tails, the standout catch (tap opens its detail), and last week's final weekly rank, points, new types and the current streak. "Share my week" sends a 9:16 image plus text with the "Weekly Recap" App Store campaign link.
 - Backend: the week leaderboard's `me` adds `lastWeekRank` / `lastWeekPoints` (additive). Until it's deployed the rank shows "—".

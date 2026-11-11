@@ -116,6 +116,17 @@ struct WeeklyRecapEntrySnapshotTests {
             }
             .modelContainer(empty),
             as: "weekly_recap_entry_leaderboard_norecap")
+        // Pushed from the Leaderboard/Profile: the host's bar, titled, no X.
+        await snapshot(
+            NavigationStack {
+                Color.clear.navigationDestination(isPresented: .constant(true)) {
+                    WeeklyRecapScreen(recap: try! #require(WeeklyRecap.lastWeek(
+                        catches: try! container.mainContext.fetch(FetchDescriptor<Catch>()))),
+                                      presentation: .pushed)
+                }
+            }
+            .modelContainer(container),
+            as: "weekly_recap_pushed")
         // Rank not served yet: the chip is just a "Your week ›" button.
         defaults.removeObject(forKey: WeeklyRecapRank.cacheKey)
         await snapshot(

@@ -191,8 +191,10 @@ struct LeaderboardScreen: View {
         .task(id: catches.count) {
             weeklyRecap = WeeklyRecap.lastWeek(catches: catches)
         }
-        .sheet(isPresented: $showingWeeklyRecap) {
-            if let weeklyRecap { WeeklyRecapScreen(recap: weeklyRecap) }
+        // Pushed, not a sheet: one level down, so the back chevron
+        // takes you back (the exit rule; a sheet's X over this one's never lined up).
+        .navigationDestination(isPresented: $showingWeeklyRecap) {
+            if let weeklyRecap { WeeklyRecapScreen(recap: weeklyRecap, presentation: .pushed) }
         }
         .task(id: selectedWindow) {
             guard !debugSeeded else { return }
