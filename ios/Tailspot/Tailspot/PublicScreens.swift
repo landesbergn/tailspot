@@ -383,16 +383,29 @@ struct LeaderboardScreen: View {
                             .font(Brand.Font.caption)
                             .foregroundStyle(Brand.Color.textSecondary)
                     } else {
-                        Text(ChampionBanner.eyebrow(count: champions.count, window: window))
-                            .font(Brand.Font.mono(size: 10, weight: .bold, relativeTo: .caption2))
-                            .tracking(1.2)
-                            .foregroundStyle(Brand.Color.podiumGold)
-                            .layoutPriority(1)
-                        Text(ChampionBanner.names(champions))
-                            .font(Brand.Font.mono(size: 13, weight: .bold, relativeTo: .footnote))
-                            .foregroundStyle(Brand.Color.textPrimary)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.7)
+                        // Two lines so the winner's handle never truncates to
+                        // make room for the score: eyebrow, then "@name 1,682 pts".
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(ChampionBanner.eyebrow(count: champions.count, window: window))
+                                .font(Brand.Font.mono(size: 10, weight: .bold, relativeTo: .caption2))
+                                .tracking(1.2)
+                                .foregroundStyle(Brand.Color.podiumGold)
+                            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                Text(ChampionBanner.names(champions))
+                                    .font(Brand.Font.mono(size: 14, weight: .bold, relativeTo: .footnote))
+                                    .foregroundStyle(Brand.Color.textPrimary)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.7)
+                                if let points = ChampionBanner.points(champions) {
+                                    Text(points)
+                                        .font(Brand.Font.mono(size: 12, weight: .regular, relativeTo: .caption))
+                                        .foregroundStyle(Brand.Color.textSecondary)
+                                        .lineLimit(1)
+                                        .fixedSize()
+                                }
+                            }
+                        }
+                        Spacer(minLength: 0)
                     }
                 }
                 .padding(.horizontal, 12)

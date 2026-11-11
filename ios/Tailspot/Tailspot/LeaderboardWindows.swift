@@ -89,6 +89,18 @@ nonisolated enum ChampionBanner {
         }
     }
 
+    /// Points line: "1,682 pts", or "410 pts each" on a shared crown. The
+    /// server froze this total when the window closed (`weekly_champions` /
+    /// `monthly_champions.points`), so a later rescore never changes it.
+    /// Tied champions share one total by definition; `max` is just a safe pick.
+    /// Nil when there's no champion.
+    static func points(_ champions: [LeaderboardChampion]) -> String? {
+        guard let top = champions.map(\.points).max() else { return nil }
+        let unit = top == 1 ? "pt" : "pts"
+        let each = champions.count > 1 ? " each" : ""
+        return "\(top.formatted(.number)) \(unit)\(each)"
+    }
+
     /// The zero-champion week (empty `champions` array — the board reset
     /// with nobody on it).
     static let noChampionTitle = "NO CHAMPION CROWNED"

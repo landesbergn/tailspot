@@ -334,8 +334,17 @@ struct WeeklyRecapScreen: View {
         // Its own stack so the standout catch can push its detail inside
         // the sheet (the Hangar's stack sits under the sheet).
         NavigationStack {
+            // The native toolbar close (not a ChromeButton row) so the X sits
+            // exactly where the Leaderboard's and Profile's do: the recap
+            // opens on top of those sheets, and a few points of drift read
+            // as a jump on open/close (Noah, 2026-11-11).
             content
-                .toolbar(.hidden, for: .navigationBar)
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button(role: .close) { dismiss() }
+                            .accessibilityLabel("Close recap")
+                    }
+                }
                 .navigationDestination(for: HangarRow.self) { row in
                     CatchDetailView(row: row)
                 }
@@ -349,12 +358,6 @@ struct WeeklyRecapScreen: View {
 
     private var content: some View {
         VStack(spacing: 0) {
-            HStack {
-                Spacer()
-                ChromeButton(.close, accessibilityLabel: "Close recap") { dismiss() }
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 10)
             ScrollView {
                 VStack(spacing: 16) {
                     WeeklyRecapCard(recap: recap, weeklyRank: weeklyRank)

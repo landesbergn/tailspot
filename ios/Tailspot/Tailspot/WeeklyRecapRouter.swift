@@ -61,11 +61,8 @@ struct WeeklyRecapSheet: View {
             if let recap {
                 WeeklyRecapScreen(recap: recap)
             } else if loaded {
+                NavigationStack {
                 VStack(spacing: 16) {
-                    HStack {
-                        Spacer()
-                        ChromeButton(.close, accessibilityLabel: "Close") { dismiss() }
-                    }
                     Spacer()
                     Text("No catches last week")
                         .font(.title3.weight(.semibold))
@@ -80,6 +77,13 @@ struct WeeklyRecapSheet: View {
                 .padding(20)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(Brand.Color.bgPrimary)
+                // Same native close as WeeklyRecapScreen, so the X never moves.
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button(role: .close) { dismiss() }
+                    }
+                }
+                }
             } else {
                 Brand.Color.bgPrimary
             }
