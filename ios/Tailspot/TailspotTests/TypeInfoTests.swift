@@ -26,6 +26,7 @@ struct TypeInfoTests {
         let version: Int
         let generated: String
         let entries: [String: TypeInfo]
+        let typecodes: [String: TypeInfo]?
     }
 
     private func bundledFile() throws -> File {
@@ -115,7 +116,8 @@ struct TypeInfoTests {
     }
 
     @Test func specsArePlausibleWhenPresent() throws {
-        for (key, info) in try bundledFile().entries {
+        let file = try bundledFile()
+        for (key, info) in file.entries.merging(file.typecodes ?? [:], uniquingKeysWith: { a, _ in a }) {
             if let y = info.firstFlightYear { #expect((1900...2030).contains(y), "\(key): \(y)") }
             if let n = info.numberBuilt { #expect(n > 0, "\(key): \(n)") }
             if let w = info.wingspanMeters { #expect((3...120).contains(w), "\(key): wingspan \(w)") }
@@ -171,12 +173,43 @@ struct TypeInfoTests {
         let candidates = AircraftNaming.table.keys.sorted().filter { tc in
             AircraftNaming.dimensionsFeet(forTypecode: tc) != nil
                 && TypeInfoStore.entry(for: mk(typecode: tc)) == nil
+                && TypeInfoStore.info(forTypecode: tc) == nil
         }
         let tc = try #require(candidates.first)
         let info = try #require(TypeInfoStore.info(for: mk(typecode: tc)))
         #expect(info.entryId == "")
         #expect(info.wikipediaTitle == nil && info.photo == nil)
         #expect(info.wingspanMeters != nil || info.lengthMeters != nil)
+    }
+
+    // MARK: - Per-typecode records (the rare tail)
+
+    @Test func typecodeRecordsAreKeyedByRealTypecodes() throws {
+        let typecodes = try #require(try bundledFile().typecodes)
+        #expect(typecodes.count > 500, "Expected the typecode pass to cover the tail, got \(typecodes.count)")
+        for (tc, info) in typecodes {
+            #expect(tc == tc.uppercased(), "\(tc) is not uppercase")
+            #expect(AircraftNaming.table[tc] != nil, "\(tc) is not in AircraftTypes.json")
+            #expect(info.entryId == "")
+            #expect(info.wikipediaTitle?.isEmpty == false, "\(tc) has no article")
+        }
+    }
+
+    @Test func typecodeOnlyCatchGetsItsArticle() throws {
+        // A type that fills no family slot but has its own record: the card
+        // back must get the description (the EDRA Paturi report, 2026-11-10).
+        let typecodes = try #require(try bundledFile().typecodes)
+        let tc = try #require(typecodes.keys.sorted().first { TypeInfoStore.entry(for: mk(typecode: $0)) == nil })
+        let info = try #require(TypeInfoStore.info(for: mk(typecode: tc)))
+        #expect(info.entryId == "")
+        #expect(info.wikipediaTitle == typecodes[tc]?.wikipediaTitle)
+        #expect(TypeInfoStore.info(forTypecode: tc.lowercased()) != nil)
+    }
+
+    @Test func familyArticleBeatsTypecodeRecord() throws {
+        let family = try #require(TypeInfoStore.info(forEntryId: "f737-800"))
+        let resolved = try #require(TypeInfoStore.info(for: mk(typecode: "B738")))
+        #expect(resolved.wikipediaTitle == family.wikipediaTitle)
     }
 
     @Test func feetToMetresRoundsToTheCentimetre() {

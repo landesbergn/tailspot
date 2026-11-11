@@ -5,6 +5,13 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-11-10 — Card-back descriptions for the rare tail (branch `claude/missing-back-description-d34937`)
+
+- Tester report: an EDRA Paturi card back had no description. Only the 302 family-set variants had a Wikipedia article bundled; everything outside the sets showed none.
+- The TypeInfo generator now matches every other typecode in `AircraftTypes.json` to its article, with strict checks (aircraft short description, matching designator or numbers, no disambiguation pages). 885 of 2,311 now have one. Wikidata specs only ride along when the article names the exact variant.
+- The card back uses the family article when there is one, else the typecode's. Family records are unchanged.
+- The Paturi stays blank: Wikipedia has no article on it.
+
 ## 2026-11-09 — Weekly recap in the Hangar (branch `claude/weekly-recap`)
 
 - New banner above the Hangar's segment switcher: "YOUR WEEK · NOV 2 – 8 / 9 planes caught", shown all week for the previous Monday-to-Sunday week when it has catches. X hides it until the next week.
