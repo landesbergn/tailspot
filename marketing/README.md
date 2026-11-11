@@ -131,8 +131,12 @@ rather than a pasted screenshot.
 
 ## Export sizes
 
-App Store Connect's iPhone slot accepts **1242 × 2688** or **1284 × 2778**.
-The deck exports five sizes so the upload never bounces:
+Which sizes App Store Connect accepts depends on the screenshot slot, and it
+changed under us. Sets up to v1.2.2 went up at **1284 × 2778**. On 2026-11-10 the
+1.2.5 slot rejected that size ("File dimensions are invalid") and listed
+**1206 × 2622** and **1179 × 2556** (plus landscape) instead, so v1.2.5 is
+1206 × 2622. Check the sizes the error lists before re-rendering.
+The deck exports five sizes so one of them fits:
 
 `1320×2868` · `1284×2778` · `1242×2688` · `1206×2622` · `1125×2436`
 
