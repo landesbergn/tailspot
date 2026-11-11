@@ -439,25 +439,37 @@ struct LeaderboardScreen: View {
     /// The right-hand chip: "#12 / your week ›". On a podium finish the rank
     /// takes its medal colour. Before the rank is known (old server, first
     /// open offline) it shows the week's plane count instead.
+    /// With last week's final rank: "#12" over "your week ›". Without it
+    /// (rank not served yet), just a "Your week ›" button: a bare plane
+    /// count up there read as a score.
     private func yourWeekChip(_ recap: WeeklyRecap, rank: Int?) -> some View {
         let place = WeeklyRecapPlace(rank: rank)
-        let top = rank.map { "#\($0.formatted())" } ?? recap.catchCount.formatted()
-        let spokenTop = rank.map { "You finished \(Ordinal.english($0))" }
-            ?? (recap.catchCount == 1 ? "You caught 1 plane" : "You caught \(recap.catchCount) planes")
+        let spoken = rank.map { "You finished \(Ordinal.english($0)) last week. Your week" } ?? "Your week"
         return VStack(spacing: 1) {
-            Text(top)
-                .font(Brand.Font.mono(size: 16, weight: .bold, relativeTo: .subheadline))
-                .foregroundStyle(place?.tint ?? Brand.Color.cyan)
+            if let rank {
+                Text("#\(rank.formatted())")
+                    .font(Brand.Font.mono(size: 16, weight: .bold, relativeTo: .subheadline))
+                    .foregroundStyle(place?.tint ?? Brand.Color.cyan)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                HStack(spacing: 3) {
+                    Text("your week")
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 9, weight: .bold))
+                }
+                .font(Brand.Font.caption)
+                .foregroundStyle(Brand.Color.textSecondary)
                 .lineLimit(1)
-                .minimumScaleFactor(0.7)
-            HStack(spacing: 3) {
-                Text(rank == nil ? (recap.catchCount == 1 ? "plane ·" : "planes ·") + " your week" : "your week")
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 9, weight: .bold))
+            } else {
+                HStack(spacing: 4) {
+                    Text("Your week")
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .bold))
+                }
+                .font(Brand.Font.body.weight(.semibold))
+                .foregroundStyle(Brand.Color.cyan)
+                .lineLimit(1)
             }
-            .font(Brand.Font.caption)
-            .foregroundStyle(Brand.Color.textSecondary)
-            .lineLimit(1)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 7)
@@ -471,7 +483,7 @@ struct LeaderboardScreen: View {
         }
         .contentShape(.rect)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(spokenTop) last week. Your week")
+        .accessibilityLabel(spoken)
         .accessibilityHint("Opens your weekly recap")
     }
 

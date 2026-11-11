@@ -116,6 +116,16 @@ struct WeeklyRecapEntrySnapshotTests {
             }
             .modelContainer(empty),
             as: "weekly_recap_entry_leaderboard_norecap")
+        // Rank not served yet: the chip is just a "Your week ›" button.
+        defaults.removeObject(forKey: WeeklyRecapRank.cacheKey)
+        await snapshot(
+            NavigationStack {
+                LeaderboardScreen(_debugWindows: [.week: LeaderboardResponse(
+                    entries: entries, me: MyStanding(rank: 3, points: 180), window: "week",
+                    champions: champ)])
+            }
+            .modelContainer(container),
+            as: "weekly_recap_entry_leaderboard_norank")
         // Podium finishes: the plaque chip takes the medal colour, and the
         // recap screen + share image open with the medal.
         for (rank, name) in [(1, "gold"), (2, "silver"), (3, "bronze")] {
