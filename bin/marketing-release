@@ -5,8 +5,9 @@
 #   bin/marketing-release v1.2.4 --force    # overwrite an existing folder
 #
 # What it copies:
-#   screenshots/  the iPhone set at 1284x2778 (the size App Store Connect's
-#                 iPhone slot takes) from app-store-screenshots/export/,
+#   screenshots/  the iPhone set at 1206x2622 from app-store-screenshots/export/
+#                 (App Store Connect rejected 1284x2778 for the slot on 2026-11-10;
+#                 sets through v1.2.2 went up at 1284x2778),
 #                 renamed by slide: 01-ar-catch.png, 02-collection-card.png, …
 #   creative/     header / search results / universal from app-store-creative/out/
 # and writes a README.md stub (status: ready, not uploaded) plus a row in
@@ -25,7 +26,7 @@ if [[ ! "$version" =~ ^v[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
   exit 2
 fi
 
-shots_src="$repo/marketing/app-store-screenshots/export/ios/iphone/1284x2778/en"
+shots_src="$repo/marketing/app-store-screenshots/export/ios/iphone/1206x2622/en"
 creative_src="$repo/marketing/app-store-creative/out"
 deck="$repo/marketing/app-store-screenshots/app-store-screenshots.json"
 dst="$repo/marketing/releases/$version"

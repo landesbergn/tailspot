@@ -15,7 +15,15 @@ marketing/
    └─ export/                          current store-ready PNGs (gitignored)
 ```
 
-## The seven slides
+**Since v1.2.5 the store set is not made here.** It is rendered by
+`releases/v1.2.5/source/deck.html` (HTML illustrations, no device frames; see that
+folder's README). The editor and the capture pipeline below still work, but
+`app-store-screenshots.json` holds the 1.2.2 headlines and layouts, so exporting
+from it reproduces the old set. For the next release, copy the latest
+`releases/<version>/source/` forward and edit it, or port the new look into the
+editor first.
+
+## The seven slides (deck editor, through v1.2.2)
 
 Files are named for the slide they fill, so the deck and the folder agree.
 **This was not always true** — they used to be `01.png`…`07.png`, where slide 2

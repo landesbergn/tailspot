@@ -75,12 +75,18 @@ headlines and layouts.
 ## Re-render
 
 ```bash
-cd marketing/releases/v1.2.5/source
+src="$PWD/marketing/releases/v1.2.5/source"; out=$(mktemp -d)
 for n in 1 2 3 4 5 6 7; do
   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new \
     --hide-scrollbars --force-device-scale-factor=1 --window-size=1206,2622 \
-    --virtual-time-budget=3000 --screenshot="$PWD/out-$n.png" "file://$PWD/deck.html#$n"
+    --virtual-time-budget=3000 --user-data-dir="$out/profile" \
+    --screenshot="$out/$n.png" "file://$src/deck.html#$n"
 done
+echo "$out"
 ```
+
+Run it from the repo root. The PNGs land in a temp folder, not in `source/`, and
+the separate profile keeps your own Chrome out of it. The committed screenshots were
+checked against this output pixel for pixel (`magick compare -metric AE`).
 
 The type uses the Mac's system fonts (SF Pro, SF Mono), so render on a Mac.
