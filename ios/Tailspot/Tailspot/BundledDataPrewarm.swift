@@ -3,7 +3,8 @@
 //  Tailspot
 //
 //  Decodes the bundled reference tables that are first needed LATER in a
-//  session (airlines, airports, the FAA registry) off the main thread,
+//  session (airlines, airports, the FAA registry, the card-back TypeInfo)
+//  off the main thread,
 //  shortly after launch.
 //
 //  Each table is a lazy `static let` — decoded on first touch. Without
@@ -29,6 +30,8 @@ nonisolated enum BundledDataPrewarm {
             _ = Airlines.bundled.count
             _ = GuessOptions.airportsByIcao.count
             _ = FAARegistry.record(forIcao24: "000000")
+            // ~580 KB; first needed by the first card-back flip.
+            _ = TypeInfoStore.info(forEntryId: "")
         }
     }
 }
