@@ -5,6 +5,14 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-11-11 — Bonus round shows up more often (branch `feat/guess-round-cadence-2in3`)
+
+- PostHog: since the 2026-08-25 bump, about 13% of catches got the route bonus round, sliding to about 10–11% in early November. Players answer about 88% of the rounds they see.
+- `GuessScheduler` now rolls 2-in-3 (was 1-in-2) with no forced gap after a round (was 1 catch). Eligible catches go from about 1 in 3 getting a round to about 2 in 3, so roughly 25% of all catches instead of 13%. Noah's call.
+- The gap guard stays wired; `minimumGapCatches` set back to 1 restores it.
+- Eligibility is the bigger limit: only about 40% of catches are fresh single catches with a usable route. Not changed here.
+- Client-only cadence change: no backend, scoring or schema change. `GuessSchedulerTests` updated for back-to-back rounds and the new long-run band.
+
 ## 2026-11-10 — Card-back descriptions for the rare tail (branch `claude/missing-back-description-d34937`)
 
 - Tester report: an EDRA Paturi card back had no description. Only the 302 family-set variants had a Wikipedia article bundled; everything outside the sets showed none.

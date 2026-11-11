@@ -3,8 +3,9 @@
 //  TailspotTests
 //
 //  Pins the ROUTE bonus-round cadence rules (plan 2026-07-09-001 D3;
-//  route-only per Noah 2026-07-09; re-balanced more frequent 2026-08-25 per
-//  Noah): ~1-in-2 roll on eligible catches, minimum 1-catch gap, never the
+//  route-only per Noah 2026-07-09; re-balanced more frequent 2026-08-25 and
+//  again 2026-11-11 per Noah): ~2-in-3 roll on eligible catches, no forced
+//  gap after a round, never the
 //  user's very first catch, eligibility = fresh single non-duplicate
 //  non-suspect with a renderable route. Everything runs against SeededRNG so
 //  the distribution assertions are exact replays, not flakes.
@@ -84,12 +85,12 @@ struct GuessSchedulerCoreTests {
 
     // ── Minimum gap ─────────────────────────────────────────────────────
 
-    @Test func minimumGapBlocksTheCatchAfterARound() {
+    @Test func noForcedGapAfterARound() {
         var rng = ConstantRNG(value: 0)
-        // Round fired → gap 0: blocked even though the roll would hit.
-        #expect(decide(catchesSinceLastRound: 0, rng: &rng) == nil)
-        // One full catch later the roll is allowed again (gap lowered to 1
-        // in the 2026-08-25 re-balance).
+        // Gap is 0 since 2026-11-11: the catch right after a round may fire
+        // too — only the roll paces rounds now.
+        #expect(GuessScheduler.minimumGapCatches == 0)
+        #expect(decide(catchesSinceLastRound: 0, rng: &rng) != nil)
         #expect(decide(catchesSinceLastRound: 1, rng: &rng) != nil)
         #expect(decide(catchesSinceLastRound: 2, rng: &rng) != nil)
         // nil = never fired → no gap constraint.
@@ -103,7 +104,7 @@ struct GuessSchedulerCoreTests {
 
     // ── Cadence distribution ────────────────────────────────────────────
 
-    @Test func cadenceIsRoughlyOneInTwoWhenUnconstrained() {
+    @Test func cadenceIsRoughlyTwoInThreeWhenUnconstrained() {
         // Pure roll probability, gap constraint out of the picture
         // (catchesSinceLastRound: nil each time).
         var rng = SeededRNG(seed: 42)
@@ -163,15 +164,15 @@ struct GuessSchedulerWrapperTests {
         #expect(defaults.integer(forKey: GuessScheduler.catchCountKey) == 2)
     }
 
-    @Test func gapIsEnforcedAcrossCalls() {
+    @Test func backToBackRoundsAllowedAcrossCalls() {
         let defaults = makeDefaults()
         let scheduler = GuessScheduler(defaults: defaults)
         var rng = ConstantRNG(value: 0)
 
         _ = recordCatch(scheduler, rng: &rng)                     // #1 guarded
         #expect(recordCatch(scheduler, rng: &rng) != nil)         // #2 fires
-        #expect(recordCatch(scheduler, rng: &rng) == nil)         // #3 gap 0
-        #expect(recordCatch(scheduler, rng: &rng) != nil)         // #4 gap 1 → fires
+        #expect(recordCatch(scheduler, rng: &rng) != nil)         // #3 no gap → fires
+        #expect(defaults.object(forKey: GuessScheduler.sinceLastRoundKey) as? Int == 0)
     }
 
     @Test func duplicatesArePureNoOps() {
@@ -192,8 +193,11 @@ struct GuessSchedulerWrapperTests {
 
         _ = recordCatch(GuessScheduler(defaults: defaults), rng: &rng)   // #1
         #expect(recordCatch(GuessScheduler(defaults: defaults), rng: &rng) != nil)  // #2 fires
-        // Fresh instance, same defaults → the gap from the fired round holds.
-        #expect(recordCatch(GuessScheduler(defaults: defaults), rng: &rng) == nil)
+        // Fresh instance, same defaults → it sees both counters from before.
+        #expect(defaults.integer(forKey: GuessScheduler.catchCountKey) == 2)
+        #expect(defaults.object(forKey: GuessScheduler.sinceLastRoundKey) as? Int == 0)
+        _ = recordCatch(GuessScheduler(defaults: defaults), rng: &rng)   // #3
+        #expect(defaults.integer(forKey: GuessScheduler.catchCountKey) == 3)
     }
 
     @Test func longRunNeverViolatesGapAndLandsNearBudget() {
@@ -206,14 +210,15 @@ struct GuessSchedulerWrapperTests {
         for i in 0..<catches where recordCatch(scheduler, rng: &rng) != nil {
             firedAt.append(i)
         }
-        // No two rounds closer than the minimum gap (1 catch between).
+        // No two rounds closer than the minimum gap (0 since 2026-11-11, so
+        // this only rules out two rounds on the same catch).
         for pair in zip(firedAt, firedAt.dropFirst()) {
             #expect(pair.1 - pair.0 > GuessScheduler.minimumGapCatches)
         }
-        // Long-run rate: a renewal cycle is 1 forced skip + Geometric(1/2)
-        // (mean 2) rolls → ~1 round per 3 catches. Assert a generous band —
-        // more frequent since 2026-08-25, but still never per-catch.
+        // Long-run rate: no gap, so every catch after the first rolls at 2/3.
+        // Assert a band — more frequent since 2026-11-11, but still clearly
+        // not every catch.
         let rate = Double(firedAt.count) / Double(catches)
-        #expect(rate > 0.28 && rate < 0.38, "long-run round rate \(rate) out of band")
+        #expect(rate > 0.62 && rate < 0.71, "long-run round rate \(rate) out of band")
     }
 }
