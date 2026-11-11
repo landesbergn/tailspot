@@ -105,6 +105,9 @@ final class GuessScheduler {
     ///     user's very first catch → never fire).
     ///   - catchesSinceLastRound: recorded catches since a round last fired,
     ///     nil if no round has ever fired.
+    ///   - minimumGap: the gap guard; defaults to `minimumGapCatches`. A
+    ///     parameter so tests keep the guard covered while production runs
+    ///     it at 0.
     /// - Returns: `.route` when a route round should fire, or nil for the
     ///   (common) no-round path.
     nonisolated static func decide(
@@ -114,6 +117,7 @@ final class GuessScheduler {
         routeAvailable: Bool,
         priorCatchCount: Int,
         catchesSinceLastRound: Int?,
+        minimumGap: Int = minimumGapCatches,
         using rng: inout some RandomNumberGenerator
     ) -> GuessKind? {
         // Eligibility guards — cheap, RNG-free, so an ineligible catch never
@@ -123,7 +127,7 @@ final class GuessScheduler {
         // Never the user's very first catch (activation protection).
         guard priorCatchCount >= 1 else { return nil }
         // Minimum gap after the last fired round.
-        if let gap = catchesSinceLastRound, gap < minimumGapCatches { return nil }
+        if let gap = catchesSinceLastRound, gap < minimumGap { return nil }
 
         // The ~2-in-3 roll.
         guard Double.random(in: 0..<1, using: &rng) < fireProbability else { return nil }

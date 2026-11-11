@@ -36,6 +36,7 @@ struct GuessSchedulerCoreTests {
         routeAvailable: Bool = true,
         priorCatchCount: Int = 10,
         catchesSinceLastRound: Int? = nil,
+        minimumGap: Int = GuessScheduler.minimumGapCatches,
         rng: inout some RandomNumberGenerator
     ) -> GuessKind? {
         GuessScheduler.decide(
@@ -45,6 +46,7 @@ struct GuessSchedulerCoreTests {
             routeAvailable: routeAvailable,
             priorCatchCount: priorCatchCount,
             catchesSinceLastRound: catchesSinceLastRound,
+            minimumGap: minimumGap,
             using: &rng
         )
     }
@@ -95,6 +97,16 @@ struct GuessSchedulerCoreTests {
         #expect(decide(catchesSinceLastRound: 2, rng: &rng) != nil)
         // nil = never fired → no gap constraint.
         #expect(decide(catchesSinceLastRound: nil, rng: &rng) != nil)
+    }
+
+    @Test func gapGuardStillWorksWhenRestored() {
+        // The guard is off in production (gap 0) but stays wired so setting
+        // minimumGapCatches back to 1 restores it. Pin that path here.
+        var rng = ConstantRNG(value: 0)
+        #expect(decide(catchesSinceLastRound: 0, minimumGap: 1, rng: &rng) == nil)
+        #expect(decide(catchesSinceLastRound: 1, minimumGap: 1, rng: &rng) != nil)
+        #expect(decide(catchesSinceLastRound: 1, minimumGap: 2, rng: &rng) == nil)
+        #expect(decide(catchesSinceLastRound: nil, minimumGap: 2, rng: &rng) != nil)
     }
 
     @Test func firesRouteWhenEligible() {
@@ -193,14 +205,16 @@ struct GuessSchedulerWrapperTests {
 
         _ = recordCatch(GuessScheduler(defaults: defaults), rng: &rng)   // #1
         #expect(recordCatch(GuessScheduler(defaults: defaults), rng: &rng) != nil)  // #2 fires
-        // Fresh instance, same defaults → it sees both counters from before.
-        #expect(defaults.integer(forKey: GuessScheduler.catchCountKey) == 2)
         #expect(defaults.object(forKey: GuessScheduler.sinceLastRoundKey) as? Int == 0)
-        _ = recordCatch(GuessScheduler(defaults: defaults), rng: &rng)   // #3
+        // Fresh instance, same defaults, a roll that never hits: it must read
+        // both persisted counters back and advance them (not restart at nil).
+        var miss = ConstantRNG(value: .max)
+        #expect(recordCatch(GuessScheduler(defaults: defaults), rng: &miss) == nil)  // #3
         #expect(defaults.integer(forKey: GuessScheduler.catchCountKey) == 3)
+        #expect(defaults.object(forKey: GuessScheduler.sinceLastRoundKey) as? Int == 1)
     }
 
-    @Test func longRunNeverViolatesGapAndLandsNearBudget() {
+    @Test func longRunLandsNearBudget() {
         let defaults = makeDefaults()
         let scheduler = GuessScheduler(defaults: defaults)
         var rng = SeededRNG(seed: 2026)
@@ -210,11 +224,8 @@ struct GuessSchedulerWrapperTests {
         for i in 0..<catches where recordCatch(scheduler, rng: &rng) != nil {
             firedAt.append(i)
         }
-        // No two rounds closer than the minimum gap (0 since 2026-11-11, so
-        // this only rules out two rounds on the same catch).
-        for pair in zip(firedAt, firedAt.dropFirst()) {
-            #expect(pair.1 - pair.0 > GuessScheduler.minimumGapCatches)
-        }
+        // No gap invariant to check here since 2026-11-11 (gap 0); the guard
+        // itself is pinned by gapGuardStillWorksWhenRestored.
         // Long-run rate: no gap, so every catch after the first rolls at 2/3.
         // Assert a band — more frequent since 2026-11-11, but still clearly
         // not every catch.
