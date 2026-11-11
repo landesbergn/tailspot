@@ -608,6 +608,10 @@ struct WeeklyRecapShareImage: View {
                 .foregroundStyle(Brand.Color.textPrimary)
                 .lineLimit(2)
                 .minimumScaleFactor(0.8)
+                // Keep both lines: on the fixed canvas the podium badge
+                // above used to squeeze a big week ("I caught 470 planes
+                // this w…") to one; the photo gives up the height instead.
+                .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, place == nil ? 22 : 6)
             Text(recap.sharedSubline)
                 .font(.system(size: 14))
@@ -617,7 +621,10 @@ struct WeeklyRecapShareImage: View {
             VStack(alignment: .leading, spacing: 0) {
                 RevealPhoto(url: s.photoURL, focus: s.focus)
                     .frame(maxWidth: .infinity)
-                    .frame(height: 180)
+                    // The one flexible block on the fixed canvas: it gives
+                    // up height when the text above runs long (two-line
+                    // headline + podium badge), so nothing else shrinks.
+                    .frame(minHeight: 110, idealHeight: 180, maxHeight: 180)
                     .clipped()
                 VStack(alignment: .leading, spacing: 3) {
                     Text(s.eyebrow)
@@ -675,6 +682,7 @@ struct WeeklyRecapShareImage: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
+            .fixedSize(horizontal: false, vertical: true)
             .padding(.top, 20)
 
             Spacer(minLength: 12)

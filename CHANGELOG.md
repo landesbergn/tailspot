@@ -24,6 +24,7 @@ Git history + PLAN.md §9 remain the authoritative record.
 - Tap opens the recap card: catches per day with the count on each bar, new tails, the standout catch (tap opens its detail), and last week's final weekly rank, points, new types and the current streak. "Share my week" sends a 9:16 image plus text with the "Weekly Recap" App Store campaign link.
 - Backend: the week leaderboard's `me` adds `lastWeekRank` / `lastWeekPoints` (additive). Until it's deployed the rank shows "—".
 - Everything except the rank is computed on the device from the Hangar, with the streak engine's frozen day keys.
+- Stress pass at the top of the board (470 catches in a week, a 140-catch day, 90 new types, a 312-day streak, five-digit points, a four-digit rank, a week spanning two months): everything fits. One fix: on the podium share image the badge line squeezed a long headline to "I caught 470 planes this w…"; the headline now keeps both lines and the photo gives up the height. `WeeklyRecapStressSnapshotTests` keeps the renders.
 - Events: `weekly_recap_shown`, `weekly_recap_opened`, `weekly_recap_dismissed`, `weekly_recap_shared`.
 - Tests: `WeeklyRecapTests` (week math, new counts, standout, points, copy, presentation) and a `WeeklyRecapSnapshotTests` visual pass.
 
