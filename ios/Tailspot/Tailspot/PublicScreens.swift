@@ -363,62 +363,52 @@ struct LeaderboardScreen: View {
 
     // MARK: - Champion plaque (week/month tabs)
 
-    /// Gold plaque under the podium: last window's champion(s), or the quiet
-    /// "no champion" line. On the WEEK tab a second row holds the viewer's
-    /// own last week and opens their weekly recap.
-    @ViewBuilder
+    /// Gold plaque under the podium: last window's champion(s) on the left,
+    /// or the quiet "no champion" line. On the WEEK tab, when you caught
+    /// something last week, a chip on the right shows how you finished and
+    /// opens your recap (canvas option O, Noah 2026-11-11). Champion and
+    /// "your week" are one row, one thing.
     private func championPlaque(_ champions: [LeaderboardChampion]?,
                                 window: LeaderboardWindow,
                                 lastWeek: WeeklyRecap?,
                                 response: LeaderboardResponse) -> some View {
-        VStack(spacing: 0) {
+        let quiet = champions?.isEmpty ?? true
+        return HStack(spacing: 10) {
             if let champions {
-                HStack(spacing: 8) {
-                    Image(systemName: "trophy")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(champions.isEmpty ? Brand.Color.textTertiary : Brand.Color.podiumGold)
-                        .accessibilityHidden(true)
+                Image(systemName: "trophy")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(quiet ? Brand.Color.textTertiary : Brand.Color.podiumGold)
+                    .accessibilityHidden(true)
+                Group {
                     if champions.isEmpty {
                         Text(ChampionBanner.noChampionSubtitle(window: window))
                             .font(Brand.Font.caption)
                             .foregroundStyle(Brand.Color.textSecondary)
                     } else {
-                        // Two lines so the winner's handle never truncates to
-                        // make room for the score: eyebrow, then "@name 1,682 pts".
                         VStack(alignment: .leading, spacing: 3) {
                             Text(ChampionBanner.eyebrow(count: champions.count, window: window))
                                 .font(Brand.Font.mono(size: 10, weight: .bold, relativeTo: .caption2))
                                 .tracking(1.2)
                                 .foregroundStyle(Brand.Color.podiumGold)
-                            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                                Text(ChampionBanner.names(champions))
-                                    .font(Brand.Font.mono(size: 14, weight: .bold, relativeTo: .footnote))
-                                    .foregroundStyle(Brand.Color.textPrimary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
+                            Text(ChampionBanner.names(champions))
+                                .font(Brand.Font.mono(size: 14, weight: .bold, relativeTo: .footnote))
+                                .foregroundStyle(Brand.Color.textPrimary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
+                            if let points = ChampionBanner.points(champions) {
+                                Text(points)
+                                    .font(Brand.Font.mono(size: 12, weight: .regular, relativeTo: .caption))
+                                    .foregroundStyle(Brand.Color.textSecondary)
                                     .lineLimit(1)
-                                    .minimumScaleFactor(0.7)
-                                if let points = ChampionBanner.points(champions) {
-                                    Text(points)
-                                        .font(Brand.Font.mono(size: 12, weight: .regular, relativeTo: .caption))
-                                        .foregroundStyle(Brand.Color.textSecondary)
-                                        .lineLimit(1)
-                                        .fixedSize()
-                                }
                             }
                         }
-                        Spacer(minLength: 0)
                     }
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 11)
-                .frame(maxWidth: .infinity)
-                .background(champions.isEmpty ? Brand.Color.bgElevated : Brand.Color.podiumGold.opacity(0.12))
-                .overlay(alignment: .top) {
-                    Rectangle()
-                        .fill(champions.isEmpty ? Brand.Color.textTertiary.opacity(0.4) : Brand.Color.podiumGold)
-                        .frame(height: 2)
                 }
                 .accessibilityElement(children: .combine)
             }
+            Spacer(minLength: 0)
             if let lastWeek {
                 let rank = WeeklyRecapRank.rank(from: response, weekStart: lastWeek.weekStartKey)
                     ?? WeeklyRecapRank.cached(weekStart: lastWeek.weekStartKey)
@@ -427,45 +417,61 @@ struct LeaderboardScreen: View {
                                               extra: ["via": .string("leaderboard")])
                     showingWeeklyRecap = true
                 } label: {
-                    lastWeekRow(lastWeek, rank: rank)
+                    yourWeekChip(lastWeek, rank: rank)
                 }
                 .buttonStyle(.plain)
-                .padding(.top, champions == nil ? 0 : 2)
-                .background(Brand.Color.bgPrimary)
+            }
+        }
+        .padding(.leading, 14)
+        .padding(.trailing, lastWeek == nil ? 14 : 10)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, minHeight: 60)
+        .background(champions == nil || quiet ? Brand.Color.bgElevated : Brand.Color.podiumGold.opacity(0.12))
+        .overlay(alignment: .top) {
+            if champions != nil {
+                Rectangle()
+                    .fill(quiet ? Brand.Color.textTertiary.opacity(0.4) : Brand.Color.podiumGold)
+                    .frame(height: 2)
             }
         }
     }
 
-    /// "You finished #12 · 21 planes        Your week ›"
-    private func lastWeekRow(_ recap: WeeklyRecap, rank: Int?) -> some View {
-        let planes = recap.catchCount == 1 ? "1 plane" : "\(recap.catchCount) planes"
-        return HStack(spacing: 8) {
-            Group {
-                if let rank {
-                    Text("You finished \(Text("#\(rank)").font(Brand.Font.mono(size: 14, weight: .bold, relativeTo: .subheadline)).foregroundStyle(Brand.Color.cyan)) · \(planes)")
-                } else {
-                    Text("You caught \(planes) last week")
-                }
+    /// The right-hand chip: "#12 / your week ›". On a podium finish the rank
+    /// takes its medal colour. Before the rank is known (old server, first
+    /// open offline) it shows the week's plane count instead.
+    private func yourWeekChip(_ recap: WeeklyRecap, rank: Int?) -> some View {
+        let place = WeeklyRecapPlace(rank: rank)
+        let top = rank.map { "#\($0.formatted())" } ?? recap.catchCount.formatted()
+        let spokenTop = rank.map { "You finished \(Ordinal.english($0))" }
+            ?? (recap.catchCount == 1 ? "You caught 1 plane" : "You caught \(recap.catchCount) planes")
+        return VStack(spacing: 1) {
+            Text(top)
+                .font(Brand.Font.mono(size: 16, weight: .bold, relativeTo: .subheadline))
+                .foregroundStyle(place?.tint ?? Brand.Color.cyan)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            HStack(spacing: 3) {
+                Text(rank == nil ? (recap.catchCount == 1 ? "plane ·" : "planes ·") + " your week" : "your week")
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 9, weight: .bold))
             }
-            .font(Brand.Font.body)
-            .foregroundStyle(Brand.Color.textPrimary)
+            .font(Brand.Font.caption)
+            .foregroundStyle(Brand.Color.textSecondary)
             .lineLimit(1)
-            .minimumScaleFactor(0.8)
-            Spacer(minLength: 8)
-            Text("Your week")
-                .font(Brand.Font.body.weight(.semibold))
-                .foregroundStyle(Brand.Color.cyan)
-            Image(systemName: "chevron.right")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(Brand.Color.textTertiary)
-                .accessibilityHidden(true)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .frame(maxWidth: .infinity)
-        .background(Brand.Color.bgElevated)
-        .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
+        .frame(minWidth: 88, minHeight: 44)
+        .background(Brand.Color.bgElevated, in: .rect(cornerRadius: Brand.Radius.row))
+        .overlay {
+            if let place {
+                RoundedRectangle(cornerRadius: Brand.Radius.row)
+                    .strokeBorder(place.tint.opacity(0.6), lineWidth: 1)
+            }
+        }
+        .contentShape(.rect)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(spokenTop) last week. Your week")
         .accessibilityHint("Opens your weekly recap")
     }
 

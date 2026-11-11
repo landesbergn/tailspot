@@ -219,6 +219,24 @@ struct WeeklyRecapTests {
         #expect(message.contains("1 plane caught"))
     }
 
+    @Test func podiumPlaceOnlyForTheTopThree() {
+        #expect(WeeklyRecapPlace(rank: 1) == .first)
+        #expect(WeeklyRecapPlace(rank: 2) == .second)
+        #expect(WeeklyRecapPlace(rank: 3) == .third)
+        #expect(WeeklyRecapPlace(rank: 4) == nil)
+        #expect(WeeklyRecapPlace(rank: 0) == nil)
+        #expect(WeeklyRecapPlace(rank: nil) == nil)
+        #expect(WeeklyRecapPlace.first.shareLabel == "Share my win")
+        #expect(WeeklyRecapPlace.second.shareLabel == "Share my week")
+    }
+
+    @Test func podiumShareMessageLeadsWithTheFinish() {
+        let r = WeeklyRecap.lastWeek(catches: [mk("2026-11-03")], now: Self.noonUTC("2026-11-09"), timeZone: .gmt)!
+        #expect(WeeklyRecapShareImage.message(r, place: .first).hasPrefix("I won the week on Tailspot: 1 plane caught"))
+        #expect(WeeklyRecapShareImage.message(r, place: .third).hasPrefix("I took 3rd place on Tailspot this week:"))
+        #expect(WeeklyRecapShareImage.message(r, place: .second).contains("ct=Weekly%20Recap"))
+    }
+
     // MARK: - Presentation
 
     @Test func bannerHidesOnlyForTheClosedWeek() {

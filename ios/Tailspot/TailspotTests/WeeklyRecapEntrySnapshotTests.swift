@@ -116,6 +116,28 @@ struct WeeklyRecapEntrySnapshotTests {
             }
             .modelContainer(empty),
             as: "weekly_recap_entry_leaderboard_norecap")
+        // Podium finishes: the plaque chip takes the medal colour, and the
+        // recap screen + share image open with the medal.
+        for (rank, name) in [(1, "gold"), (2, "silver"), (3, "bronze")] {
+            defaults.set("\(weekStart)|\(rank)", forKey: WeeklyRecapRank.cacheKey)
+            let recap = try #require(WeeklyRecap.lastWeek(catches: try container.mainContext.fetch(FetchDescriptor<Catch>())))
+            await snapshot(WeeklyRecapScreen(recap: recap, weeklyRank: rank).modelContainer(container),
+                           as: "weekly_recap_podium_\(name)")
+            if rank == 1 {
+                await snapshot(
+                    NavigationStack {
+                        LeaderboardScreen(_debugWindows: [.week: LeaderboardResponse(
+                            entries: entries, me: MyStanding(rank: 3, points: 180), window: "week",
+                            champions: champ)])
+                    }
+                    .modelContainer(container),
+                    as: "weekly_recap_entry_leaderboard_gold")
+                if let image = WeeklyRecapShareImage.render(recap, weeklyRank: rank),
+                   let png = image.pngData() {
+                    try? png.write(to: Self.snapDir.appendingPathComponent("weekly_recap_share_gold.png"))
+                }
+            }
+        }
         #expect(true)
     }
 }

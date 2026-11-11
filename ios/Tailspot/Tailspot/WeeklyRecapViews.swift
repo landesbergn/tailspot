@@ -85,10 +85,77 @@ struct WeeklyRecapBanner: View {
 
 /// Seven bars, Monday first, drawn to scale. A day with no catches keeps a
 /// short dim stub so the week's shape still reads.
+/// A podium finish on last week's board (rank 1, 2 or 3). Podium recaps
+/// trade the cyan for the medal colour and open with a medal (Noah
+/// 2026-11-11, canvas round 5b). Everyone else gets the normal recap.
+enum WeeklyRecapPlace: Int {
+    case first = 1, second, third
+
+    init?(rank: Int?) {
+        guard let rank, let place = WeeklyRecapPlace(rawValue: rank) else { return nil }
+        self = place
+    }
+
+    var tint: Color {
+        switch self {
+        case .first:  Brand.Color.podiumGold
+        case .second: Brand.Color.podiumSilver
+        case .third:  Brand.Color.podiumBronze
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .first:  "You won the week"
+        case .second: "Second place"
+        case .third:  "Third place"
+        }
+    }
+
+    /// Eyebrow on the share image: "1ST PLACE".
+    var badge: String {
+        switch self {
+        case .first:  "1ST PLACE"
+        case .second: "2ND PLACE"
+        case .third:  "3RD PLACE"
+        }
+    }
+
+    var shareLabel: String { self == .first ? "Share my win" : "Share my week" }
+}
+
+/// The round medal at the top of a podium recap: a trophy for 1st, the
+/// number for 2nd and 3rd.
+struct WeeklyRecapMedal: View {
+    let place: WeeklyRecapPlace
+    var side: CGFloat = 76
+
+    var body: some View {
+        ZStack {
+            Circle().fill(place.tint)
+            if place == .first {
+                Image(systemName: "trophy.fill")
+                    .font(.system(size: side * 0.44, weight: .semibold))
+            } else {
+                Text("\(place.rawValue)")
+                    .font(Brand.Font.mono(fixedSize: side * 0.5, weight: .bold))
+            }
+        }
+        .foregroundStyle(Brand.Color.bgPrimary)
+        .frame(width: side, height: side)
+        .padding(side * 0.08)
+        .background(Circle().fill(place.tint.opacity(0.18)))
+        .shadow(color: place.tint.opacity(0.45), radius: side * 0.24)
+        .accessibilityHidden(true)
+    }
+}
+
 struct WeeklyRecapDayBars: View {
     let counts: [Int]
     var height: CGFloat = 88
     var labelFont: Font = Brand.Font.mono(size: 10, weight: .bold, relativeTo: .caption2)
+    /// Cyan normally; the medal colour on a podium recap.
+    var tint: Color = Brand.Color.cyan
 
     /// Shortest bar that still holds its count label.
     static let minCountedBar: CGFloat = 18
@@ -112,7 +179,7 @@ struct WeeklyRecapDayBars: View {
                     // cyan), so a counted bar is never shorter than its label.
                     // Empty days stay a blank stub so the busy days read first.
                     RoundedRectangle(cornerRadius: 3)
-                        .fill(n > 0 ? Brand.Color.cyan : Brand.Color.textPrimary.opacity(0.12))
+                        .fill(n > 0 ? tint : Brand.Color.textPrimary.opacity(0.12))
                         .frame(height: Self.barHeight(count: n, peak: peak, height: height))
                         .overlay(alignment: .top) {
                             if n > 0 {
@@ -212,6 +279,9 @@ struct WeeklyRecapCard: View {
     let recap: WeeklyRecap
     var weeklyRank: Int? = nil
 
+    private var place: WeeklyRecapPlace? { WeeklyRecapPlace(rank: weeklyRank) }
+    private var accent: Color { place?.tint ?? Brand.Color.cyan }
+
     var body: some View {
         let standout = recap.rarest.isDeleted ? nil : WeeklyRecapStandout(recap.rarest)
         VStack(alignment: .leading, spacing: 18) {
@@ -219,7 +289,7 @@ struct WeeklyRecapCard: View {
                 Text("YOUR WEEK · \(recap.rangeLabel())")
                     .font(Brand.Font.mono(size: 11, weight: .bold, relativeTo: .caption))
                     .tracking(1.2)
-                    .foregroundStyle(Brand.Color.cyan)
+                    .foregroundStyle(accent)
                 Text(recap.headline)
                     .brandDisplayFont()
                     .foregroundStyle(Brand.Color.textPrimary)
@@ -228,7 +298,7 @@ struct WeeklyRecapCard: View {
                     .foregroundStyle(Brand.Color.textSecondary)
             }
 
-            WeeklyRecapDayBars(counts: recap.dayCounts)
+            WeeklyRecapDayBars(counts: recap.dayCounts, tint: accent)
 
             // Opens the catch's detail (WeeklyRecapScreen's stack). Skipped
             // if that catch was just deleted from its own detail: reading a
@@ -263,6 +333,12 @@ struct WeeklyRecapCard: View {
         }
         .padding(18)
         .background(Brand.Color.bgElevated, in: .rect(cornerRadius: Brand.Radius.card))
+        .overlay {
+            if let place {
+                RoundedRectangle(cornerRadius: Brand.Radius.card)
+                    .strokeBorder(place.tint.opacity(0.45), lineWidth: 1)
+            }
+        }
     }
 
     private func standoutRow(_ s: WeeklyRecapStandout) -> some View {
@@ -360,6 +436,9 @@ struct WeeklyRecapScreen: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(spacing: 16) {
+                    if let place {
+                        podiumHero(place)
+                    }
                     WeeklyRecapCard(recap: recap, weeklyRank: weeklyRank)
                     Button(action: share) {
                         HStack(spacing: 8) {
@@ -368,13 +447,13 @@ struct WeeklyRecapScreen: View {
                             } else {
                                 Image(systemName: "square.and.arrow.up")
                             }
-                            Text("Share my week")
+                            Text(place?.shareLabel ?? "Share my week")
                         }
                         .font(Brand.Font.button)
                         .foregroundStyle(Brand.Color.bgPrimary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
-                        .background(Brand.Color.cyan, in: .rect(cornerRadius: Brand.Radius.row))
+                        .background(place?.tint ?? Brand.Color.cyan, in: .rect(cornerRadius: Brand.Radius.row))
                     }
                     .buttonStyle(.plain)
                     .disabled(rendering)
@@ -384,7 +463,18 @@ struct WeeklyRecapScreen: View {
                 .padding(.bottom, 32)
             }
         }
-        .background(Brand.Color.bgPrimary)
+        .background {
+            ZStack(alignment: .top) {
+                Brand.Color.bgPrimary
+                // A podium finish glows in its medal colour from the top.
+                if let place {
+                    RadialGradient(colors: [place.tint.opacity(0.22), .clear],
+                                   center: .top, startRadius: 0, endRadius: 380)
+                        .frame(height: 460)
+                }
+            }
+            .ignoresSafeArea()
+        }
         .sheet(item: $shareItems) { share in
             ActivityShareSheet(items: share.items) { method in
                 if let method {
@@ -397,6 +487,26 @@ struct WeeklyRecapScreen: View {
         }
     }
 
+    private var place: WeeklyRecapPlace? { WeeklyRecapPlace(rank: weeklyRank) }
+
+    /// Medal, "You won the week" / "Second place", and the final standing.
+    private func podiumHero(_ place: WeeklyRecapPlace) -> some View {
+        VStack(spacing: 8) {
+            WeeklyRecapMedal(place: place)
+                .padding(.bottom, 4)
+            Text(place.title)
+                .brandDisplayFont()
+                .foregroundStyle(Brand.Color.textPrimary)
+            Text("#\(place.rawValue) on last week's board · \(recap.points.formatted()) pts")
+                .font(Brand.Font.body)
+                .foregroundStyle(Brand.Color.textSecondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.bottom, 6)
+        .accessibilityElement(children: .combine)
+    }
+
     private func share() {
         rendering = true
         // Let the spinner draw before the synchronous 3× render.
@@ -404,7 +514,7 @@ struct WeeklyRecapScreen: View {
             await Task.yield()
             var items: [Any] = []
             if let image = WeeklyRecapShareImage.render(recap, weeklyRank: weeklyRank) { items.append(image) }
-            items.append(WeeklyRecapShareImage.message(recap))
+            items.append(WeeklyRecapShareImage.message(recap, place: place))
             rendering = false
             shareItems = ShareItems(items: items)
         }
@@ -424,8 +534,14 @@ struct WeeklyRecapShareImage: View {
     /// Text that rides with the image. The link sits mid-sentence for the
     /// same reason as the catch share (CatchShare.shareMessage): Messages
     /// keeps it a plain link instead of a big preview bubble.
-    static func message(_ r: WeeklyRecap) -> String {
-        "My week on Tailspot: \(r.headline) — get the app at \(storeURL.absoluteString) and start spotting."
+    static func message(_ r: WeeklyRecap, place: WeeklyRecapPlace? = nil) -> String {
+        let lead = switch place {
+        case .first:  "I won the week on Tailspot"
+        case .second: "I took 2nd place on Tailspot this week"
+        case .third:  "I took 3rd place on Tailspot this week"
+        case nil:     "My week on Tailspot"
+        }
+        return "\(lead): \(r.headline) — get the app at \(storeURL.absoluteString) and start spotting."
     }
 
     @MainActor
@@ -440,6 +556,8 @@ struct WeeklyRecapShareImage: View {
         renderer.scale = 3
         return renderer.uiImage
     }
+
+    private var place: WeeklyRecapPlace? { WeeklyRecapPlace(rank: weeklyRank) }
 
     var body: some View {
         let s = WeeklyRecapStandout(recap.rarest)
@@ -458,12 +576,22 @@ struct WeeklyRecapShareImage: View {
                     .foregroundStyle(Brand.Color.textTertiary)
             }
 
+            if let place {
+                HStack(spacing: 6) {
+                    Image(systemName: place == .first ? "trophy.fill" : "medal.fill")
+                    Text("\(place.badge) THIS WEEK")
+                }
+                .font(Brand.Font.mono(fixedSize: 11, weight: .bold))
+                .tracking(1.4)
+                .foregroundStyle(place.tint)
+                .padding(.top, 18)
+            }
             Text("I caught \(CountCopy.phrase(recap.catchCount, singular: "plane")) this week")
                 .font(.system(size: 30, weight: .bold))
                 .foregroundStyle(Brand.Color.textPrimary)
                 .lineLimit(2)
                 .minimumScaleFactor(0.8)
-                .padding(.top, 22)
+                .padding(.top, place == nil ? 22 : 6)
             Text(recap.sharedSubline)
                 .font(.system(size: 14))
                 .foregroundStyle(Brand.Color.textSecondary)
@@ -509,7 +637,8 @@ struct WeeklyRecapShareImage: View {
             WeeklyRecapDayBars(
                 counts: recap.dayCounts,
                 height: 76,
-                labelFont: Brand.Font.mono(fixedSize: 10, weight: .bold)
+                labelFont: Brand.Font.mono(fixedSize: 10, weight: .bold),
+                tint: place?.tint ?? Brand.Color.cyan
             )
             .padding(.top, 22)
 
