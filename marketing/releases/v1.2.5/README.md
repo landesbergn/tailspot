@@ -20,7 +20,7 @@
 - `source/deck.html`: the renderer for all seven slides
 - `source/creative.html`: the renderer for the three creative assets (`#header`, `#search`, `#universal`)
 - `source/e6.png`, `source/l39.png`: photo crops for slides 1–2
-- `source/ph/`: `c27j_gg.jpg` (the header photo, a copy of `catch-photos/fw_c27j_golden_gate.jpg`), `a321_guess.jpg`, slide 3's photo (the area inside the bracket baked into
+- `source/ph/`: `c27j_gg.jpg` (the header photo, a copy of `catch-photos/fw_c27j_golden_gate.jpg`), `c27j_card.jpg` (the header card's photo), `a321_guess.jpg`, slide 3's photo (the area inside the bracket baked into
   `catch-photos/a321_with_route_first.jpg`, crop 256x144+294+212, scaled to 941 × 529),
   and the app icon for slide 7's push
 
@@ -88,11 +88,16 @@ the two slots show different images:
   keeps "Point your phone at it.": the longer line runs to five lines at
   slide width and pushes the card down, and the first thumbnail needs a short
   headline.
-- **Header:** "Catch the planes flying overhead." (the 1.2.2 header line) beside
-  the C-27J over the Golden Gate (`catch-photos/fw_c27j_golden_gate.jpg`, copied
-  to `source/ph/c27j_gg.jpg`), cropped wide around the bracket the app baked in,
-  with a "C-27J SPARTAN · EPIC" tag. A few strangers in the crowd are
-  recognisable at full size, as on the 1.2.2 slide 1.
+- **Header:** "Catch the planes flying overhead." with the whole catch told left to
+  right: the C-27J over the Golden Gate (`catch-photos/fw_c27j_golden_gate.jpg`,
+  copied to `source/ph/c27j_gg.jpg`) with the app's pinned label (`C2703 · EPIC
+  +100`), dashed zoom lines from the bracket to its catch card, and the card
+  itself (C-27J Spartan, US Coast Guard, Epic, 427 ft, 132 kt, 1.9 km, +100: the
+  catch row). The card photo is `source/ph/c27j_card.jpg`, crop 300x250+432+1516
+  of the original, so the plane is big enough to see. Redone 2026-11-11 after
+  Noah found the first header hard to read (the plane was a speck in a crowd
+  photo). A few strangers in the crowd are recognisable at full size, as on the
+  1.2.2 slide 1.
 
 They replace the 1.2.2 airshow-trio header and the phone-plus-E-6 search image,
 which used the old split-flap cards. The header keeps everything inside the 16:9
