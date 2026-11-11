@@ -20,7 +20,7 @@
 - `source/deck.html`: the renderer for all seven slides
 - `source/creative.html`: the renderer for the three creative assets (`#header`, `#search`, `#universal`)
 - `source/e6.png`, `source/l39.png`: photo crops for slides 1–2
-- `source/ph/`: `a321_guess.jpg`, slide 3's photo (the area inside the bracket baked into
+- `source/ph/`: `c27j_gg.jpg` (the header photo, a copy of `catch-photos/fw_c27j_golden_gate.jpg`), `a321_guess.jpg`, slide 3's photo (the area inside the bracket baked into
   `catch-photos/a321_with_route_first.jpg`, crop 256x144+294+212, scaled to 941 × 529),
   and the app icon for slide 7's push
 
@@ -79,12 +79,22 @@ headlines and layouts.
 
 ## Creative assets
 
-Same look as slides 1–2: the dusk gradient, slide 1's headline ("What's that
-plane? Point your phone at it."), and the E-6 and L-39 catch cards fanned on the
-right, with no phone. They replace the 1.2.2 airshow-trio header and the
-phone-plus-E-6 search image, which used the old split-flap cards. The header
-keeps everything inside the 16:9 centre crop App Store Connect shows on iPhone
-(about 2926 of 3840 px); check the Preview tool there after upload.
+Same look as the slides (dusk gradient, the slide headline type, no phone), and
+the two slots show different images:
+
+- **Search results (and universal):** "What's that plane? Point your phone to
+  catch it." with the E-6 and L-39 catch cards fanned on the right. This is the
+  image a searcher sees, so it carries slide 1's hook.
+- **Header:** "Catch the planes flying overhead." (the 1.2.2 header line) beside
+  the C-27J over the Golden Gate (`catch-photos/fw_c27j_golden_gate.jpg`, copied
+  to `source/ph/c27j_gg.jpg`), cropped wide around the bracket the app baked in,
+  with a "C-27J SPARTAN · EPIC" tag. A few strangers in the crowd are
+  recognisable at full size, as on the 1.2.2 slide 1.
+
+They replace the 1.2.2 airshow-trio header and the phone-plus-E-6 search image,
+which used the old split-flap cards. The header keeps everything inside the 16:9
+centre crop App Store Connect shows on iPhone (about 2926 of 3840 px); check the
+Preview tool there after upload.
 
 Render at half size with a device scale factor of 2:
 

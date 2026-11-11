@@ -1,7 +1,8 @@
 <!doctype html>
 <meta charset="utf-8">
 <title>Tailspot creative 1.2.5</title>
-<!-- Header (21:9), search results (3:2) and universal (16:9) creative for the 1.2.5 listing.
+<!-- Header (21:9): the C-27J over the Golden Gate (real catch photo, its bracket baked in by the app). Search (3:2) and universal (16:9): the E-6 and L-39 cards.
+     Header (21:9), search results (3:2) and universal (16:9) creative for the 1.2.5 listing.
      Same cards, gradient and headline as slides 1-2 of deck.html. Open creative.html#header|#search|#universal
      and screenshot at half size with --force-device-scale-factor=2 (see the folder README). -->
 <style>
@@ -39,6 +40,10 @@ html,body{width:auto;height:auto}
 .cw .idcard{position:relative;top:0;left:0;right:0;margin:0 7cqw}
 .hd{position:absolute;font-weight:800;letter-spacing:-.02em;line-height:1.02}
 .hd em{font-style:normal;color:var(--cyan);display:block}
+.pan{position:absolute;border-radius:28px;overflow:hidden;border:2px solid rgba(0,212,255,.35);box-shadow:0 18px 48px rgba(0,0,0,.45)}
+.pan img{width:100%;height:100%;object-fit:cover;display:block}
+.pan .tag{position:absolute;left:20px;bottom:20px;font-family:var(--sfmono);font-weight:700;font-size:17px;letter-spacing:.1em;padding:9px 14px;border-radius:10px;background:rgba(8,12,20,.78);color:#fff}
+.pan .tag b{color:#AB78EA;font-weight:700}
 </style>
 <div id="o"></div>
 <script>
@@ -58,14 +63,15 @@ const L39={img:'l39.png',ty:'L-39 ALBATROS',op:'PATRIOTS JET TEAM · RARE', tint
 // Layouts in CSS px at half the output size. Header: content stays inside the
 // 16:9 centre crop App Store Connect shows on iPhone (x 228..1692 of 1920).
 const L={
- header:{w:1920,h:823,hd:{x:262,y:348,size:62},cards:[{c:L39,x:1250,y:128,w:380,rot:7},{c:E6,x:990,y:116,w:380,rot:-4}]},
- search:{w:1920,h:1280,hd:{x:120,y:548,size:88},cards:[{c:L39,x:1400,y:290,w:450,rot:7},{c:E6,x:1100,y:272,w:450,rot:-4}]},
- universal:{w:2622,h:1475,hd:{x:180,y:620,size:116},cards:[{c:L39,x:1870,y:330,w:520,rot:7},{c:E6,x:1500,y:310,w:520,rot:-4}]},
+ header:{w:1920,h:823,hd:{x:262,y:320,size:66,t:['Catch the planes','flying overhead.']},pan:{x:820,y:96,w:850,h:631,pos:'50% 61%'},cards:[]},
+ search:{w:1920,h:1280,hd:{x:130,y:511,size:84},cards:[{c:L39,x:1400,y:290,w:450,rot:7},{c:E6,x:1100,y:272,w:450,rot:-4}]},
+ universal:{w:2622,h:1475,hd:{x:190,y:569,size:110},cards:[{c:L39,x:1870,y:330,w:520,rot:7},{c:E6,x:1500,y:310,w:520,rot:-4}]},
 };
 const k=location.hash.slice(1)||'search', l=L[k];
 document.body.style.width=l.w+'px';
 document.getElementById('o').innerHTML=`<div class="stage" style="width:${l.w}px;height:${l.h}px">
- <div class="hd" style="left:${l.hd.x}px;top:${l.hd.y}px;font-size:${l.hd.size}px">What's that plane?<em>Point your phone at it.</em></div>
+ <div class="hd" style="left:${l.hd.x}px;top:${l.hd.y}px;font-size:${l.hd.size}px">${(l.hd.t||['What\'s that plane?'])[0]}<em>${(l.hd.t||['','Point your phone<br>to catch it.'])[1]}</em></div>
+ ${l.pan?`<div class="pan" style="left:${l.pan.x}px;top:${l.pan.y}px;width:${l.pan.w}px;height:${l.pan.h}px"><img src="ph/c27j_gg.jpg" alt="" style="object-position:${l.pan.pos}"><div class="tag">C-27J SPARTAN · <b>EPIC</b></div></div>`:''}
  ${l.cards.map(q=>`<div class="cw" style="left:${q.x}px;top:${q.y}px;width:${q.w/0.86}px;margin-left:${-q.w*0.07/0.86}px;transform:rotate(${q.rot}deg)">${card(q.c)}</div>`).join('')}
 </div>`;
 </script>
