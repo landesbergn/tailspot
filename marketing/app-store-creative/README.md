@@ -1,5 +1,10 @@
 # App Store creative assets (header, search results)
 
+**v1.2.5 does not use this builder.** Its header, search results and universal
+images are rendered from `marketing/releases/v1.2.5/source/creative.html` to
+match the new screenshot set (see that folder's README). `compose.py` below
+built the v1.2.2 assets.
+
 Product page **header** and **search results** images (iOS 27 / iPadOS 27
 creative assets). Specs from App Store Connect, 2026-10-12:
 

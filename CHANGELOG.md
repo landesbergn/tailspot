@@ -5,6 +5,28 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-11-10 — Card-back descriptions for the rare tail (branch `claude/missing-back-description-d34937`)
+
+- Tester report: an EDRA Paturi card back had no description. Only the 302 family-set variants had a Wikipedia article bundled; everything outside the sets showed none.
+- The TypeInfo generator now matches every other typecode in `AircraftTypes.json` to its article, with strict checks (aircraft short description, matching designator or numbers, no disambiguation pages). 885 of 2,311 now have one. Wikidata specs only ride along when the article names the exact variant.
+- The card back uses the family article when there is one, else the typecode's. Family records are unchanged.
+- The Paturi stays blank: Wikipedia has no article on it.
+
+## 2026-11-05 — Leaderboard catch count matches the Hangar (branch `claude/catch-count-discrepancy-61f350`)
+
+- Noah's Hangar showed 588 catches and the all-time leaderboard 605. The 17 extra were catches deleted before #295, when a Hangar delete never reached the server.
+- New one-time launch reconcile (`HangarReconcile.swift`) deletes those server rows for every user: server catches missing from the Hangar, caught on or after the oldest Hangar catch. It skips on an empty Hangar or a restore prompt, refuses if more than half would go, and reports `hangar_reconciled`.
+- Policy: the phone is the source of truth. The same run re-sends phone catches the server is missing, and never deletes a catch on the phone.
+- The Hangar list's long-press delete now fires `catch_deleted` (the event moved into `CatchDeletion.delete`); before, only deletes from the catch detail screen were counted.
+- Tested on Noah's phone: prod went from 605 to 588, matching the Hangar.
+
+## 2026-11-05 — Hangar detail opens the catch you tapped (branch `claude/swa503-picture-misalignment-6ca661`)
+
+- Field report: tapping today's SWA503 in the Hangar opened SWA4842 from Jul 23, with a different photo, route and date. Both were catches of the same Southwest 737, so they share one Hangar row.
+- The cell renders the row's most recent catch, but the detail rendered its earliest (`row.firstCatch`). The detail now renders `row.mostRecent`, so the card always matches the cell. No "first caught" line was added (Noah's call).
+- `CatchDetailViewTests` pins the detail's catch to the cell's.
+- Delete (the detail's trash button and the row's long-press menu) now removes only the catch on screen: its photo, its row and its server copy. It used to remove every catch of the airframe, including ones the screen never showed. Both sites share `CatchDeletion.delete`; `CatchDeletionTests` cover it.
+
 ## 2026-11-05 — Full-screen catch photo: working X, true full screen, smooth zoom (PR #411)
 
 - Tester report: after a catch, the full-screen photo's X sat under the status bar and did nothing. The open viewer was hosted inside the morph layer's `.ignoresSafeArea()`, which removed its top inset.
