@@ -1806,6 +1806,20 @@
       "wikidataId": "Q2877369",
       "wikipediaTitle": "Gulfstream G100"
     },
+    "fg-ii": {
+      "entryId": "fg-ii",
+      "lengthMeters": 24.36,
+      "numberBuilt": 256,
+      "photo": {
+        "artist": "Eduard Marmet",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f6/Mauritania_Government_G-1159_Gulfstream_II_at_Basle_Aiprort_March_1987.jpg/960px-Mauritania_Government_G-1159_Gulfstream_II_at_Basle_Aiprort_March_1987.jpg",
+        "license": "CC BY-SA 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Mauritania_Government_G-1159_Gulfstream_II_at_Basle_Aiprort_March_1987.jpg"
+      },
+      "wikidataId": "Q1467623",
+      "wikipediaTitle": "Grumman Gulfstream II",
+      "wingspanMeters": 20.98
+    },
     "fg-iv": {
       "entryId": "fg-iv",
       "firstFlightYear": 1985,
