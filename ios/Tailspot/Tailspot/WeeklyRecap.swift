@@ -8,9 +8,10 @@
 //  from the 2026-11-08 ideas round: a reason to come back on Monday, and a
 //  share image that carries a campaign-attributed App Store link.
 //
-//  Everything is computed on the device from the Hangar. No backend call:
-//  last week's leaderboard rank isn't kept anywhere the app can read once
-//  the board resets, so the recap shows points instead.
+//  Everything except the rank is computed on the device from the Hangar.
+//  Last week's final rank comes from the leaderboard (`me.lastWeekRank`,
+//  see WeeklyRecapRank below) and is shown only when the server's closed
+//  UTC week starts on the recap's local Monday.
 //
 //  Week math reuses the streak engine's frozen day keys (Streaks.swift), so
 //  a catch lands in the same day here as it does for the streak, even after
@@ -317,11 +318,26 @@ enum WeeklyRecapRank {
     }
 
     /// The rank to show for `weekStart`, or nil (unknown, unranked, or the
-    /// board's week doesn't match the recap's).
-    nonisolated static func rank(from response: LeaderboardResponse, weekStart: String) -> Int? {
+    /// board's week doesn't match the recap's). A points tie shares the
+    /// crown, but the server's rank still orders ties by sign-up date, so a
+    /// co-champion can come back as #2: when `myHandle` is among the week's
+    /// champions, the rank is 1.
+    nonisolated static func rank(from response: LeaderboardResponse, weekStart: String,
+                                 myHandle: String? = nil) -> Int? {
         guard lastClosedWeekStart(response) == weekStart,
               let rank = response.me?.lastWeekRank, rank >= 1 else { return nil }
+        if rank > 1, let me = myHandle?.lowercased(), !me.isEmpty,
+           response.champions?.contains(where: {
+               $0.handle?.lowercased() == me && ($0.weekStart == nil || $0.weekStart == weekStart)
+           }) == true {
+            return 1
+        }
         return rank
+    }
+
+    /// This device's handle, for the co-champion check.
+    static var myHandle: String? {
+        UserDefaults.standard.string(forKey: SpotterHandle.storageKey)
     }
 
     static func cached(weekStart: String, defaults: UserDefaults = .standard) -> Int? {
@@ -334,7 +350,7 @@ enum WeeklyRecapRank {
     /// Fetches and caches the rank. nil on any failure (offline, old server).
     static func fetch(weekStart: String, client: TailspotAccountClient = TailspotAccountClient()) async -> Int? {
         guard let response = try? await client.leaderboard(window: .week, limit: 1),
-              let rank = rank(from: response, weekStart: weekStart) else { return nil }
+              let rank = rank(from: response, weekStart: weekStart, myHandle: myHandle) else { return nil }
         UserDefaults.standard.set("\(weekStart)|\(rank)", forKey: cacheKey)
         return rank
     }

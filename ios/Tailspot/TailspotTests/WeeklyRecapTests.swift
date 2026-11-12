@@ -192,6 +192,22 @@ struct WeeklyRecapTests {
         #expect(WeeklyRecapRank.rank(from: board(resetsAt: "2026-11-16T00:00:00.000Z", lastWeekRank: nil), weekStart: "2026-11-02") == nil)
     }
 
+    @Test func coChampionOfATieIsFirstNotSecond() {
+        // A points tie shares the crown, but the server orders the tie by
+        // sign-up date, so the newer co-champion comes back as #2.
+        let tied = LeaderboardResponse(
+            entries: [],
+            me: MyStanding(rank: 1, points: 10, lastWeekRank: 2),
+            window: "week",
+            resetsAt: "2026-11-16T00:00:00.000Z",
+            champions: [LeaderboardChampion(handle: "skykid", points: 410, weekStart: "2026-11-02", monthStart: nil),
+                        LeaderboardChampion(handle: "Noah", points: 410, weekStart: "2026-11-02", monthStart: nil)])
+        #expect(WeeklyRecapRank.rank(from: tied, weekStart: "2026-11-02", myHandle: "noah") == 1)
+        // Not a champion: the server's rank stands.
+        #expect(WeeklyRecapRank.rank(from: tied, weekStart: "2026-11-02", myHandle: "contrail") == 2)
+        #expect(WeeklyRecapRank.rank(from: tied, weekStart: "2026-11-02") == 2)
+    }
+
     @Test func statsReadRankPointsTypesStreak() {
         let r = WeeklyRecap.lastWeek(catches: [mk("2026-11-03")], now: Self.noonUTC("2026-11-09"), timeZone: .gmt)!
         let ranked = WeeklyRecapStat.all(r, weeklyRank: 4).map(\.value)

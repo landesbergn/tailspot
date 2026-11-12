@@ -83,8 +83,6 @@ struct WeeklyRecapBanner: View {
 
 // MARK: - Shared pieces
 
-/// Seven bars, Monday first, drawn to scale. A day with no catches keeps a
-/// short dim stub so the week's shape still reads.
 /// A podium finish on last week's board (rank 1, 2 or 3). Podium recaps
 /// trade the cyan for the medal colour and open with a medal (Noah
 /// 2026-11-11, canvas round 5b). Everyone else gets the normal recap.
@@ -150,6 +148,8 @@ struct WeeklyRecapMedal: View {
     }
 }
 
+/// Seven bars, Monday first, drawn to scale. A day with no catches keeps a
+/// short dim stub so the week's shape still reads.
 struct WeeklyRecapDayBars: View {
     let counts: [Int]
     var height: CGFloat = 88
@@ -507,6 +507,8 @@ struct WeeklyRecapScreen: View {
     private var place: WeeklyRecapPlace? { WeeklyRecapPlace(rank: weeklyRank) }
 
     /// Medal, "You won the week" / "Second place", and the final standing.
+    /// No points here: the board's total is the server's for the UTC week,
+    /// which can differ from the on-device points in the stat tile.
     private func podiumHero(_ place: WeeklyRecapPlace) -> some View {
         VStack(spacing: 8) {
             WeeklyRecapMedal(place: place)
@@ -514,7 +516,7 @@ struct WeeklyRecapScreen: View {
             Text(place.title)
                 .brandDisplayFont()
                 .foregroundStyle(Brand.Color.textPrimary)
-            Text("#\(place.rawValue) on last week's board · \(recap.points.formatted()) pts")
+            Text("#\(place.rawValue) on last week's board")
                 .font(Brand.Font.body)
                 .foregroundStyle(Brand.Color.textSecondary)
                 .multilineTextAlignment(.center)

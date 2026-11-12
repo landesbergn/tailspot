@@ -102,9 +102,7 @@ nonisolated enum ChampionBanner {
     }
 
     /// The zero-champion week (empty `champions` array — the board reset
-    /// with nobody on it).
-    static let noChampionTitle = "NO CHAMPION CROWNED"
-
+    /// with nobody on it): the plaque's quiet line.
     static func noChampionSubtitle(window: LeaderboardWindow) -> String {
         window == .month ? "The sky was quiet last month." : "The sky was quiet last week."
     }

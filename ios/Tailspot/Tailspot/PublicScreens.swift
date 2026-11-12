@@ -188,7 +188,7 @@ struct LeaderboardScreen: View {
         // Runs on appear AND whenever the selected tab changes: a fresh tab
         // fetches (spinner — it has no data yet); a cached tab re-fetches
         // silently behind its stale board.
-        .task(id: catches.count) {
+        .task(id: "\(catches.count)|\(Streaks.dayKey(for: Date()))") {
             weeklyRecap = WeeklyRecap.lastWeek(catches: catches)
         }
         // Pushed, not a sheet: one level down, so the back chevron
@@ -412,7 +412,8 @@ struct LeaderboardScreen: View {
             }
             Spacer(minLength: 0)
             if let lastWeek {
-                let rank = WeeklyRecapRank.rank(from: response, weekStart: lastWeek.weekStartKey)
+                let rank = WeeklyRecapRank.rank(from: response, weekStart: lastWeek.weekStartKey,
+                                                myHandle: WeeklyRecapRank.myHandle)
                     ?? WeeklyRecapRank.cached(weekStart: lastWeek.weekStartKey)
                 Button {
                     WeeklyRecapTelemetry.fire(WeeklyRecapTelemetry.openedEvent, lastWeek,
@@ -438,12 +439,10 @@ struct LeaderboardScreen: View {
         }
     }
 
-    /// The right-hand chip: "#12 / your week ›". On a podium finish the rank
-    /// takes its medal colour. Before the rank is known (old server, first
-    /// open offline) it shows the week's plane count instead.
-    /// With last week's final rank: "#12" over "your week ›". Without it
-    /// (rank not served yet), just a "Your week ›" button: a bare plane
-    /// count up there read as a score.
+    /// The right-hand chip. With last week's final rank: "#12" over "your
+    /// week ›", the rank in its medal colour on a podium finish. Without it
+    /// (old server, first open offline), just a "Your week ›" button: a
+    /// bare plane count up there read as a score.
     private func yourWeekChip(_ recap: WeeklyRecap, rank: Int?) -> some View {
         let place = WeeklyRecapPlace(rank: rank)
         let spoken = rank.map { "You finished \(Ordinal.english($0)) last week. Your week" } ?? "Your week"
