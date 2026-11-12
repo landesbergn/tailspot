@@ -41,6 +41,21 @@ struct HangarView: View {
     /// so a future source cell can opt back in. See `HangarZoomNamespace.swift`.
     @Namespace private var zoomNamespace
 
+    /// Weekly recap (WeeklyRecap.swift): the week the user closed, and the
+    /// week whose banner already sent `weekly_recap_shown`.
+    @AppStorage(WeeklyRecapPresentation.dismissedWeekKey) private var dismissedRecapWeek = ""
+    @AppStorage(WeeklyRecapPresentation.shownWeekKey) private var shownRecapWeek = ""
+    @State private var showingRecap = false
+    /// Last week's recap, recomputed off the body path: when the Hangar
+    /// opens, when the catch count changes, and when the day rolls over.
+    /// (Hashing every catch per body pass is what made the Recent list
+    /// stutter on big Hangars.)
+    @State private var weeklyRecap: WeeklyRecap?
+
+    private var recapTaskID: String {
+        "\(catches.count)|\(Streaks.dayKey(for: Date()))"
+    }
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
@@ -138,6 +153,7 @@ struct HangarView: View {
             emptyState
         } else {
             VStack(spacing: 0) {
+                recapBanner
                 HangarSegmentedSwitcher(selection: segment)
                 // A paged TabView keeps every segment alive (no @Query re-run
                 // or List rebuild on switch — that was the original lag) AND
@@ -158,6 +174,43 @@ struct HangarView: View {
                 .tabViewStyle(.page(indexDisplayMode: .never))
             }
             .background(Brand.Color.bgPrimary)
+            .task(id: recapTaskID) {
+                weeklyRecap = WeeklyRecap.lastWeek(catches: catches)
+            }
+            // On the stable container, not the banner: the banner can vanish
+            // (week rolls over) while the recap or its share sheet is up.
+            .sheet(isPresented: $showingRecap) {
+                if let weeklyRecap { WeeklyRecapScreen(recap: weeklyRecap) }
+            }
+        }
+    }
+
+    // MARK: - Weekly recap
+
+    /// Last week's recap, above the switcher so it shows on every segment.
+    /// Present all week until closed; a new week brings the next one back.
+    @ViewBuilder
+    private var recapBanner: some View {
+        if let recap = weeklyRecap,
+           WeeklyRecapPresentation.shouldShow(weekStartKey: recap.weekStartKey,
+                                              dismissedWeek: dismissedRecapWeek) {
+            WeeklyRecapBanner(
+                recap: recap,
+                onOpen: {
+                    WeeklyRecapTelemetry.fire(WeeklyRecapTelemetry.openedEvent, recap)
+                    showingRecap = true
+                },
+                onDismiss: {
+                    WeeklyRecapTelemetry.fire(WeeklyRecapTelemetry.dismissedEvent, recap)
+                    withAnimation(.snappy) { dismissedRecapWeek = recap.weekStartKey }
+                }
+            )
+            .transition(.opacity.combined(with: .move(edge: .top)))
+            .onAppear {
+                guard shownRecapWeek != recap.weekStartKey else { return }
+                shownRecapWeek = recap.weekStartKey
+                WeeklyRecapTelemetry.fire(WeeklyRecapTelemetry.shownEvent, recap)
+            }
         }
     }
 

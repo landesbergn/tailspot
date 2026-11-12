@@ -115,8 +115,8 @@ struct LeadersSheetSnapshotTests {
     /// distinct and stable — the raw value is what the invite-link route
     /// maps to (`.challenges`, added 2026-09-21).
     @Test func primarySheetIdsAreDistinctAndStable() {
-        let all: [PrimarySheet] = [.hangar, .profile, .leaders, .challenges]
-        #expect(Set(all.map(\.id)).count == 4)
+        let all: [PrimarySheet] = [.hangar, .profile, .leaders, .challenges, .weeklyRecap]
+        #expect(Set(all.map(\.id)).count == 5)
         #expect(PrimarySheet.hangar.id == "hangar")
         #expect(PrimarySheet.profile.id == "profile")
         #expect(PrimarySheet.leaders.id == "leaders")

@@ -398,6 +398,13 @@ struct ChampionBannerCopyTests {
                 == "anonymous spotter & @skykid")
     }
 
+    @Test func championPoints() {
+        #expect(ChampionBanner.points([champ("skykid", points: 1_682)]) == "1,682 pts")
+        #expect(ChampionBanner.points([champ("skykid", points: 1)]) == "1 pt")
+        #expect(ChampionBanner.points([champ("a", points: 410), champ("b", points: 410)]) == "410 pts each")
+        #expect(ChampionBanner.points([]) == nil)
+    }
+
     @Test func emptyChampions() {
         #expect(ChampionBanner.names([]) == "")
         #expect(ChampionBanner.noChampionSubtitle(window: .week) == "The sky was quiet last week.")
