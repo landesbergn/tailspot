@@ -703,3 +703,57 @@ struct WeeklyRecapShareImage: View {
         )
     }
 }
+
+// MARK: - Profile entry card
+
+/// LAST WEEK on Profile: a card like BEST CATCH (mini bars + headline
+/// numbers) that opens last week's recap.
+struct WeeklyRecapEntryRow: View {
+    let recap: WeeklyRecap
+    let weeklyRank: Int?
+
+    private var planes: String {
+        recap.catchCount == 1 ? "1 plane" : "\(recap.catchCount) planes"
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            miniBars.frame(width: 44, height: 34)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("LAST WEEK · \(recap.rangeLabel().uppercased())")
+                    .font(Brand.Font.eyebrow)
+                    .tracking(Brand.Font.eyebrowTracking)
+                    .foregroundStyle(Brand.Color.textTertiary)
+                Text(weeklyRank.map { "\(planes) · #\($0) on the board" } ?? "\(planes) caught")
+                    .font(Brand.Font.cardTitle)
+                    .foregroundStyle(Brand.Color.textPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                Text("\(recap.points.formatted(.number)) PTS · \(recap.newTypes) NEW \(recap.newTypes == 1 ? "TYPE" : "TYPES")")
+                    .font(Brand.Font.mono(size: 9, weight: .bold, relativeTo: .caption2))
+                    .tracking(Brand.Font.eyebrowTracking)
+                    .foregroundStyle(Brand.Color.textSecondary)
+            }
+            Spacer(minLength: 0)
+            Image(systemName: "chevron.right")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Brand.Color.textTertiary)
+                .accessibilityHidden(true)
+        }
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("Opens last week's recap")
+    }
+
+    private var miniBars: some View {
+        let peak = max(recap.dayCounts.max() ?? 0, 1)
+        return HStack(alignment: .bottom, spacing: 2) {
+            ForEach(Array(recap.dayCounts.enumerated()), id: \.offset) { _, n in
+                RoundedRectangle(cornerRadius: 1.5)
+                    .fill(n > 0 ? Brand.Color.cyan : Brand.Color.textPrimary.opacity(0.15))
+                    .frame(height: n > 0 ? max(5, 34 * CGFloat(n) / CGFloat(peak)) : 2)
+            }
+        }
+        .frame(maxHeight: .infinity, alignment: .bottom)
+    }
+}
