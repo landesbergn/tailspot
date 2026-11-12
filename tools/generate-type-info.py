@@ -201,6 +201,7 @@ OVERRIDES = {
     "fc-mustang": "Cessna Citation Mustang",
     "fg-astra": "IAI Astra",
     "fg-150": "Gulfstream G150",
+    "fg-ii": "Gulfstream II",
     "fg-iv": "Gulfstream IV",
     "fg-280": "Gulfstream G280",
     "fg-550": "Gulfstream G550",
