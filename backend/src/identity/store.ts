@@ -526,9 +526,10 @@ export interface CatchStore {
    * The given device's rank + total points — computed over ALL devices
    * (handle-less devices accrue points and occupy ranks invisibly). `since`
    * scopes both my points AND everyone's, so the rank is the in-window rank.
+   * `until` (exclusive) closes the window, for a past week's final standing.
    * Null only for an unknown device id.
    */
-  myStanding(deviceId: string, since?: Date): Promise<MyStanding | null>;
+  myStanding(deviceId: string, since?: Date, until?: Date): Promise<MyStanding | null>;
   /**
    * DECIDE-ON-READ: make sure every closed week (Monday-00:00-UTC boundaries)
    * since the earliest catch has its champion(s) frozen in `weekly_champions`.
@@ -952,13 +953,15 @@ export class DrizzleCatchStore implements CatchStore {
     };
   }
 
-  async myStanding(deviceId: string, since?: Date): Promise<MyStanding | null> {
+  async myStanding(deviceId: string, since?: Date, until?: Date): Promise<MyStanding | null> {
     // Windowing mirrors `leaderboard`: the filter lives in the LEFT JOIN so a
     // device with no in-window catches still ranks (with 0 points) rather than
-    // vanishing.
-    const joinOn = since
-      ? and(eq(catches.deviceId, devices.id), gte(catches.caughtAt, since))
-      : eq(catches.deviceId, devices.id);
+    // vanishing. `until` (exclusive) closes the window for a past week.
+    const joinOn = and(
+      eq(catches.deviceId, devices.id),
+      since ? gte(catches.caughtAt, since) : undefined,
+      until ? lt(catches.caughtAt, until) : undefined,
+    );
 
     // The device's own total (in-window) points.
     const mine = await withDbRetry(() =>

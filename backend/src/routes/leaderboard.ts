@@ -29,6 +29,10 @@
  * `me.monthlyWins` / `me.everToppedAllTime` are LIFETIME facts (not window-scoped) and
  * ride along on every window for simplicity.
  *
+ * Week window only: `me.lastWeekRank` / `me.lastWeekPoints` are the caller's
+ * FINAL standing in the last closed week (rank 0 = no points that week). The
+ * app's weekly recap reads them (2026-11-09); additive, other windows omit them.
+ *
  * `champions` is the LAST CLOSED week's champion(s) — plural on shared crowns
  * (a points tie crowns everyone), empty when that week had zero catches (the
  * only champion-less case; there is NO winner floor), and null off the week
@@ -148,15 +152,20 @@ export function registerLeaderboardRoute(
       weeklyWins: number;
       monthlyWins: number;
       everToppedAllTime: boolean;
+      lastWeekRank?: number;
+      lastWeekPoints?: number;
     } | null = null;
     if (device) {
       const standing = await catchStore.myStanding(device.id, since);
       if (standing) {
-        // Three independent point reads — issued together, not serially.
-        const [weeklyWins, monthlyWins, everToppedAllTime] = await Promise.all([
+        // Independent point reads — issued together, not serially.
+        const [weeklyWins, monthlyWins, everToppedAllTime, lastWeek] = await Promise.all([
           catchStore.weeklyWins(device.id),
           catchStore.monthlyWins(device.id),
           catchStore.everToppedAllTime(device.id),
+          window === "week" && since
+            ? catchStore.myStanding(device.id, addDaysUtc(since, -7), since)
+            : Promise.resolve(null),
         ]);
         me = {
           rank: standing.rank,
@@ -164,6 +173,7 @@ export function registerLeaderboardRoute(
           weeklyWins,
           monthlyWins,
           everToppedAllTime,
+          ...(lastWeek ? { lastWeekRank: lastWeek.rank, lastWeekPoints: lastWeek.points } : {}),
         };
       }
     }

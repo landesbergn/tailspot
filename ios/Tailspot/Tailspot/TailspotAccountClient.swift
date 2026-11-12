@@ -335,17 +335,26 @@ nonisolated struct MyStanding: Decodable {
     /// Whether this device has ever held #1 on the all-time board (fuel for
     /// the PR3 winner trophies; decoded now so the contract is pinned).
     let everToppedAllTime: Bool?
+    /// Week window only: this device's FINAL rank in the last closed week
+    /// (0 = no points that week). Nil on other windows and older backends.
+    /// Read by the weekly recap.
+    let lastWeekRank: Int?
+    let lastWeekPoints: Int?
 
     init(rank: Int,
          points: Int,
          weeklyWins: Int? = nil,
          monthlyWins: Int? = nil,
-         everToppedAllTime: Bool? = nil) {
+         everToppedAllTime: Bool? = nil,
+         lastWeekRank: Int? = nil,
+         lastWeekPoints: Int? = nil) {
         self.rank = rank
         self.points = points
         self.weeklyWins = weeklyWins
         self.monthlyWins = monthlyWins
         self.everToppedAllTime = everToppedAllTime
+        self.lastWeekRank = lastWeekRank
+        self.lastWeekPoints = lastWeekPoints
     }
 }
 
