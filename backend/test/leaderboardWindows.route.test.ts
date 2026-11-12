@@ -200,6 +200,12 @@ describe("GET /v1/leaderboard windows + weekly/monthly champions", () => {
     expect(week.me.weeklyWins).toBe(1);
     expect(week.me.everToppedAllTime).toBe(true);
     expect(week.champions).toEqual([{ handle: "Alice", points: 500, weekStart: "2026-06-29" }]);
+    // Last week's final standing: Alice's 500 was the only catch, so #1.
+    expect(week.me.lastWeekRank).toBe(1);
+    expect(week.me.lastWeekPoints).toBe(500);
+    const bobWeek = await get("/v1/leaderboard?window=week", bob.token);
+    expect(bobWeek.me.lastWeekRank).toBe(0); // no points last week → unranked
+    expect(bobWeek.me.lastWeekPoints).toBe(0);
 
     // The all-time board still counts everything.
     const all = await get("/v1/leaderboard", alice.token);
@@ -208,8 +214,25 @@ describe("GET /v1/leaderboard windows + weekly/monthly champions", () => {
       { rank: 2, handle: "Bob", points: 200, catches: 1 },
     ]);
     expect(all.window).toBe("all");
+    expect(all.me.lastWeekRank).toBeUndefined(); // week window only
     expect(all.resetsAt).toBeNull();
     expect(all.champions).toBeNull();
+  });
+
+  it("last week's rank excludes catches from before and after that week", async () => {
+    const alice = await register();
+    const bob = await register();
+    // Two weeks ago Bob was far ahead; this week too. Last week Alice led.
+    await seedCatch(bob.deviceId, 900, utc(2026, 6, 25)); // week before last
+    await seedCatch(alice.deviceId, 50, utc(2026, 7, 1)); // last week
+    await seedCatch(bob.deviceId, 20, utc(2026, 7, 5, 23)); // last week, Sunday night
+    await seedCatch(bob.deviceId, 900, utc(2026, 7, 6)); // this week (Mon 00:00)
+    const a = await get("/v1/leaderboard?window=week", alice.token);
+    expect(a.me.lastWeekRank).toBe(1);
+    expect(a.me.lastWeekPoints).toBe(50);
+    const b = await get("/v1/leaderboard?window=week", bob.token);
+    expect(b.me.lastWeekRank).toBe(2);
+    expect(b.me.lastWeekPoints).toBe(20);
   });
 
   it("month window starts on the 1st UTC and resets on the next 1st", async () => {

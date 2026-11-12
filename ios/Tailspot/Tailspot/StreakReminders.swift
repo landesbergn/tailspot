@@ -354,6 +354,10 @@ final class StreakReminderCenter: NSObject, UNUserNotificationCenterDelegate {
         // delivered copy is retired too — once the user has caught (or
         // muted, or lapsed), a stale nudge sitting in Notification Center
         // is a false statement.
+        // The Monday weekly-recap notification re-plans on the same
+        // triggers (catch, foreground, timezone, Settings).
+        await WeeklyRecapReminderScheduler.sync(
+            catches: catches, now: now, center: center, authorized: authorized)
         center.removePendingNotificationRequests(withIdentifiers: [StreakReminders.notificationId])
         center.removeDeliveredNotifications(withIdentifiers: [StreakReminders.notificationId])
         guard case let .schedule(dayKey, streak) = decision,
@@ -472,6 +476,10 @@ final class StreakReminderCenter: NSObject, UNUserNotificationCenterDelegate {
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification
     ) async -> UNNotificationPresentationOptions {
+        if notification.request.identifier == WeeklyRecapReminder.notificationId {
+            // Same never-cover-the-viewfinder rule as the streak nudge.
+            return StreakReminders.foregroundPresentation(cameraFrontmost: Self.cameraIsFrontmost())
+        }
         guard StreakReminders.isStreakReminder(notification.request.identifier) else {
             // Challenge notifications — local reminders AND the backend's
             // remote pushes — obey the same never-cover-the-viewfinder rule
@@ -550,6 +558,11 @@ final class StreakReminderCenter: NSObject, UNUserNotificationCenterDelegate {
         _ center: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse
     ) async {
+        if response.notification.request.identifier == WeeklyRecapReminder.notificationId {
+            Log.ui.notice("Weekly recap notification tapped")
+            WeeklyRecapRelay.shared.pendingOpen = true
+            return
+        }
         guard StreakReminders.isStreakReminder(response.notification.request.identifier) else {
             // A challenge notification (local or remote) opens that
             // challenge's detail. Everything else is not ours.

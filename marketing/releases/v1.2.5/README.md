@@ -12,7 +12,8 @@ What is in App Store Connect for 1.2.5 (en-US), as of 2026-11-11:
 - **6.3" (`APP_IPHONE_61`)**: `screenshots/`, 1206 × 2622.
 - **Header**: `creative/header_21x9_3840x1646.png`. **Search results**:
   `creative/search_3x2_3840x2560.png`. `universal_16x9_5244x2950.png` is in the asset
-  library but not placed.
+  library but not placed. These are the "hand of catches" images, swapped in later on
+  2026-11-11 (the first upload that day was the C-27J header and the E-6/L-39 search image).
 
 The creative slots use the App Store Connect API's asset library: upload with
 `POST /v1/appAssetLibraryImages` (category `CREATIVE_ASSETS`, relationship
@@ -39,7 +40,7 @@ To do it by hand instead: App Store Connect → 1.2.5 → iPhone screenshots →
 - `source/deck.html`: the renderer for all seven slides
 - `source/creative.html`: the renderer for the three creative assets (`#header`, `#search`, `#universal`)
 - `source/e6.png`, `source/l39.png`: photo crops for slides 1–2
-- `source/ph/`: `c27j_gg.jpg` (the header photo, a copy of `catch-photos/fw_c27j_golden_gate.jpg`), `c27j_card.jpg` (the header card's photo), `a321_guess.jpg`, slide 3's photo (the area inside the bracket baked into
+- `source/ph/`: `c27j_card.jpg` (crop 300x250+432+1516 of `catch-photos/fw_c27j_golden_gate.jpg`), `bd700_card.jpg` (crop 380x317+266+110 of `catch-photos/bd700_rare.jpg`, inside the app's bracket, scaled to 640 wide), both used by the creative cards; `a321_guess.jpg`, slide 3's photo (the area inside the bracket baked into
   `catch-photos/a321_with_route_first.jpg`, crop 256x144+294+212, scaled to 941 × 529),
   and the app icon for slide 7's push
 
@@ -98,30 +99,29 @@ headlines and layouts.
 
 ## Creative assets
 
-Same look as the slides (dusk gradient, the slide headline type, no phone), and
-the two slots show different images:
+All three show the same thing, "a hand of catches": five real catch cards fanned
+from the bottom like a hand of cards, with the Legendary E-6 in front in a gold
+border and soft gold glow. The other four are the JetBlue A321neo (Common +10,
+JBU1770), the Patriots L-39 (Rare +50), the Coast Guard C-27J (Epic +100) and the
+Global Express (Rare +50, WWI21). Tier colours and points are from `GameSystem.swift`.
+The cards are a short version of the catch card (photo, type, operator and tier,
+points) because the stats don't fit at this size.
 
-- **Search results (and universal):** "What's that plane? Point your phone to
-  catch it." with the E-6 and L-39 catch cards fanned on the right. This is the
-  image a searcher sees. Its line (Noah's, 2026-11-11) adds "catch". Slide 1
-  keeps "Point your phone at it.": the longer line runs to five lines at
-  slide width and pushes the card down, and the first thumbnail needs a short
-  headline.
-- **Header:** "Catch the planes flying overhead." with the whole catch told left to
-  right: the C-27J over the Golden Gate (`catch-photos/fw_c27j_golden_gate.jpg`,
-  copied to `source/ph/c27j_gg.jpg`) with the app's pinned label (`C2703 · EPIC
-  +100`), dashed zoom lines from the bracket to its catch card, and the card
-  itself (C-27J Spartan, US Coast Guard, Epic, 427 ft, 132 kt, 1.9 km, +100: the
-  catch row). The card photo is `source/ph/c27j_card.jpg`, crop 300x250+432+1516
-  of the original, so the plane is big enough to see. Redone 2026-11-11 after
-  Noah found the first header hard to read (the plane was a speck in a crowd
-  photo). A few strangers in the crowd are recognisable at full size, as on the
-  1.2.2 slide 1.
+- **Search results and universal:** "What's that plane? **Catch it.**" across the
+  top, fan below. The line is shorter than slide 1's so it can be big enough to
+  read in a search thumbnail.
+- **Header:** "Catch the planes **overhead.**" on the left, fan on the right, all inside
+  the 16:9 centre crop App Store Connect shows on iPhone (x 228..1692 of the 1920
+  half-size layout). Check the Preview tool there after a change.
 
-They replace the 1.2.2 airshow-trio header and the phone-plus-E-6 search image,
-which used the old split-flap cards. The header keeps everything inside the 16:9
-centre crop App Store Connect shows on iPhone (about 2926 of 3840 px); check the
-Preview tool there after upload.
+History (2026-11-11, Noah's reviews the same day): first a C-27J-over-the-Golden-Gate
+header and an E-6/L-39 search image (uploaded); then "could these pop more?" led to
+louder drafts (bigger type, a sunset glow, gold rays, an all-cyan field, a full-bleed
+sky, arcade yellow, and this fan). Noah picked the fan, asked for the gold glow and
+the blue glow behind the headline to be turned down so the text reads, and changed
+the header line from "flying overhead" to "overhead".
+
+They replace the 1.2.2 airshow-trio header and the phone-plus-E-6 search image.
 
 Render at half size with a device scale factor of 2:
 

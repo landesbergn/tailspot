@@ -858,6 +858,7 @@ struct ContentView: View {
                 case .profile:    ProfileScreen()
                 case .leaders:    LeadersSheet()
                 case .challenges: ChallengesSheet()
+                case .weeklyRecap: WeeklyRecapSheet()
                 }
             }
             .modifier(PrimarySheetReveal(isReady: primarySheetContentVisible))
@@ -1965,12 +1966,21 @@ struct ContentView: View {
     /// or toast raised from here is under any presented sheet. The
     /// dismiss-wait-present order lives in `ChallengeInvitePresentation`.
     private var challengeInviteRouter: some View {
-        ChallengeInviteRouter(
-            sheetOpen: primarySheet,
-            dismissPrimarySheet: { primarySheet = nil },
-            presentChallenges: { primarySheet = .challenges },
-            showUnavailableToast: { presentTopToast(.challengesUnavailable) }
-        )
+        ZStack {
+            ChallengeInviteRouter(
+                sheetOpen: primarySheet,
+                dismissPrimarySheet: { primarySheet = nil },
+                presentChallenges: { primarySheet = .challenges },
+                showUnavailableToast: { presentTopToast(.challengesUnavailable) }
+            )
+            // The Monday recap notification's tap. Rides in the same
+            // zero-size slot so ContentView.body pays nothing for it.
+            WeeklyRecapRouter(
+                sheetOpen: primarySheet,
+                dismissPrimarySheet: { primarySheet = nil },
+                presentRecap: { primarySheet = .weeklyRecap }
+            )
+        }
     }
 
     // MARK: - Hangar restore overlay

@@ -56,6 +56,10 @@ struct ProfileScreen: View {
     @AppStorage(LeaderboardStandingCache.monthlyWinsKey) private var cachedMonthlyWins: Int = 0
     private let accountClient = TailspotAccountClient()
     @State private var showHandleSheet = false
+    /// Last week's recap (the "LAST WEEK" card), recomputed when the catch
+    /// count or the day changes.
+    @State private var weeklyRecap: WeeklyRecap?
+    @State private var showingWeeklyRecap = false
     /// "Handle changed to @x" confirmation, cleared after a few seconds.
     @State private var handleToast: String?
     /// Memo for the whole-Hangar derivations (see `ProfileDerived`). Held in
@@ -110,6 +114,9 @@ struct ProfileScreen: View {
                     VStack(spacing: 16) {
                         identityHeader(stats: stats)
                         statsAndStreak(stats: stats, inputs: inputs, streak: streak)
+                        if let weeklyRecap {
+                            weeklyRecapCard(weeklyRecap)
+                        }
                         if let best = Self.bestCatch(top: derived.bestCatch) {
                             bestCatchCard(best)
                         }
@@ -125,6 +132,14 @@ struct ProfileScreen: View {
             .navigationTitle("Profile")
             .navigationBarTitleDisplayMode(.inline)
             .task { await loadStanding() }
+            .task(id: "\(catches.count)|\(Streaks.dayKey(for: Date()))") {
+                weeklyRecap = WeeklyRecap.lastWeek(catches: catches)
+            }
+            // Pushed, not a sheet: one level down, so the back chevron
+            // takes you back (the exit rule; a sheet's X over this one's never lined up).
+            .navigationDestination(isPresented: $showingWeeklyRecap) {
+                if let weeklyRecap { WeeklyRecapScreen(recap: weeklyRecap, presentation: .pushed) }
+            }
             .sheet(isPresented: $showHandleSheet) {
                 HandleEditSheet(source: "profile") { saved in
                     showToast(saved)
@@ -750,6 +765,23 @@ struct ProfileScreen: View {
         )
         let name = canonical.displayName ?? top.callsign ?? top.icao24.uppercased()
         return BestCatch(top: top, name: name, rarity: top.resolvedRarity)
+    }
+
+    /// LAST WEEK: a door into the weekly recap, under the numbers card.
+    private func weeklyRecapCard(_ recap: WeeklyRecap) -> some View {
+        Button {
+            WeeklyRecapTelemetry.fire(WeeklyRecapTelemetry.openedEvent, recap,
+                                      extra: ["via": .string("profile")])
+            showingWeeklyRecap = true
+        } label: {
+            WeeklyRecapEntryRow(
+                recap: recap,
+                weeklyRank: WeeklyRecapRank.cached(weekStart: recap.weekStartKey))
+                .padding(.horizontal, Self.cardInset)
+                .padding(.vertical, 12)
+                .glassEffect(Self.brandGlass, in: .rect(cornerRadius: Brand.Radius.card))
+        }
+        .buttonStyle(.plain)
     }
 
     private func bestCatchCard(_ best: BestCatch) -> some View {

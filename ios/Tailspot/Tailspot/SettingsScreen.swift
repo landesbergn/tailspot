@@ -33,6 +33,7 @@ struct SettingsScreen: View {
     /// nudge on the next sync below). Key shared with StreakReminderCenter.
     @AppStorage(StreakReminders.enabledKey) private var streakRemindersEnabled = true
     @AppStorage(ChallengeReminderScheduler.enabledKey) private var challengeRemindersEnabled = true
+    @AppStorage(WeeklyRecapReminder.enabledKey) private var weeklyRecapRemindersEnabled = true
     /// Display units. `@Bindable` is Observation's binding bridge — the
     /// pickers write straight into the shared preference (which persists to
     /// UserDefaults itself), and every card reading it re-renders.
@@ -74,7 +75,7 @@ struct SettingsScreen: View {
     private var remindersState: RemindersRowState {
         RemindersRowState.resolve(
             authorization: notifStatus,
-            anyToggleOn: streakRemindersEnabled || challengeRemindersEnabled
+            anyToggleOn: streakRemindersEnabled || challengeRemindersEnabled || weeklyRecapRemindersEnabled
         )
     }
 
@@ -283,6 +284,18 @@ struct SettingsScreen: View {
         // two that asked for permission or re-planned, so switching
         // Challenges on did nothing until the next foreground, and switching
         // it off left already-scheduled reminders to fire.
+        // Same shape again for the Monday weekly recap: ON may ask, and the
+        // shared sync re-plans (OFF removes the pending notification).
+        .onChange(of: weeklyRecapRemindersEnabled) { _, enabled in
+            Task { @MainActor in
+                if enabled,
+                   await StreakReminderCenter.shared.authorizationStatus() == .notDetermined {
+                    _ = await StreakReminderCenter.shared.requestPermission()
+                    await refreshNotifStatus()
+                }
+                await StreakReminderCenter.shared.sync(context: modelContext)
+            }
+        }
         .onChange(of: challengeRemindersEnabled) { _, enabled in
             Task { @MainActor in
                 if enabled,
@@ -318,6 +331,15 @@ struct SettingsScreen: View {
         // authorization state; its own on/off key.
         Toggle(isOn: $challengeRemindersEnabled) {
             Text("Challenges")
+                .foregroundStyle(notifDenied
+                                 ? Brand.Color.textTertiary
+                                 : Brand.Color.textPrimary)
+        }
+        .tint(Brand.Color.cyan)
+        .disabled(notifDenied)
+        // Weekly recap (2026-11-10): Monday 09:00, last week's catches.
+        Toggle(isOn: $weeklyRecapRemindersEnabled) {
+            Text("Weekly recap")
                 .foregroundStyle(notifDenied
                                  ? Brand.Color.textTertiary
                                  : Brand.Color.textPrimary)
