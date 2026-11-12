@@ -15,7 +15,15 @@ marketing/
    └─ export/                          current store-ready PNGs (gitignored)
 ```
 
-## The seven slides
+**Since v1.2.5 the store set is not made here.** It is rendered by
+`releases/v1.2.5/source/deck.html` (HTML illustrations, no device frames; see that
+folder's README). The editor and the capture pipeline below still work, but
+`app-store-screenshots.json` holds the 1.2.2 headlines and layouts, so exporting
+from it reproduces the old set. For the next release, copy the latest
+`releases/<version>/source/` forward and edit it, or port the new look into the
+editor first.
+
+## The seven slides (deck editor, through v1.2.2)
 
 Files are named for the slide they fill, so the deck and the folder agree.
 **This was not always true** — they used to be `01.png`…`07.png`, where slide 2
@@ -131,8 +139,12 @@ rather than a pasted screenshot.
 
 ## Export sizes
 
-App Store Connect's iPhone slot accepts **1242 × 2688** or **1284 × 2778**.
-The deck exports five sizes so the upload never bounces:
+Which sizes App Store Connect accepts depends on the screenshot slot, and it
+changed under us. Sets up to v1.2.2 went up at **1284 × 2778**. On 2026-11-10 the
+1.2.5 slot rejected that size ("File dimensions are invalid") and listed
+**1206 × 2622** and **1179 × 2556** (plus landscape) instead, so v1.2.5 is
+1206 × 2622. Check the sizes the error lists before re-rendering.
+The deck exports five sizes so one of them fits:
 
 `1320×2868` · `1284×2778` · `1242×2688` · `1206×2622` · `1125×2436`
 
