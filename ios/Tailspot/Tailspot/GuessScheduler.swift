@@ -16,10 +16,13 @@
 //    - only ELIGIBLE catches can fire: a fresh single catch — not a duplicate
 //      ("already caught" awards no points, so there's nothing to bonus), not
 //      part of a multi-catch, and not a legacy gate-suspect row;
-//    - ~1-in-2 roll on eligible catches (was 1-in-3 through v1.0 — raised
-//      2026-08-25 per Noah: measured only ~10% of recorded catches actually
-//      got a round, and players answer 90% of the ones shown);
-//    - minimum 1-catch gap after a round fires (was 2, same re-balance);
+//    - ~2-in-3 roll on eligible catches (1-in-3 through v1.0; 1-in-2 from
+//      2026-08-25; 2-in-3 from 2026-11-11 per Noah — PostHog showed only
+//      ~13% of all catches getting a round, sliding to ~10%, while players
+//      answer ~88% of the rounds they see);
+//    - no forced gap after a round (was 2 through v1.0, 1 from 2026-08-25,
+//      0 from 2026-11-11 — the gap guard stays wired so one constant can
+//      bring it back);
 //    - never on the user's very first catch (protect activation).
 //
 //  Split design, per the repo's testability convention (ADSBSource,
@@ -74,15 +77,16 @@ final class GuessScheduler {
 
     /// Probability an eligible, gap-clear, non-first catch fires a round.
     /// One constant — the kill switch the plan's risk #1 calls for lives
-    /// here. Raised from D3's 1-in-3 on 2026-08-25 (Noah's call): with the
-    /// gap below, the steady state is ~1 round per 3 eligible catches, about
-    /// double the shipped v1.0 rate.
-    nonisolated static let fireProbability: Double = 1.0 / 2.0
+    /// here. D3 shipped 1-in-3; raised to 1-in-2 on 2026-08-25 and to 2-in-3
+    /// on 2026-11-11 (both Noah's call). With no gap, the steady state is ~2
+    /// rounds per 3 eligible catches — still not every catch.
+    nonisolated static let fireProbability: Double = 2.0 / 3.0
 
-    /// Minimum number of recorded catches BETWEEN two rounds. A round on
-    /// catch N means catch N+1 can never fire; N+2 is the first that can
-    /// roll again. Lowered from D3's 2 in the 2026-08-25 re-balance.
-    nonisolated static let minimumGapCatches = 1
+    /// Minimum number of recorded catches BETWEEN two rounds. With 1, a round
+    /// on catch N means N+1 can never fire. 0 (since 2026-11-11) disables the
+    /// guard: back-to-back rounds are allowed and only the roll paces them.
+    /// D3 shipped 2; lowered to 1 on 2026-08-25.
+    nonisolated static let minimumGapCatches = 0
 
     // MARK: Pure core
 
@@ -101,6 +105,9 @@ final class GuessScheduler {
     ///     user's very first catch → never fire).
     ///   - catchesSinceLastRound: recorded catches since a round last fired,
     ///     nil if no round has ever fired.
+    ///   - minimumGap: the gap guard; defaults to `minimumGapCatches`. A
+    ///     parameter so tests keep the guard covered while production runs
+    ///     it at 0.
     /// - Returns: `.route` when a route round should fire, or nil for the
     ///   (common) no-round path.
     nonisolated static func decide(
@@ -110,6 +117,7 @@ final class GuessScheduler {
         routeAvailable: Bool,
         priorCatchCount: Int,
         catchesSinceLastRound: Int?,
+        minimumGap: Int = minimumGapCatches,
         using rng: inout some RandomNumberGenerator
     ) -> GuessKind? {
         // Eligibility guards — cheap, RNG-free, so an ineligible catch never
@@ -119,9 +127,9 @@ final class GuessScheduler {
         // Never the user's very first catch (activation protection).
         guard priorCatchCount >= 1 else { return nil }
         // Minimum gap after the last fired round.
-        if let gap = catchesSinceLastRound, gap < minimumGapCatches { return nil }
+        if let gap = catchesSinceLastRound, gap < minimumGap { return nil }
 
-        // The ~1-in-2 roll.
+        // The ~2-in-3 roll.
         guard Double.random(in: 0..<1, using: &rng) < fireProbability else { return nil }
 
         return .route
