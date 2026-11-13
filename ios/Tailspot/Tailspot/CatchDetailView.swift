@@ -268,7 +268,8 @@ struct CatchDetailView: View {
             ? shown.photoFilename.flatMap { CatchPhotoStore.url(forFilename: $0) }
             : planespottersPhoto?.thumbnailLargeURL
         return CardPlane(
-            callsign: shown.callsign,
+            callsign: Callsign.cardIdentifier(callsign: shown.callsign,
+                                              registration: shown.registration),
             model: canonical.displayName ?? shown.model,
             carrier: Airlines.operatorLabel(operatorName: shown.operatorName,
                                             callsign: shown.callsign),
@@ -390,7 +391,8 @@ struct CatchDetailView: View {
     // MARK: - Delete
 
     private var deleteTitle: String {
-        let cs = shown.callsign?.trimmedNonEmpty ?? shown.icao24.uppercased()
+        let cs = Callsign.cardIdentifier(callsign: shown.callsign, registration: shown.registration)
+            ?? shown.icao24.uppercased()
         return "Delete catch of \(cs)?"
     }
 

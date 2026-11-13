@@ -279,6 +279,20 @@ git worktree add ../tailspot-featB feat/featB
 Caveat: `bin/deploy` uses one fixed build directory, so deploy from one worktree
 at a time.
 
+## Measuring test time
+
+The console's "(N seconds)" and the xcresult per-test durations both include
+queue time in parallel runs, so don't use them. Use Swift Testing's own "Test
+run with N tests … passed after X seconds" line, which a parallel (clone) run
+writes only to the xcresult:
+
+```bash
+xcrun xcresulttool get log --path R.xcresult --type action --compact | grep -o 'Test run with[^"\\]*'
+```
+
+For true per-test cost, run with `-parallel-testing-enabled NO` (Swift Testing
+then runs serially, as CI does).
+
 ## What runs where
 
 - **GitHub Actions** (`.github/workflows/tests.yml`) — `TailspotTests` on every

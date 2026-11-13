@@ -88,8 +88,7 @@ enum CatchBackfill {
     /// alone — mixing an as-flown origin with a currently-filed destination
     /// would fabricate a journey no one observed.
     static func needsRoute(_ c: Catch) -> Bool {
-        guard !(c.callsign ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        else { return false }
+        guard Callsign.clean(c.callsign) != nil else { return false }
         let noRoute = c.originIcao == nil && c.destIcao == nil
         let fullRouteNoIata = c.originIcao != nil && c.destIcao != nil
             && c.originIata == nil && c.destIata == nil
@@ -121,8 +120,7 @@ enum CatchBackfill {
         track: Double? = nil,
         timeout: Duration = .milliseconds(1500)
     ) async -> BackendAircraft.Route? {
-        guard let cs = callsign?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !cs.isEmpty else { return nil }
+        guard let cs = Callsign.clean(callsign) else { return nil }
         // Capture the Sendable client into a local so the @Sendable task-group
         // children don't reach back into MainActor-isolated static state.
         let client = routeClient
@@ -389,7 +387,7 @@ enum CatchBackfill {
         var routeCache: [String: BackendAircraft.Route?] = [:]
         for c in catches.filter(needsRoute) {
             if Task.isCancelled { break }
-            let callsign = (c.callsign ?? "").trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+            let callsign = (Callsign.clean(c.callsign) ?? "").uppercased()
             guard !callsign.isEmpty else { continue }
             // ~0.1° bucket (≈11 km) — catches from one spotting session share
             // a lookup; a different day's catch elsewhere gets its own. The

@@ -3612,7 +3612,7 @@ struct ContentView: View {
             )
         } ?? 0
         return CardPlane(
-            callsign: row.callsign,
+            callsign: Callsign.cardIdentifier(callsign: row.callsign, registration: row.registration),
             model: canonical.displayName ?? row.model,
             // Same derivation as CatchDetailView's card: recorded operator,
             // else the callsign-prefix airline, else Private/unknown — so the
@@ -3682,7 +3682,9 @@ struct ContentView: View {
             !catches.contains { $0.typecode == tc }
         } ?? false
         return CardPlane(
-            callsign: aircraft.callsign,
+            callsign: Callsign.cardIdentifier(
+                callsign: aircraft.callsign,
+                registration: aircraft.registration ?? metadata?.registration),
             model: canonical.displayName ?? metadata?.model,
             carrier: Airlines.operatorLabel(
                 operatorName: metadata?.operatorName

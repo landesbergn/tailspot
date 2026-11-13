@@ -172,7 +172,12 @@ function normalizeOne(a: AdsbLolAircraft, fetchedAt: number): NormalizedAircraft
 function trimCallsign(flight: string | null | undefined): string | null {
   if (typeof flight !== "string") return null;
   const t = flight.trim();
-  return t.length > 0 ? t : null;
+  // Some transponders broadcast a placeholder flight ID ("00000000",
+  // "--------") when the crew never set one. No letter and no non-zero
+  // digit means it names nothing: treat it as no callsign, same rule as the
+  // app's Callsign.clean, so older app builds stop showing it too.
+  if (!/[A-Za-z1-9]/.test(t)) return null;
+  return t;
 }
 
 /** Trim an optional string field; undefined for missing/blank so the JSON key

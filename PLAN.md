@@ -296,7 +296,8 @@ Concrete bullets that reviewers and users care about:
 tailspot/
 ├─ PLAN.md                  ← this file
 ├─ README.md
-├─ CLAUDE.md                ← guidance for future Claude Code sessions
+├─ CLAUDE.md                ← guidance for future Claude Code sessions (ios/CLAUDE.md for iOS traps)
+├─ .claude/rules/           ← path-scoped Claude Code rules (the rest of .claude/ is local)
 ├─ .gitignore
 ├─ bin/                     ← deploy / log-start / log-stop / log-tail (Phase 0c)
 ├─ tools/
