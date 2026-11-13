@@ -5,6 +5,12 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-11-12 — Scoring v9 live on prod (tier audit server rollout, #406)
+
+- 1.2.5 went live, so the server half ran in the documented order: DB volume snapshot, `typecodes` ingest from the shipped `AircraftTypes.json`, deploy (API v63), rescore dry run, review, apply.
+- 744 of 24,627 catches changed tier; leaderboard total 411,450 → 428,681 (+17,231). Biggest moves: Common → Uncommon 559 (+7,093), Common → Rare 104 (+5,340), Common → Legendary 4 (+2,450); Epic → Rare 13 (−862). All-time top 8 unchanged.
+- Earlier the same night (2026-11-11), API v62 shipped the weekly recap's `lastWeekRank` / `lastWeekPoints` with scoring held at v8.
+
 ## 2026-11-11 — Bonus round shows up more often (branch `feat/guess-round-cadence-2in3`)
 
 - PostHog: since the 2026-08-25 bump, about 13% of catches got the route bonus round, sliding to about 10–11% in early November. Players answer about 88% of the rounds they see.
