@@ -377,16 +377,18 @@ struct CatchCardBack: View {
                         if let first { ledgerLine("FIRST CAUGHT", first, scale: scale) }
                         if !log.rows.isEmpty { catchLogBlock(log, scale: scale) }
                     }
-                    // Never squeezed: on a tight face the stack shrank the
-                    // FIRST CAUGHT date (minimumScaleFactor) before taking
-                    // lines from the Wikipedia teaser.
-                    .fixedSize(horizontal: false, vertical: true)
+                    // Laid out before the teaser: on a tight face the stack
+                    // shrank the FIRST CAUGHT date (minimumScaleFactor)
+                    // before taking lines from the Wikipedia teaser. A
+                    // priority, not fixedSize, so the date can still shrink
+                    // if this content alone ever outgrows the face.
+                    .layoutPriority(1)
                 }
 
                 if !specs.isEmpty {
                     Rectangle().fill(RP.rule).frame(height: 1)
                     specGrid(specs, scale: scale)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .layoutPriority(1)
                 }
 
                 if CardBackFormat.showsWikipedia(model) {
@@ -711,7 +713,9 @@ struct CatchCardBack: View {
             .onCardTap { showingSummary = true }
             .layoutPriority(-1)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(CardBackFormat.teaserText(summary))
+            // The short extract, not the whole intro the card may truncate:
+            // the hint opens the full paragraph.
+            .accessibilityLabel(summary.extract)
             .accessibilityHint("Opens the Wikipedia summary")
             .accessibilityAddTraits(.isButton)
             .accessibilityAction { showingSummary = true }

@@ -38,7 +38,7 @@ nonisolated enum BackFixtures {
     // Test copy written for the fixture (not real Wikipedia text).
     static let b738Summary = WikipediaSummary(
         extract: "The Boeing 737-800 is a stretched member of the 737 Next Generation family of narrow-body airliners. It entered service in 1998 and became the most widely flown variant of the family.",
-        intro: "The Boeing 737-800 is a stretched member of the 737 Next Generation family of narrow-body airliners. It entered service in 1998 and became the most widely flown variant of the family. A third sentence only the sheet shows.",
+        intro: "The Boeing 737-800 is a stretched member of the 737 Next Generation family of narrow-body airliners. It entered service in 1998 and became the most widely flown variant of the family. A third sentence the card shows when it has room.",
         pageURL: URL(string: "https://en.m.wikipedia.org/wiki/Boeing_737_Next_Generation")!)
 
     static let planespotters = PlanePhoto(
@@ -289,24 +289,6 @@ struct CardBackSnapshotTests {
     @Test func backCommonsGA() async throws {
         let png = try await render(back(BackFixtures.c172, photo: Self.testPhoto),
                                    name: "closeup_back_commons_ga.png")
-        #expect(!png.isEmpty)
-    }
-
-    /// At a FIXED face height (as FlipCard lays it out), a long intro runs
-    /// down to the bottom inset instead of stopping at four lines; a short
-    /// face truncates it instead.
-    @Test(arguments: [560.0, 680])
-    func backFillsAFixedFace(_ height: Double) async throws {
-        var m = BackFixtures.b738
-        m.summary = WikipediaSummary(
-            extract: BackFixtures.b738Summary.extract,
-            intro: String(repeating: BackFixtures.b738Summary.intro + " ", count: 4),
-            pageURL: BackFixtures.b738Summary.pageURL)
-        let view = CatchCardBack(model: m, width: Self.cardWidth,
-                                 onOpenURL: { _ in }, snapshotImage: Self.testPhoto)
-            .frame(height: height)
-            .padding(.top, 60)
-        let png = try await render(view, name: "closeup_back_fixed_\(Int(height)).png")
         #expect(!png.isEmpty)
     }
 

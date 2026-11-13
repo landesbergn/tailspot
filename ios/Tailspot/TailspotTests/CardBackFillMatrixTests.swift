@@ -83,9 +83,11 @@ struct CardBackFillMatrixTests {
             isFirstOfType: route, icao24: "a4f2c1")
     }
 
-    /// Card widths as CatchDetailView computes them: min(screen − 36, 420).
-    /// iPhone SE/13 mini (375), 17 / 16 (393), 17 Pro Max (440).
-    @Test(arguments: [339.0, 357, 404])
+    /// Card widths as CatchDetailView computes them: min(screen − 36, 420),
+    /// at the extremes: iPhone SE/13 mini (375) and 17 Pro Max (440). The
+    /// card scales with its width, so the sheets match; two widths catch a
+    /// regression that breaks that without paying for a third render.
+    @Test(arguments: [339.0, 404])
     func fillSheet(_ width: Double) async throws {
         let w = CGFloat(width)
         let backs = Self.backs
