@@ -55,6 +55,7 @@ Failures that need Noah, not a retry:
 ## Tests
 
 Swift Testing (`@Test`, `#expect`), not XCTest, in `ios/Tailspot/TailspotTests/`.
+(`TailspotUITests/` is slow template scaffolding, not part of the workflow.)
 Run them after substantive changes and always before committing or deploying
 changes to Geo, Aircraft decoding, `ADSBManager`, the backend client, or
 anything they depend on:
@@ -99,6 +100,7 @@ Tailspot is live on the App Store. Process and checklists: `CONTRIBUTING.md`.
 - No force-push to `main` without Noah's explicit OK.
 - After a build reaches TestFlight or the App Store, check App Store Connect →
   Crashes (and, for the App Store, ratings and the PostHog funnel by version).
+  Testers paste version+build from the tap-to-copy footer in Settings.
 
 ## Secrets
 
@@ -109,7 +111,8 @@ checkout. Keep that step.
 
 Inspect `git diff --cached` before every commit (this repo has leaked secrets
 twice). Secrets never go in `.swift`, plists or commit messages.
-`Tailspot.xcscheme` is the only committed shared scheme.
+`Tailspot.xcscheme` is the only committed shared scheme; review it before
+`git add ios/`, since both past leaks rode in through it.
 
 ## Architecture
 

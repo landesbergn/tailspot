@@ -6,6 +6,9 @@ paths:
   - "ios/**/CatchCaptureDiagnostics*.swift"
   - "ios/**/CatchDetailView*.swift"
   - "ios/**/CatchUploader*.swift"
+  - "ios/**/GuessRecreditSweep*.swift"
+  - "ios/**/TailspotApp.swift"
+  - "ios/**/ContentView.swift"
 ---
 
 # The Catch model contract (iOS)

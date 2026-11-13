@@ -5,6 +5,10 @@ paths:
   - "ios/**/PostHog*.swift"
   - "ios/**/TailspotAccountClient*.swift"
   - "ios/**/DeviceID*.swift"
+  - "ios/**/HandleClaimer*.swift"
+  - "ios/**/OnboardingFlow*.swift"
+  - "ios/**/TailspotApp.swift"
+  - "ios/**/ContentView.swift"
 ---
 
 # Analytics identity (iOS)

@@ -2,6 +2,7 @@
 paths:
   - "ios/**/ADSB*.swift"
   - "ios/**/ErrorCopy*.swift"
+  - "ios/**/ContentView.swift"
 ---
 
 # ADS-B errors (iOS)
