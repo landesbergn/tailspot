@@ -1,74 +1,64 @@
 # CLAUDE.md
 
-Guidance for Claude Code (claude.ai/code) working in this repo. This file is the
-**durable "how to work here"** — process, conventions, and the non-obvious traps.
-Product state, the backlog, and history live in other files (below); don't mirror
-them here, or this file drifts.
+<!-- Durable "how to work here" guidance only. Product status, the backlog and
+history live in PLAN §9, CHANGELOG.md and git log; don't mirror them here.
+Edit this file only when durable guidance changes. Anthropic's guidance is to
+keep it under ~200 lines and to leave out anything Claude can learn by reading
+the code. -->
 
-## Orient first: strategy, plan, history
+## Orient first
 
-- **`STRATEGY.md`** — the product strategy and the source of priorities. North-star
-  metric is **catch-confirmation-rate** ("is the catch real?"). The approach is
-  **make the catch real first, then make it a game**: Bet A — the *Real-catch
-  engine* (trustworthy ID) — is the foundation; Bet B — *Collection &
-  progression* — is why people return; then *Social & sharing* and the *Backend &
-  data platform*. Work is organized under those four tracks. **Not doing** (don't
-  propose these): monetization, Android, a web app.
-- **`PLAN.md`** — architectural decisions (§1), tech stack (§2), phased roadmap
-  (§3), risks (§5), open questions (§6), repo layout (§8), and **§9 — the canonical
-  ranked backlog + current status.** When you need "what's next" or "what just
-  shipped," read §9, not this file.
-- **`CHANGELOG.md`** — per-round history, newest first.
+- `STRATEGY.md`: priorities. North-star metric is catch-confirmation-rate ("is
+  the catch real?"). Make the catch real first (trustworthy ID), then make it a
+  game (collection and progression), then social and the backend platform. Not
+  doing, so don't propose: monetization, Android, a web app.
+- `PLAN.md`: architectural decisions (§1), roadmap, risks, open questions, and
+  §9, the ranked backlog and current status. Read §9 for "what's next" or "what
+  just shipped". Finishing a round means updating §9.
+- `CHANGELOG.md`: per-round history, newest first.
+- `CONTRIBUTING.md`: the release process in full.
 
-There is **no `Current state` block in this file** — status lives in PLAN §9 +
-CHANGELOG + `git log`. Read PLAN/STRATEGY before proposing anything structural or
-reprioritizing work.
+Read PLAN and STRATEGY before proposing anything structural or reprioritizing.
 
-## Working model
+## Working with Noah
 
-- **Solo developer (Noah), no prior iOS experience.** Claude writes the code; Noah
-  runs it on his iPhone 16 (iOS 26.x), field-tests, and reports back. He's learning
-  iOS in parallel with shipping.
-- **Explain-as-we-go.** When you introduce a Swift / SwiftUI / iOS pattern Noah
-  hasn't seen, narrate it in the commit message or an inline comment.
-- **Simplest viable iOS choice at every fork:** SwiftUI over UIKit, SwiftData over
-  Core Data, Apple-native over third-party, no CocoaPods/SPM deps yet.
-- **Field-test location varies.** Berkeley/Oakland is the home base (dense SFO/OAK
-  ADS-B incl. adsb.lol MLAT — GA, helis, some military appear), but Noah also tests
-  while travelling (e.g. Bali). Don't assume a US location.
+- Solo developer. Claude writes the code; Noah runs it on his iPhone 16 (iOS
+  26.x), field-tests and reports back.
+- Noah decides UI, workflows and product/user experience: bring him choices
+  there, with screenshots or mockups. Code-level decisions are Claude's; don't
+  narrate Swift patterns or ask him to weigh in on implementation.
+- Simplest viable choice at each fork: SwiftUI, SwiftData, Apple-native, no
+  third-party dependencies unless clearly worth it.
+- Field-test location varies. Home is Berkeley/Oakland (dense ADS-B incl. MLAT),
+  but he also tests while travelling (e.g. Bali). Don't assume a US location.
 
 ## Build, run, deploy
 
-- **`bin/deploy [--no-build] [--no-launch] [--dry-run]`** (default) — builds via
-  `xcodebuild`, installs via `xcrun devicectl`, launches on Noah's paired iPhone
-  wirelessly. UDID/scheme/paths in `tools/deploy/config.sh` (override via gitignored
-  `config.local.sh`). Wireless pairing must be active (`xcrun devicectl list
-  devices`). There is **no CI on deploys** — run the tests first when touching
-  testable code.
-- **Manual:** Xcode `⌘R` against the connected iPhone (for the debugger / live
-  `os_log` console).
-- The **iOS Simulator can't provide GPS, compass, or camera** — the iPhone is
-  required for any runtime / field testing.
-- `bin/log-start` / `bin/log-tail` stream the device syslog via `idevicesyslog`
-  — that captures system-emitted lines *about* the app, but **not** the app's own
-  `os_log` output (libimobiledevice doesn't expose `os_trace_relay`). For app
-  logs, use Xcode's Console / `os_log` viewer.
+- `bin/deploy [--no-build] [--no-launch] [--dry-run]` builds with `xcodebuild`,
+  installs with `xcrun devicectl` and launches on Noah's iPhone wirelessly.
+  Device and scheme config: `tools/deploy/config.sh` (override in gitignored
+  `config.local.sh`). Nothing tests a deploy, so run the tests first when
+  touching testable code.
+- The iOS Simulator has no GPS, compass or camera; runtime and field testing
+  need the iPhone.
+- `bin/log-start` / `bin/log-tail` stream the device syslog, which does not
+  include the app's own `os_log` output. For app logs use Xcode's console.
 
-**Failure modes that need Noah, not a retry:**
-- `devicectl install` fails ("developer disk image could not be mounted") → unlock
-  the phone, re-pair via USB, or open Xcode once to mount the DDI.
-- `devicectl process launch` returns Locked → phone must be unlocked; ask, then
-  retry the launch step.
-- `xcodebuild` can't find the destination → check `devicectl list devices`;
-  `unavailable` means USB re-pair or open Xcode once.
+Failures that need Noah, not a retry:
+- `devicectl install` says the developer disk image could not be mounted: he
+  unlocks the phone, re-pairs over USB, or opens Xcode once.
+- `devicectl process launch` returns Locked: ask him to unlock, then retry the
+  launch.
+- `xcodebuild` can't find the destination: check `xcrun devicectl list devices`;
+  `unavailable` means a USB re-pair or opening Xcode once.
 
 ## Tests
 
-Swift Testing (`@Test`, `#expect`, `@Suite`) — **not XCTest** — in
-`ios/Tailspot/TailspotTests/`. (`TailspotUITests/` is slow template scaffolding,
-not part of the workflow.) Run after substantive changes, and always before
-committing/deploying when touching Geo, Aircraft decoding, `ADSBManager`, the
-backend source client, or anything they depend on:
+Swift Testing (`@Test`, `#expect`), not XCTest, in `ios/Tailspot/TailspotTests/`.
+(`TailspotUITests/` is slow template scaffolding, not part of the workflow.)
+Run them after substantive changes and always before committing or deploying
+changes to Geo, Aircraft decoding, `ADSBManager`, the backend client, or
+anything they depend on:
 
 ```
 xcodebuild test \
@@ -78,126 +68,64 @@ xcodebuild test \
   -only-testing:TailspotTests
 ```
 
-A cold run (fresh build + simulator boot) is ~6–7 min; a warm full run ~4 min, of
-which the tests themselves are ~2 min and the rest is the simulator clone booting and
-the host app launching. Browse `TailspotTests/` for coverage — inline inventories
-drift. **`ADSBManager.init(source: ADSBSource =
-TailspotBackendClient())`** has a defaulted param so production uses the real
-backend and tests inject a fixture; `ContentView`'s `@StateObject private var adsb
-= ADSBManager()` depends on the no-arg default — don't break that shape.
+- About 6–7 min cold and 4 min warm, so run it in the background.
+- Most suites are `@MainActor`, so the main thread is the bottleneck. Never
+  block it in a test with `RunLoop.main.run(until:)`; use `try? await
+  Task.sleep(for:)`.
+- `ContentView` relies on `ADSBManager()` taking no arguments
+  (`init(source: ADSBSource = TailspotBackendClient())`); tests inject a fixture
+  through that parameter. Keep that shape.
+- Measuring test speed: see CONTRIBUTING.md → Measuring test time.
 
-Speed rules (2026-10-31 measurements, CHANGELOG):
-- **Most suites are `@MainActor`, so the main thread is the bottleneck**, not cores.
-  Never block it in a test: no `RunLoop.main.run(until:)` settle spins (a spin stalls
-  every other MainActor test for its whole duration, because GCD won't re-enter the
-  main queue). Use `try? await Task.sleep(for:)`, which also lets the view's `.task` run.
-- **Measure with Swift Testing's own number**, not the console's "(N seconds)" or the
-  xcresult durations (both include queue time in parallel runs). It is the "Test run
-  with N tests … passed after X seconds" line, which a parallel (clone) run only writes
-  to the xcresult: `xcrun xcresulttool get log --path R.xcresult --type action
-  --compact | grep -o 'Test run with[^"\\]*'`. For true per-test cost run with
-  `-parallel-testing-enabled NO` (Swift Testing then runs serially, as CI does).
+## Shipping
 
-## Workflow: four rings (local → main → TestFlight → App Store)
+Tailspot is live on the App Store. Process and checklists: `CONTRIBUTING.md`.
 
-**Tailspot is live on the App Store** (v1.0.0 build 83, approved 2026-08-08), so
-there are now four rings, not three. Canonical process, with the per-release
-checklist and soak table: `CONTRIBUTING.md`.
+- `main` is protected and always green: branch, field-test with `bin/deploy`,
+  open a PR, squash-merge on green CI. Merging does not ship.
+- Claude may commit, `bin/deploy`, merge on green CI, and cut TestFlight builds
+  with `bin/xcode-cloud-build --watch` (one build per batch; say what went in).
+- Claude never submits to App Review or touches a phased release. That's Noah's,
+  because an App Store release can't be rolled back.
+- One `MARKETING_VERSION` per public release, bumped when the release train
+  opens, in both config blocks of the app target. Leave
+  `CURRENT_PROJECT_VERSION` at `1`; CI bumps build numbers.
+- SwiftData changes stay additive (new optional fields with defaults). The
+  Hangar is local-only with no sync, so a breaking schema change or a reinstall
+  destroys a real user's collection. Warn before any delete/reinstall test on a
+  device that matters.
+- The backend serves old app versions for months: API changes are additive,
+  deploy the server before the client that needs it, and snapshot the DB before
+  migrations.
+- No force-push to `main` without Noah's explicit OK.
+- After a build reaches TestFlight or the App Store, check App Store Connect →
+  Crashes (and, for the App Store, ratings and the PostHog funnel by version).
+  Testers paste version+build from the tap-to-copy footer in Settings.
 
-```
-Ring 0 bin/deploy → Ring 1 main → Ring 2 TestFlight → Ring 3 App Store
-       (Noah's phone)  (nobody)     (invited testers)   (the public, NO ROLLBACK)
-```
+## Secrets
 
-- `main` is the **enforced, always-green integration line** — branch protection
-  blocks direct pushes (admins included) and requires the green **Unit tests**
-  check. Flow: branch → field-test with `bin/deploy` → PR → squash-merge.
-  **Merging does not ship; cutting a TestFlight build does not ship.**
-- **Claude may** commit, `bin/deploy`, merge on green CI, and **cut TestFlight
-  builds** (`bin/xcode-cloud-build --watch`; Noah's OK 2026-09-07) — one build
-  per batch, and say what went into it. **Claude may not** promote to Ring 3 —
-  the App Review submission and phased release are Noah's, always.
-- **Ring 3 is irreversible.** iOS has no rollback; the only post-hoc levers are
-  pull-from-sale, an expedited review, or pausing a phased rollout. Front-load
-  the caution — soak on TestFlight, and prefer phased release on every submit.
-- **Versioning — this rule INVERTED at GA.** Pre-GA guidance was "keep the same
-  `MARKETING_VERSION`, let the build number increment"; that is **wrong for the
-  App Store**, where each public release needs a new, higher version string. Now:
-  **one `MARKETING_VERSION` per public release, bumped when the train opens**
-  (not at submission), edited in *both* config blocks of the app target only.
-  Build numbers still auto-bump in CI (`ci_scripts/ci_pre_xcodebuild.sh`) —
-  leave `CURRENT_PROJECT_VERSION` at `1` in `project.pbxproj`.
-- **SwiftData migrations stay lightweight/additive** (new optional fields with
-  defaults). The Hangar is **local-only** (no sync, photos not uploaded), so a
-  breaking schema change destroys real users' collections — and post-GA there is
-  no one to warn, because they aren't testers you can message. Reinstall also
-  loses it: warn before any delete/reinstall test on a device that matters.
-- **The backend is half of production and serves clients you can't fix.** Old
-  app versions live on phones for months: API changes are **additive-only** with
-  respect to shipped builds, deploy the **server before the client** that needs
-  it, and snapshot the DB before migrations.
-- **Don't force-push to `main` without Noah's explicit OK** (e.g. a leak needing
-  history rewrite — surface the trade-offs and let him decide).
-- After any build reaches Ring 2 or 3, check App Store Connect → Crashes (and,
-  for Ring 3, ratings/reviews + the PostHog funnel by version). Testers paste the
-  version+build from Settings' tap-to-copy footer.
+The only build-time secret is the optional PostHog key in gitignored
+`ios/Tailspot/Tailspot.secrets.xcconfig`; without it `Analytics.swift` no-ops.
+Fresh worktrees don't have that file, so `bin/deploy` copies it from the primary
+checkout. Keep that step.
 
-### Doc-staleness Stop hook
+Inspect `git diff --cached` before every commit (this repo has leaked secrets
+twice). Secrets never go in `.swift`, plists or commit messages.
+`Tailspot.xcscheme` is the only committed shared scheme; review it before
+`git add ios/`, since both past leaks rode in through it.
 
-`.claude/settings.json` registers a `Stop` hook (`bin/doc-staleness-check`): if
-there are unpushed commits on `main` and **none touched `CLAUDE.md` or `PLAN.md`**,
-it blocks the turn and asks for a doc refresh. In this repo's model the live status
-lives in **PLAN §9** (prior rounds in `CHANGELOG.md`), so finishing a round means
-updating **PLAN §9** — which satisfies the hook. Update *this* file only when
-*durable guidance* changes. (`.claude/settings.json` is gitignored; to make the
-hook follow the repo, `!`-allow it in `.gitignore` and commit.)
+## Architecture
 
-## Secrets: PostHog key only
-
-The app ships **no ADS-B secret.** OpenSky (the only credentialed source) and the
-synthetic mock source were both removed in the 2026-06-21 cutover; ADS-B comes
-solely from the Tailspot backend (`api.tailspot.app`), which needs no per-app
-secret. The one build-time secret is the **optional** PostHog analytics key in
-gitignored `ios/Tailspot/Tailspot.secrets.xcconfig` (`POSTHOG_API_KEY`); when
-absent, `Analytics.swift` no-ops. It's a write-only anonymous key — baking it into
-the binary is acceptable. **Worktree trap:** being gitignored, the file is absent
-from every fresh per-feature worktree, so worktree `bin/deploy` builds were
-silently keyless — the dev phone sent zero analytics/replays for 6 days
-(2026-08-19 → 08-25) before anyone noticed. `bin/deploy` now heals the file from
-the primary checkout (or warns loudly if it can't); don't remove that backstop.
-
-**Leak hygiene still applies** (two real leaks in this repo's history, both
-OpenSky). Inspect `git diff --cached` before every commit; secrets belong only in
-the gitignored secrets file — never in `.swift`, plists, commit messages, or a
-staged secrets file. `Tailspot.xcscheme` is the **only** committed shared scheme
-(`.gitignore` allows exactly it) — review before `git add ios/`.
-
-## iOS conventions & load-bearing gotchas
-
-Moved to **`ios/CLAUDE.md`** — it loads automatically whenever Claude works with
-files under `ios/`, which is exactly when those traps apply: MainActor default
-isolation, pitch vs. camera elevation, the portrait + iPhone-only pins, the
-visibility filter and tap-to-reveal, the design system, logging, the analytics
-identity rule, and the `Catch` / backfill contracts.
-
-## Architectural baseline (settled — see PLAN §1)
-
-- **Identification is geometric, not visual** — GPS + true-north heading + camera
-  elevation correlated against ADS-B positions; not ML object detection. *Visual
-  confirmation* (bundled YOLOX detector) is live **only** to snap the reticle /
-  catch-photo bracket onto the actual plane image and feed the catch-time gates
-  (L2 sky gate enforcing; L4 detector gate in shadow) — never to identify. PLAN
-  §1.1a / §9.
-- **The Tailspot backend is the sole ADS-B provider** (`api.tailspot.app`,
-  adsb.lol + MLAT), abstracted behind `ADSBSource` so adding/swapping a provider is
-  one file.
-- **Disambiguation is a v1 design choice:** render a label for every candidate in
-  the angular cone; the user taps one.
-- **Photos:** commissioned illustrated cards (type × livery) to sidestep licensing
-  — but the *medium itself is reopened* (illustrated vs. real photos vs. other; see
-  STRATEGY's Collection track / PLAN §6.3). Decide the medium before any
-  commissioning pipeline.
-
-**Design prototype:** the canvas handoff lives in `design/` (HTML/JSX, reference
-only — recreate in SwiftUI, don't port the JSX). Open with `python3 -m
-http.server 4173 --directory design && open http://127.0.0.1:4173/`.
+- Identification is geometric (GPS, true-north heading and camera elevation
+  matched against ADS-B positions), not visual. The bundled detector only snaps
+  the bracket onto the plane and feeds the catch-time checks; it never decides
+  which plane was caught.
+- The Tailspot backend (`api.tailspot.app`) is the only ADS-B source, behind the
+  `ADSBSource` protocol.
+- When several planes are in view, every candidate gets a label and the user
+  taps one.
+- iOS conventions and traps live in `ios/CLAUDE.md`, which loads when working
+  under `ios/`.
+- Design prototype (reference only; rebuild in SwiftUI, don't port the JSX):
+  `python3 -m http.server 4173 --directory design`, then open
+  http://127.0.0.1:4173/.
