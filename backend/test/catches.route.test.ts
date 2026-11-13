@@ -124,6 +124,7 @@ describe("POST /v1/catches", () => {
       typecode: "B738",
       firstOfType: true,
       guessCorrect: false, // no guess sent → additive key present, false
+      pressSize: 1, // a lone catch (scoring v10)
       duplicate: false,
     });
   });
@@ -190,6 +191,7 @@ describe("POST /v1/catches", () => {
       typecode: "B738",
       firstOfType: true,
       guessCorrect: false,
+      pressSize: 1,
       duplicate: false,
     });
 
@@ -409,6 +411,94 @@ describe("POST /v1/catches", () => {
     expect(res.json().points).toBe(75); // first-of-type only
   });
 
+  describe("multi-catch bonus (scoring v10): one shutter press, several planes", () => {
+    const rowPoints = async (catchUuid: string) => {
+      const rows = await db
+        .select({ points: catches.points, pressSize: catches.pressSize })
+        .from(catches)
+        .where(eq(catches.catchUuid, catchUuid));
+      return rows[0];
+    };
+    const A = "a1a1a1a1-0000-4000-8000-000000000001";
+    const B = "b2b2b2b2-0000-4000-8000-000000000002";
+    const C = "c3c3c3c3-0000-4000-8000-000000000003";
+
+    it("two airframes at the same instant: each earns +25% of base, the first one retroactively", async () => {
+      // First row of the press arrives alone: rare 50 + first-of-type 25.
+      const first = await post(catchBody("aaaaaa", A));
+      expect(first.json()).toMatchObject({ points: 75, pressSize: 1 });
+
+      // Its sibling lands: rare 50 + first-of-type 25 + double round(50*0.25)=13.
+      const second = await post(catchBody("bababa", B));
+      expect(second.statusCode).toBe(201);
+      expect(second.json()).toMatchObject({ points: 88, pressSize: 2 });
+
+      // ...and the first row is lifted to match.
+      expect(await rowPoints(A)).toEqual({ points: 88, pressSize: 2 });
+      expect(await rowPoints(B)).toEqual({ points: 88, pressSize: 2 });
+    });
+
+    it("a third airframe lifts the whole press to +50% of base", async () => {
+      await db.insert(registry).values({
+        icao24: "cccccc",
+        registration: "N77777",
+        manufacturerRaw: "BOEING",
+        modelRaw: "737-800",
+        typecode: "B738",
+        source: "faa",
+      });
+      await post(catchBody("aaaaaa", A));
+      await post(catchBody("bababa", B));
+      // B738 again, so no first-of-type: rare 50 + triple 25.
+      const third = await post(catchBody("cccccc", C));
+      expect(third.json()).toMatchObject({ points: 75, pressSize: 3, firstOfType: false });
+      // The first two: 50 + first-of-type 25 + triple 25.
+      expect(await rowPoints(A)).toEqual({ points: 100, pressSize: 3 });
+      expect(await rowPoints(B)).toEqual({ points: 100, pressSize: 3 });
+    });
+
+    it("the SAME airframe twice at one instant is not a multi-catch", async () => {
+      await post(catchBody("aaaaaa", A));
+      const again = await post(catchBody("aaaaaa", B));
+      expect(again.json()).toMatchObject({ points: 50, pressSize: 1 });
+      expect(await rowPoints(A)).toEqual({ points: 75, pressSize: 1 });
+    });
+
+    it("airframes a second apart are separate presses", async () => {
+      await post(catchBody("aaaaaa", A));
+      const later = { ...catchBody("bababa", B), caughtAt: NOW + 1 };
+      const res = await post(later);
+      expect(res.json()).toMatchObject({ points: 75, pressSize: 1 });
+      expect(await rowPoints(A)).toEqual({ points: 75, pressSize: 1 });
+    });
+
+    it("another device's catch at the same instant does not join the press", async () => {
+      await post(catchBody("aaaaaa", A));
+      const other = (await app.inject({ method: "POST", url: "/v1/devices" })).json().deviceToken;
+      const res = await post(catchBody("bababa", B), other);
+      expect(res.json()).toMatchObject({ points: 75, pressSize: 1 });
+      expect(await rowPoints(A)).toEqual({ points: 75, pressSize: 1 });
+    });
+
+    it("a replay of a press row reports the lifted points and press size", async () => {
+      await post(catchBody("aaaaaa", A));
+      await post(catchBody("bababa", B));
+      const replay = await post(catchBody("aaaaaa", A));
+      expect(replay.statusCode).toBe(200);
+      expect(replay.json()).toMatchObject({ points: 88, pressSize: 2, duplicate: true });
+    });
+
+    it("a sibling keeps its correct-guess bonus when the press lifts it", async () => {
+      const first = await post({
+        ...catchBody("aaaaaa", A),
+        guess: { kind: "type", value: "B738" },
+      });
+      expect(first.json().points).toBe(88); // 50 + first-of-type 25 + type guess 13
+      await post(catchBody("bababa", B));
+      expect(await rowPoints(A)).toEqual({ points: 101, pressSize: 2 }); // + double 13
+    });
+  });
+
   it("NO ORACLE: an implausible catch returns the same status + body SHAPE as a plausible one", async () => {
     // Plausible catch (first-of-type B738 → rare → 75).
     const plausible = await post(catchBody("aaaaaa", "66666666-6666-4666-8666-666666666666"));
@@ -419,6 +509,10 @@ describe("POST /v1/catches", () => {
     const liar = catchBody("bababa", "77777777-7777-4777-8777-777777777777");
     liar.observer.headingDeg = 180;
     liar.observer.elevationDeg = -45;
+    // A minute apart: two airframes at the SAME instant are one shutter press
+    // and would both earn the multi-catch bonus (scoring v10).
+    liar.caughtAt = NOW - 60;
+    liar.aircraft.positionTimestamp = NOW - 60;
     const implausible = await post(liar);
 
     expect(plausible.statusCode).toBe(implausible.statusCode); // both 201

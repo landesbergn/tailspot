@@ -285,6 +285,7 @@ struct CatchDetailView: View {
             originName: shown.originName,
             destName: shown.destName,
             isFirstOfType: wasFirstOfType,
+            pressSize: shown.pressSize ?? 1,
             icao24: shown.icao24
         )
     }

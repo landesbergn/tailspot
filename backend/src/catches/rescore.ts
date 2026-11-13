@@ -99,6 +99,7 @@ export async function rescoreCatches(
       points: catches.points,
       scoringVersion: catches.scoringVersion,
       firstOfType: catches.firstOfType,
+      pressSize: catches.pressSize,
       guessKind: catches.guessKind,
       guessCorrect: catches.guessCorrect,
       caughtAt: catches.caughtAt,
@@ -147,7 +148,10 @@ export async function rescoreCatches(
   const scoreKey = (row: RescoreRow) => {
     const guess = rowGuess(row);
     const guessPart = guess ? `${guess.kind}:${guess.correct ? 1 : 0}:${guessEra(row)}` : "-";
-    return `${row.icao24}:${row.firstOfType ? 1 : 0}:${guessPart}`;
+    // `press_size` is frozen like the flags (counted at insert, backfilled by
+    // migration 0012): two rows of one airframe score differently when one
+    // was a lone catch and the other half of a double.
+    return `${row.icao24}:${row.firstOfType ? 1 : 0}:${guessPart}:${row.pressSize}`;
   };
   const scoredByKey = new Map<string, ScoredCatch>();
   for (const row of rows) {
@@ -159,6 +163,7 @@ export async function rescoreCatches(
           firstOfType: row.firstOfType,
           guess: rowGuess(row),
           caughtAt: row.caughtAt,
+          pressSize: row.pressSize,
         }),
       );
     }

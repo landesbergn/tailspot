@@ -116,7 +116,8 @@ struct TailCard: View {
             ? c.guessKind.flatMap(GuessKind.init(rawValue:))
             : nil
         let points = ScoringBonuses.displayPoints(
-            base: base, isFirstOfType: isFirstOfType, guessKind: guessKind, caughtAt: c.caughtAt
+            base: base, isFirstOfType: isFirstOfType, guessKind: guessKind, caughtAt: c.caughtAt,
+            pressSize: c.pressSize ?? 1
         )
 
         // One spoken line for the whole row — otherwise VoiceOver walks the

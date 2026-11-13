@@ -192,6 +192,15 @@ final class Catch {
     /// the server never saw the guess; the sweep sends it once. Added
     /// 2026-10 — optional + nil-default for lightweight migration.
     var guessRecreditedAt: Date?
+    /// How many FRESH planes the shutter press that made this row caught,
+    /// this one included (scoring v10, 2026-11-13). 2 or more earns the
+    /// multi-catch bonus (`ScoringBonuses.multiCatchBonus`); nil or 1 is a
+    /// lone catch. Written once at catch time; rows from before this field
+    /// are filled by `CatchBackfill.backfillPressSizes`, which counts the
+    /// distinct airframes sharing a `caughtAt` (every row of one press is
+    /// stamped with the same instant), the same rule the server uses. Not
+    /// on the init. Optional + nil-default for lightweight migration.
+    var pressSize: Int?
 
     init(
         icao24: String,

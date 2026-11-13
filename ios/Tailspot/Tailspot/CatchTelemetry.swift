@@ -546,7 +546,9 @@ nonisolated enum CatchTelemetry {
     /// latency work is steered by measurements instead of estimates. One
     /// event per capture tap that ran the pipeline. `mode`: "shell" (early
     /// loading reveal), "settled" (single card built at pipeline end),
-    /// "multi", or "none" (nothing presented). `snapMs`/`composeMs` are nil
+    /// "multi_shell" (a multi-catch presented at the tap, 2026-11-13),
+    /// "multi" (a multi-catch built at pipeline end: every build before
+    /// that, and the fallback since), or "none" (nothing presented). `snapMs`/`composeMs` are nil
     /// when that stage didn't run (no photo / multi-target snap skip);
     /// `presentMs` is tap→reveal-on-screen, `totalMs` tap→pipeline-done.
     @MainActor static func firePipelineTiming(

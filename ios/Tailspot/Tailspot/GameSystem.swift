@@ -134,6 +134,32 @@ nonisolated enum ScoringBonuses {
     /// Correct type call (the marquee skill test): +25% of base.
     static let typeGuess = 0.25
 
+    /// Multi-catch (scoring v10, 2026-11-13): several planes caught in ONE
+    /// shutter press. Each plane in a press of two earns +25% of its own
+    /// base; each in a press of three or more earns +50%. Additive, like
+    /// the bonuses above, so they stack without compounding.
+    static let multiCatchDouble = 0.25
+    static let multiCatchTriple = 0.5
+
+    /// The multi-catch bonus for one plane of a press. `pressSize` counts
+    /// the FRESH planes of the press (an already-caught plane makes no row,
+    /// so the server never counts it); below 2 there is no bonus.
+    static func multiCatchBonus(base: Int, pressSize: Int) -> Int {
+        guard pressSize >= 2 else { return 0 }
+        let fraction = pressSize == 2 ? multiCatchDouble : multiCatchTriple
+        return Int((Double(base) * fraction).rounded())
+    }
+
+    /// Ledger label for a press of this size ("DOUBLE CATCH" / "TRIPLE
+    /// CATCH" / "MULTI-CATCH").
+    static func multiCatchLabel(pressSize: Int) -> String {
+        switch pressSize {
+        case 2: return "DOUBLE CATCH"
+        case 3: return "TRIPLE CATCH"
+        default: return "MULTI-CATCH"
+        }
+    }
+
     /// Rounded bonus amounts. `.rounded()` (half away from zero) matches the
     /// backend's `Math.round` for these always-positive bases.
     static func firstOfTypeBonus(base: Int) -> Int {
@@ -157,12 +183,14 @@ nonisolated enum ScoringBonuses {
     /// re-tier floats the bonuses with the base). Returns the bonus
     /// separately so the Recent card can render its "base +bonus"
     /// micro-ledger. Pass `guessKind` only for a CORRECT guess (wrong /
-    /// skipped / no round → nil → no bonus), and the catch's own
-    /// `caughtAt` so the route fraction lands in the right era.
+    /// skipped / no round → nil → no bonus), the catch's own `caughtAt` so
+    /// the route fraction lands in the right era, and the row's stored
+    /// `pressSize` so a multi-catch shows its bonus.
     static func displayPoints(
-        base: Int, isFirstOfType: Bool, guessKind: GuessKind?, caughtAt: Date
+        base: Int, isFirstOfType: Bool, guessKind: GuessKind?, caughtAt: Date,
+        pressSize: Int = 1
     ) -> (total: Int, bonus: Int) {
-        var bonus = 0
+        var bonus = multiCatchBonus(base: base, pressSize: pressSize)
         if isFirstOfType { bonus += firstOfTypeBonus(base: base) }
         if let kind = guessKind { bonus += guessBonus(base: base, kind: kind, caughtAt: caughtAt) }
         return (base + bonus, bonus)

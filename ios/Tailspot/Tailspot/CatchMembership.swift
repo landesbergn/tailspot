@@ -86,6 +86,59 @@ nonisolated func chooseCatchMembers(
     return CatchMembership(chosen: chosen, overflow: overflow)
 }
 
+// MARK: - Press hold (button steadiness)
+
+/// Keeps the press from flickering (2026-11-13, Noah's field report: the
+/// ×2 badge dropped to a single catch just as he tapped). The per-frame
+/// rules re-decide membership 30 times a second, and a plane sitting on a
+/// threshold (the edge of the sky grid's building check, the bright/faint
+/// band, a size rank swap, the shipped rule's zone edge) pops in and out.
+/// A plane that was in the press stays in it for `holdSeconds` after the
+/// rules last chose it, as long as it is still on screen.
+///
+/// What it never does: add a plane the rules have not chosen, keep one
+/// that has left the frame (it would not be in the photo), or grow the
+/// press past `maxCount`. Joining is immediate; only leaving is delayed.
+///
+/// A reference type on purpose: the selection runs inside the AR
+/// TimelineView body, which must not write @State. Like `LockOnEngine`,
+/// this is a small idempotent state machine ticked from that spot.
+final class PressHold {
+    static let holdSeconds: TimeInterval = 0.6
+
+    /// When the rules last chose each plane.
+    private var lastChosen: [String: Date] = [:]
+
+    /// The steadied press for this frame: `raw` (the rules' choice, in rank
+    /// order) plus recently chosen planes still `onScreen`, newest first,
+    /// up to `maxCount`.
+    func steady(
+        raw: [String],
+        onScreen: Set<String>,
+        now: Date,
+        maxCount: Int = maxCatchTargets
+    ) -> [String] {
+        for icao in raw { lastChosen[icao] = now }
+        lastChosen = lastChosen.filter { icao, at in
+            onScreen.contains(icao) && now.timeIntervalSince(at) <= Self.holdSeconds
+                && now >= at
+        }
+        var result = Array(raw.prefix(maxCount))
+        guard result.count < maxCount else { return result }
+        let held = lastChosen
+            .filter { !raw.contains($0.key) }
+            .sorted { a, b in
+                a.value != b.value ? a.value > b.value : a.key < b.key
+            }
+            .map(\.key)
+        result.append(contentsOf: held.prefix(maxCount - result.count))
+        return result
+    }
+
+    /// Forget everything (catch-mode switch, a pin, the AR view covered).
+    func reset() { lastChosen.removeAll() }
+}
+
 // MARK: - Catch-time bracket assignment (D4·2)
 
 /// One per-target snap attempt at catch time: the press-pose predicted

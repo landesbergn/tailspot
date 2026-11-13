@@ -292,7 +292,7 @@ struct CatchShareCompactCard: View {
     private var points: Int {
         let base = plane.rarity.basePoints
         let bonus = plane.isFirstOfType ? ScoringBonuses.firstOfTypeBonus(base: base) : 0
-        return base + bonus
+        return base + bonus + ScoringBonuses.multiCatchBonus(base: base, pressSize: plane.pressSize)
     }
 
     var body: some View {

@@ -59,6 +59,9 @@ struct ContentView: View {
     /// machine. Stays `.idle` for the whole session while the frame mode
     /// is live — nothing calls `update`/`forceLock` on it there.
     @StateObject private var lockOn = LockOnEngine()
+    /// Steadies the capture button's press between frames (see `PressHold`).
+    /// A plain reference in @State: ticking it never invalidates the view.
+    @State private var pressHold = PressHold()
     /// Catch-rule feature flag (see `CatchMode.swift`). `catchMode` is
     /// what the view actually runs: the PostHog `frame-is-the-catch` flag,
     /// unless this Debug install has a wrench override (Release ignores
@@ -835,6 +838,12 @@ struct ContentView: View {
         // allowlist, so on every other install this returns immediately
         // without touching the network. Delete once it has run.
         .task {
+            // Press sizes for multi-catches made before the field existed
+            // (and for restored rows, which arrive without one), so their
+            // points include the multi-catch bonus the server now pays.
+            // Cheap and idempotent. Rides this task rather than its own
+            // modifier: `body` is at the type-check budget.
+            CatchBackfill.backfillPressSizes(catches, in: modelContext)
             await missedCatchRepair.runIfNeeded(context: modelContext)
         }
         // When any primary sheet closes, re-diff the trophies. Hangar: a
@@ -1271,6 +1280,15 @@ struct ContentView: View {
         }
     }
 
+    /// The capture button's mode for a chosen set of planes.
+    private static func captureMode(for icaos: [String]) -> CaptureMode {
+        switch icaos.count {
+        case 0:  return .disabled
+        case 1:  return .single(icaos[0])
+        default: return .multi(icaos)
+        }
+    }
+
     /// Resolve the frame's selection for whichever catch mode is live.
     /// Called from inside the TimelineView body every frame, so it must
     /// stay free of @State writes: the legacy path's `lockOn.update` is a
@@ -1317,16 +1335,15 @@ struct ContentView: View {
                     )
                 }
             )
-            let mode: CaptureMode
-            switch membership.chosen.count {
-            case 0:  mode = .disabled
-            case 1:  mode = .single(membership.chosen[0])
-            default: mode = .multi(membership.chosen)
-            }
+            // Steadied so a plane on a threshold can't flip ×2 to a single
+            // catch between the look and the tap. The labels follow the
+            // steadied set, so bright still means "in the press".
+            let chosen = pressHold.steady(
+                raw: membership.chosen, onScreen: Set(onScreenPositions.keys), now: now)
             return FrameSelection(
-                mode: mode,
-                bright: Set(membership.chosen),
-                quiet: Set(membership.overflow),
+                mode: Self.captureMode(for: chosen),
+                bright: Set(chosen),
+                quiet: Set(membership.overflow).subtracting(chosen),
                 labelPositions: onScreenPositions,
                 pinned: nil
             )
@@ -1381,13 +1398,33 @@ struct ContentView: View {
             let quiet: Set<String> = pinned == nil
                 ? Set(visible.filter { $0.visibilityTier == .full }.map(\.aircraft.icao24))
                 : []
+            let rawMode = legacyCaptureMode(
+                visible: visible, onScreenPositions: onScreenPositions,
+                pinned: pinned, screenSize: screenSize,
+                headingDeg: headingDeg, cameraElevationDeg: cameraElevationDeg,
+                rollDeg: rollDeg, hfovDeg: hfovDeg, vfovDeg: vfovDeg
+            )
+            // Same steadying as frame mode, for a multi-catch only: a pin is
+            // the user's explicit choice and takes effect at once, and a
+            // lone target swapping for another is the rule working, not
+            // flicker. So only a press that WAS several planes is held.
+            let legacyMode: CaptureMode
+            if pinned != nil {
+                pressHold.reset()
+                legacyMode = rawMode
+            } else if case .multi(let icaos) = rawMode {
+                legacyMode = Self.captureMode(for: pressHold.steady(
+                    raw: icaos, onScreen: Set(onScreenPositions.keys), now: now,
+                    maxCount: max(icaos.count, maxCatchTargets)))
+            } else {
+                let held = pressHold.steady(
+                    raw: [], onScreen: Set(onScreenPositions.keys), now: now)
+                let wanted = rawMode.icaos
+                legacyMode = held.count >= 2 && wanted.allSatisfy(held.contains)
+                    ? .multi(held) : rawMode
+            }
             return FrameSelection(
-                mode: legacyCaptureMode(
-                    visible: visible, onScreenPositions: onScreenPositions,
-                    pinned: pinned, screenSize: screenSize,
-                    headingDeg: headingDeg, cameraElevationDeg: cameraElevationDeg,
-                    rollDeg: rollDeg, hfovDeg: hfovDeg, vfovDeg: vfovDeg
-                ),
+                mode: legacyMode,
                 bright: [],
                 quiet: quiet,
                 labelPositions: labelPositions,
@@ -2568,6 +2605,12 @@ struct ContentView: View {
             }
         }
 
+        // Multi-catches get the same early shell (see `presentMultiShell`);
+        // empty when it couldn't be built, which keeps the settled flow.
+        let multiShell: [String: RevealLoader] = icaos.count >= 2
+            ? presentMultiShell(icaos: icaos, visibleByIcao: visibleByIcao, tapAt: tapAt)
+            : [:]
+
         Task { @MainActor in
             // Backstop: the latch is normally cleared by the reveal's
             // dismiss callbacks, but if this task exits before a reveal
@@ -2575,8 +2618,9 @@ struct ContentView: View {
             // catch button would soft-lock. Clear it unless a sheet
             // actually went up. The early shell counts as up from the start
             // (its dismiss callbacks own the latch from presentation on).
-            var revealPresented = (earlyLoader != nil)
+            var revealPresented = (earlyLoader != nil) || !multiShell.isEmpty
             defer { if !revealPresented { captureInFlight = false } }
+            defer { for loader in multiShell.values { loader.pipelineFinished = true } }
             // However this task exits, the shell must stop reading as
             // "loading" — a photo-less catch settles to the classic
             // placeholder instead of a perpetual loading slot.
@@ -2957,6 +3001,14 @@ struct ContentView: View {
                 newCatches.append(row)
             }
 
+            // Multi-catch (scoring v10): every fresh row of this press records
+            // how many fresh planes it caught, before the save, so the reveal,
+            // the Hangar and the weekly recap all show the bonus the server
+            // pays. Already-caught planes made no row and don't count.
+            if newCatches.count >= 2 {
+                for row in newCatches { row.pressSize = newCatches.count }
+            }
+
             if !newCatches.isEmpty {
                 do {
                     try modelContext.save()
@@ -3187,6 +3239,17 @@ struct ContentView: View {
                 revealPresented = (pendingReveal != nil)
                 presentMs = 0
                 revealMode = "shell"
+            } else if !multiShell.isEmpty {
+                // The run has been up since the tap: fill each fresh plane.
+                fillMultiShell(multiShell, newCatches: newCatches, visibleByIcao: visibleByIcao)
+                // Dismissed before the pipeline finished: its callbacks
+                // already ran, so flush any moment that became ready since.
+                if pendingMultiReveal == nil {
+                    presentPostRevealMomentIfNeeded()
+                }
+                revealPresented = (pendingMultiReveal != nil)
+                presentMs = 0
+                revealMode = "multi_shell"
             } else {
                 presentReveal(newCatches: newCatches, duplicates: duplicates,
                               visibleByIcao: visibleByIcao, guess: guessPayload,
@@ -3638,6 +3701,7 @@ struct ContentView: View {
             isFirstOfType: isFirstOfType,
             guessKind: guessKind,
             guessBonusPoints: guessBonusPoints,
+            pressSize: row.pressSize ?? 1,
             icao24: row.icao24
         )
     }
@@ -3658,8 +3722,13 @@ struct ContentView: View {
     /// slot instead; at pipeline end the loader swaps in plane + row + guess
     /// in one MainActor pass, so the slot resolves atomically to either the
     /// real route or the masked prompt — never one then the other.
+    ///
+    /// `firstOfType` / `pressSize` are the multi-catch shell's overrides: a
+    /// run of two planes of a new type pays first-of-type once, and each
+    /// fresh plane of the run shows its multi-catch bonus from the start.
     private func shellCardPlane(
-        observed: ObservedAircraft, metadata: AircraftMetadata?
+        observed: ObservedAircraft, metadata: AircraftMetadata?,
+        firstOfType: Bool? = nil, pressSize: Int = 1
     ) -> CardPlane {
         let aircraft = observed.aircraft
         let typecode = Catch.preferredAirframeField(
@@ -3683,7 +3752,7 @@ struct ContentView: View {
         // No row exists yet, so unlike `cardPlane(from:)` there's nothing to
         // exclude from the scan: first-of-type ⇔ no existing row shares the
         // typecode.
-        let isFirstOfType = typecode.map { tc in
+        let isFirstOfType = firstOfType ?? typecode.map { tc in
             !catches.contains { $0.typecode == tc }
         } ?? false
         return CardPlane(
@@ -3702,8 +3771,100 @@ struct ContentView: View {
             speedText: CardPlane.speedText(fromMps: aircraft.velocityMps),
             distText: CardPlane.distText(fromMeters: observed.slantDistanceMeters),
             isFirstOfType: isFirstOfType,
+            pressSize: pressSize,
             icao24: aircraft.icao24
         )
+    }
+
+    /// EARLY SHELL for a multi-catch (2026-11-13, Noah's field report: "a
+    /// TON of lag"). A press of several planes used to wait for the shutter,
+    /// one detector search per plane and one photo compose per plane before
+    /// anything appeared (about 1.2 s at the median on Release builds, several
+    /// seconds on a Debug build). Now the run presents at the tap, like the
+    /// single reveal's shell: each fresh plane starts from tap-time feed data
+    /// behind its own `RevealLoader`, and the pipeline fills the loaders when
+    /// it finishes. Already-caught planes are complete from the start.
+    ///
+    /// Returns the loaders keyed by icao24, or empty when the shell could not
+    /// be built for every plane (one fell out of the observed set, or an
+    /// existing row could not be read); the caller then keeps the settled
+    /// flow, which builds the reveal from finished rows.
+    ///
+    /// The duplicate verdict is taken at the tap; the pipeline re-checks it
+    /// at save time. They can only differ across a local midnight, and then
+    /// the page shows the tap-time verdict while the Hangar holds the truth.
+    private func presentMultiShell(
+        icaos: [String],
+        visibleByIcao: [String: ObservedAircraft],
+        tapAt: Date
+    ) -> [String: RevealLoader] {
+        let day = Streaks.dayKey(for: tapAt)
+        var fresh: [(icao: String, observed: ObservedAircraft, metadata: AircraftMetadata?)] = []
+        var dupPlanes: [CardPlane] = []
+        for icao in icaos {
+            guard let observed = visibleByIcao[icao] else { return [:] }
+            if Catch.isDuplicate(icao24: icao, callsign: observed.aircraft.callsign,
+                                 on: day, in: modelContext) {
+                guard let existing = fetchExistingCatch(icao: icao) else { return [:] }
+                dupPlanes.append(cardPlane(from: existing, observed: observed))
+            } else {
+                fresh.append((icao, observed, cachedMetadata(for: icao)))
+            }
+        }
+        // First-of-type as the server pays it: once per typecode the Hangar
+        // doesn't hold, even with two of it in the run.
+        let firstFlags = MultiCatchReveal.runFirstOfType(
+            typecodes: fresh.map {
+                Catch.preferredAirframeField(feed: $0.observed.aircraft.typecode,
+                                             metadata: $0.metadata?.typecode)
+            },
+            heldTypecodes: Set(catches.compactMap(\.typecode)))
+        var loaders: [String: RevealLoader] = [:]
+        var entries: [MultiCatchReveal.Entry] = []
+        for (plane, isFirst) in zip(fresh, firstFlags) {
+            let shell = shellCardPlane(observed: plane.observed, metadata: plane.metadata,
+                                       firstOfType: isFirst, pressSize: fresh.count)
+            let loader = RevealLoader(plane: shell)
+            loaders[plane.icao] = loader
+            entries.append(.init(plane: shell, isDuplicate: false, loader: loader))
+        }
+        entries.append(contentsOf: dupPlanes.map { .init(plane: $0, isDuplicate: true) })
+        guard entries.count >= 2, !loaders.isEmpty else { return [:] }
+
+        let newAirframes = fresh.filter {
+            !Catch.airframeCaught(icao24: $0.icao, in: modelContext)
+        }.count
+        pendingMultiReveal = PendingMultiReveal(
+            entries: entries,
+            lastEntryNumber: Set(catches.map(\.icao24)).count + newAirframes
+        )
+        // The viewfinder's latest frame fills every fresh page's photo slot
+        // until its composed photo lands (see the single shell above).
+        let waiting = Array(loaders.values)
+        Task.detached(priority: .userInitiated) { [visualConfirm] in
+            guard let frame = visualConfirm.latestFrameImage() else { return }
+            await MainActor.run { for loader in waiting { loader.provisionalPhoto = frame } }
+        }
+        return loaders
+    }
+
+    /// Hand the finished rows of a multi-catch to the shell that has been up
+    /// since the tap. One swap per plane keeps photo, route, first-of-type
+    /// and the multi-catch bonus consistent, as `presentReveal` builds them.
+    private func fillMultiShell(_ loaders: [String: RevealLoader],
+                                newCatches: [Catch],
+                                visibleByIcao: [String: ObservedAircraft]) {
+        let heldTypecodes = Set(catches
+            .filter { row in !newCatches.contains { $0 === row } }
+            .compactMap(\.typecode))
+        let firstOfType = MultiCatchReveal.runFirstOfType(
+            typecodes: newCatches.map(\.typecode), heldTypecodes: heldTypecodes)
+        for (row, isFirst) in zip(newCatches, firstOfType) {
+            guard let loader = loaders[row.icao24] else { continue }
+            loader.plane = cardPlane(from: row, observed: visibleByIcao[row.icao24],
+                                     firstOfType: isFirst)
+            loader.row = row
+        }
     }
 
     /// Metadata already on hand at tap time — legacy's pinned snapshot,
@@ -4659,6 +4820,7 @@ struct ContentView: View {
         lockOn.unpin()
         visualConfirm.updateTarget(nil)
         assertedPlanes = [:]
+        pressHold.reset()
         Log.ui.notice("Catch mode → \(mode.label, privacy: .public)")
     }
 

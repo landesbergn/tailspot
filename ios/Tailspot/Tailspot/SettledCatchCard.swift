@@ -52,7 +52,10 @@ struct SettledCatchCard: View {
     var caughtAt: Date? = nil
 
     private var base: Int { plane.rarity.basePoints }
-    private var bonus: Int { isFirstOfType ? Int((Double(base) * 0.5).rounded()) : 0 }
+    private var bonus: Int { isFirstOfType ? ScoringBonuses.firstOfTypeBonus(base: base) : 0 }
+    private var multiCatchBonus: Int {
+        ScoringBonuses.multiCatchBonus(base: base, pressSize: plane.pressSize)
+    }
 
     @Environment(\.cardSwipeGuard) private var swipeGuard
 
@@ -146,8 +149,12 @@ struct SettledCatchCard: View {
                     if bonus > 0 {
                         ledgerRow("FIRST OF TYPE", "+\(bonus)", RP.gold, 1, scale: scale)
                     }
+                    if multiCatchBonus > 0 {
+                        ledgerRow(ScoringBonuses.multiCatchLabel(pressSize: plane.pressSize),
+                                  "+\(multiCatchBonus)", RP.gold, 1, scale: scale)
+                    }
                     Rectangle().fill(RP.rule).frame(height: 1)
-                    ledgerRow("TOTAL", "+\(base + bonus)", accent, 1, scale: scale, big: true)
+                    ledgerRow("TOTAL", "+\(base + bonus + multiCatchBonus)", accent, 1, scale: scale, big: true)
                 }
             }
             .padding(.horizontal, hPad)

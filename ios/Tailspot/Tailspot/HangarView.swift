@@ -71,6 +71,9 @@ struct HangarView: View {
                     // written before these fields existed. One metadata
                     // fetch per distinct icao24; idempotent. The @Query
                     // auto-refreshes the UI as fields fill and save().
+                    // Press sizes first (sync, no network): rows a restore
+                    // just brought in have none until this runs.
+                    CatchBackfill.backfillPressSizes(catches, in: modelContext)
                     await CatchBackfill.backfillAll(catches, in: modelContext)
                     // One-time photo-focus recovery: derive the crop focus
                     // from the baked bracket for catches that predate the

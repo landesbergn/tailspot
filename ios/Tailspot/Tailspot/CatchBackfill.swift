@@ -418,6 +418,39 @@ enum CatchBackfill {
         if changedAny { try? context.save() }
     }
 
+    /// The press size of every multi-catch among `catches`, keyed by the
+    /// shared `caughtAt`: the number of DISTINCT airframes stamped with that
+    /// instant, when it is two or more. Every row of one shutter press gets
+    /// the same `caughtAt`, and two separate presses can't share one (it is
+    /// a sub-millisecond timestamp), so this is exactly the server's rule
+    /// (`reconcilePress` / migration 0012). Distinct airframes, so a restored
+    /// duplicate row (same plane, same instant) never reads as a double.
+    nonisolated static func pressSizes(
+        _ rows: [(caughtAt: Date, icao24: String)]
+    ) -> [Date: Int] {
+        var airframes: [Date: Set<String>] = [:]
+        for row in rows {
+            airframes[row.caughtAt, default: []].insert(row.icao24.lowercased())
+        }
+        return airframes.compactMapValues { $0.count >= 2 ? $0.count : nil }
+    }
+
+    /// Fill `Catch.pressSize` on rows that predate the field or came from a
+    /// Hangar restore. Only ever raises a size (a later delete of one plane
+    /// of a press keeps the other's bonus, as on the server). One pass, no
+    /// network; a no-op once every multi-catch row is stamped.
+    static func backfillPressSizes(_ catches: [Catch], in context: ModelContext) {
+        let sizes = pressSizes(catches.map { ($0.caughtAt, $0.icao24) })
+        guard !sizes.isEmpty else { return }
+        var changed = false
+        for c in catches {
+            guard let size = sizes[c.caughtAt], (c.pressSize ?? 1) < size else { continue }
+            c.pressSize = size
+            changed = true
+        }
+        if changed { try? context.save() }
+    }
+
     /// UserDefaults key + current version for the one-time `photoFocus`
     /// recovery. Bump the version to force a re-scan after the baked
     /// brackets change on disk (e.g. an offline heal re-draws them).

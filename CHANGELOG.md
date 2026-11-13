@@ -33,6 +33,18 @@ Git history + PLAN.md §9 remain the authoritative record.
 - New `.claude/rules/` holds path-scoped rules (analytics identity, the `Catch` model contract, ADS-B errors) that load only when Claude touches matching files. `.gitignore` now keeps `.claude/` local except `rules/`.
 - Test-timing measurement steps moved to CONTRIBUTING.md.
 
+## 2026-11-13 — Multi-catch is a real thing: a paid bonus, a steady button, no wait (branch `claude/catch-multiplier-scoring-a94f12`)
+
+- Noah: multi-catch "should be an actual thing". The ×1.5–×3 combo was removed on 2026-10-23 because the server never paid it, the button flickered between ×2 and a single catch, and the reveal took seconds to open.
+- **Scoring v10 (Noah's numbers).** Each plane in a press of two earns +25% of its own base; each in a press of three or more earns +50%. Additive, like first-of-type and the guess bonus, so they stack without compounding. A rare caught in a double is 50 + 13.
+- **The server decides, with no new wire field.** Every row of one press already carries the same `caughtAt`, so the server counts the distinct airframes a device caught at that instant (`press_size`, migration 0012). When a second plane of a press arrives, `reconcilePress` re-scores the first. Builds already on phones get the bonus without an update. Only fresh planes count: an already-caught plane makes no row.
+- **Past multi-catches are paid too.** Migration 0012 backfills `press_size` for every old press; the v9→v10 `npm run rescore` then adds the bonus. That is the combo the reveal showed from 2026-05-21 to 2026-10-23.
+- **App.** `Catch.pressSize` (optional, additive) is set at catch time and backfilled for old and restored rows by the same rule. The reveal page, the multi-catch summary, the Hangar row, the detail card, the share card and the weekly recap all show a "DOUBLE CATCH" / "TRIPLE CATCH" line through `ScoringBonuses`, pinned to the server's fractions by `scoring-bonuses.json`.
+- **Steady button (`PressHold`).** A plane the rules chose stays in the press for 0.6 s after they drop it, while it is still on screen. Joining is immediate, a plane that leaves the frame goes at once, and the press never grows past its cap. Both catch rules; who qualifies is unchanged, so the A/B is not disturbed.
+- **No wait.** A multi-catch now opens its reveal at the tap, as single catches have since 2026-08-13: each fresh plane starts from live feed data and the viewfinder frame, and its photo and route arrive when the pipeline finishes. PostHog (60 days, Release builds): the old flow took 1.2 s at the median and 1.8 s at p90 under the new catch rule, mostly one detector search per plane. `catch_pipeline_timing` reports the new path as `mode: multi_shell`.
+- Not changed: who is in a press under either rule (the A/B reads 2026-12-21), and the pipeline's own speed (each plane's detector search still decodes the photo again).
+- **Needs Noah's go-ahead, in this order:** snapshot the DB, apply migration 0012 to prod, deploy the API, then dry-run the rescore and review the delta and any changed weekly or monthly winner before applying it.
+
 ## 2026-11-12 — Placeholder callsigns show the tail number (branch `claude/catch-000000-issue-5eeec5`)
 
 - Noah's Challenger 300 catch (N549FX, 2026-11-08) read "00000000 · PRIVATE". The plane's transponder broadcast all zeros as its flight ID, and adsb.lol passes that through.

@@ -259,6 +259,18 @@ export const catches = pgTable(
     guessKind: text("guess_kind"),
     guessValue: text("guess_value"),
     guessCorrect: boolean("guess_correct").notNull().default(false),
+    /**
+     * How many distinct airframes this device caught in the SAME shutter press
+     * as this row, itself included (migration 0012, scoring v10). 1 = a lone
+     * catch. Rows of one press share `caught_at` exactly (the app stamps one
+     * instant on every row of a press), so the server derives this itself; the
+     * wire carries no press size. Drives the multi-catch bonus in the ONE
+     * canonical scorer. Kept current on INSERT only (`reconcilePress` re-counts
+     * the press and re-scores its rows when a sibling arrives); a rescore READS
+     * it, like `first_of_type`, and a later delete of a sibling does not take
+     * the bonus back.
+     */
+    pressSize: integer("press_size").notNull().default(1),
     /** When the client says it was caught. */
     caughtAt: timestamp("caught_at", { withTimezone: true }).notNull(),
     observerLat: doublePrecision("observer_lat").notNull(),

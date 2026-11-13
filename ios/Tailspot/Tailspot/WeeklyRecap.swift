@@ -175,7 +175,8 @@ struct WeeklyRecap {
             base: c.resolvedRarity.basePoints,
             isFirstOfType: isFirstOfType,
             guessKind: guessKind,
-            caughtAt: c.caughtAt
+            caughtAt: c.caughtAt,
+            pressSize: c.pressSize ?? 1
         ).total
     }
 
