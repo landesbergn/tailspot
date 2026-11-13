@@ -36,6 +36,7 @@ nonisolated enum Callsign {
     /// every card rather than only the carrier.
     static func cardIdentifier(callsign: String?, registration: String?) -> String? {
         if let cs = clean(callsign) { return cs }
+        // Inline trim: the String.trimmedNonEmpty helpers are file-private.
         guard let reg = registration?.trimmingCharacters(in: .whitespacesAndNewlines),
               !reg.isEmpty else { return nil }
         return reg

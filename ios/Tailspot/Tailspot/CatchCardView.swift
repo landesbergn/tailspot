@@ -37,6 +37,9 @@ import SwiftUI
 /// moment, before persistence). All optionality lives here; the
 /// view falls back to em-dashes / hidden lines when fields are nil.
 struct CardPlane: Equatable {
+    /// What the card names the plane by: the flight callsign, else the tail
+    /// number (`Callsign.cardIdentifier`). Display only. It can hold a
+    /// registration, so never feed it to an airline or route lookup.
     let callsign: String?
     let model: String?
     let carrier: String?

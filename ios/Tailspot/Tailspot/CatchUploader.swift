@@ -301,7 +301,7 @@ class CatchUploader {
                     let response = try await client.uploadCatch(
                         catchUuid: uuid,
                         icao24: catchRow.icao24,
-                        callsign: catchRow.callsign,
+                        callsign: Callsign.clean(catchRow.callsign),
                         caughtAt: catchRow.caughtAt,
                         observerLat: catchRow.observerLat,
                         observerLon: catchRow.observerLon,
