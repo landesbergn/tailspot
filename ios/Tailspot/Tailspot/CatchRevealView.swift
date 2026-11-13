@@ -784,6 +784,13 @@ struct CatchRevealView: View {
     /// Share still works, but sends no share analytics.
     var isSimulated: Bool = false
 
+    /// The trophy track this catch moved (plain data from
+    /// `TrophyUnlockCenter.lastAdvance`; it lands a beat AFTER the reveal
+    /// appears, when the catch row is counted). Drives the one quiet progress
+    /// strip above the exits. Ignored for a duplicate or simulated reveal, so
+    /// a stale advance can never show there. nil = no strip.
+    var trophyAdvance: TrophyAdvance? = nil
+
     /// Early-shell conduit (capture-lag work, 2026-08-13). Non-nil when the
     /// reveal presented as a loading shell at tap time: the pipeline swaps
     /// in the finished `plane` snapshot (photo, healed route), the persisted
@@ -816,6 +823,16 @@ struct CatchRevealView: View {
     /// The streak stamp's day count, whether threaded at presentation or
     /// delivered late through the shell's loader.
     private var liveStreakDays: Int? { loader?.streakDays ?? streakDays }
+    /// The advance the strip may show: only a fresh, real catch has one.
+    private var liveAdvance: TrophyAdvance? {
+        (isDuplicate || isSimulated) ? nil : trophyAdvance
+    }
+    /// The strip shows once the card has settled (with the CTA row it
+    /// belongs to) and never while the bonus-round chips are up, when the
+    /// card is at its tallest.
+    private var stripVisible: Bool {
+        liveAdvance != nil && settled && chipsPhase != .shown
+    }
     /// The early shell is up and the pipeline hasn't delivered yet.
     private var stillLoading: Bool { loader.map { !$0.pipelineFinished } ?? false }
 
@@ -862,6 +879,9 @@ struct CatchRevealView: View {
     /// Flips true once the reveal has played out (or the user taps to skip),
     /// gating the dismiss CTAs and the success haptic.
     @State private var settled = false
+
+    /// `trophy_progress_shown` fires once per reveal.
+    @State private var stripShownFired = false
 
     /// When the reveal first appeared, for `reveal_dismissed`'s dwell.
     /// Separate from `start`, which a skip-tap rewinds.
@@ -1029,7 +1049,8 @@ struct CatchRevealView: View {
                     let bt = bonusStart.map { revClamp(context.date.timeIntervalSince($0) / bonusCountUpDuration) } ?? 0
                     let gt = chipsStart.map { revClamp(context.date.timeIntervalSince($0) / chipPopDuration) }
                         ?? (chipsPhase == .shown ? 1 : 0)
-                    layout(t: t, bt: bt, gt: gt, width: width, height: geo.size.height)
+                    layout(t: t, bt: bt, gt: gt, width: width, height: geo.size.height,
+                           bottomInset: geo.safeAreaInsets.bottom)
                 }
 
                 // Morph layer for the hero's zoom transition — above the
@@ -1093,6 +1114,13 @@ struct CatchRevealView: View {
             }
             .sensoryFeedback(.success, trigger: successBeat)
             .sensoryFeedback(.error, trigger: missBeat)
+            // Once per reveal, when the strip is actually on screen.
+            .onChange(of: stripVisible) { _, visible in
+                guard visible, !stripShownFired, let advance = liveAdvance else { return }
+                stripShownFired = true
+                Analytics.capture(TrophyAnalytics.progressShown,
+                                  TrophyAnalytics.progressShownProperties(advance))
+            }
             // The same sheet the Hangar detail's share pill opens. Presented
             // from inside this full-screen cover, so it slides up over the
             // reveal and dismissing it lands back on the settled card.
@@ -1262,7 +1290,8 @@ struct CatchRevealView: View {
     /// every card height; on a tall phone nothing changes (the card still
     /// centers, the scroll view never engages).
     @ViewBuilder
-    private func layout(t: Double, bt: Double, gt: Double, width: CGFloat, height: CGFloat) -> some View {
+    private func layout(t: Double, bt: Double, gt: Double, width: CGFloat, height: CGFloat,
+                        bottomInset: CGFloat) -> some View {
         // Map the live bonus-round @State into the immutable per-frame render.
         let render: GuessRender? = liveGuess.map {
             GuessRender(question: $0,
@@ -1348,7 +1377,49 @@ struct CatchRevealView: View {
             ctaRow()
                 .opacity(settled ? 1 : 0)
                 .allowsHitTesting(settled)
+                .modifier(TrophyStripSlot(strip: trophyStripOverlay(width: width, bottomInset: bottomInset,
+                                                                   visible: stripVisible),
+                                          below: Self.stripGoesBelow(bottomInset: bottomInset)))
         })
+    }
+
+    /// Where the trophy strip lives. It is an OVERLAY on the CTA row (never
+    /// part of the column's layout), so its arrival can't move the card; the
+    /// advance lands after the reveal is already up.
+    ///
+    /// The card has no reliable free space to lend (the tallest card, a
+    /// bonus-round catch with first-of-type, overflows even a 393 x 759
+    /// safe area and scrolls), so the strip never goes beside it:
+    ///  - Phones with a bottom safe-area inset (home-indicator iPhones, 34 pt
+    ///    + the 28 pt strip padding = ~62 pt of empty air under the exits)
+    ///    get the two-row pill BELOW "Continue / View in Hangar".
+    ///  - Home-button phones (iPhone SE class, no inset) get the one-row
+    ///    compact form in the 24 pt of padding ABOVE the exits, which sits
+    ///    outside the scroll viewport and so overlaps nothing.
+    private static let stripBelowMinInset: CGFloat = 20
+    private static let stripRowGap: CGFloat = 8
+
+    static func stripGoesBelow(bottomInset: CGFloat) -> Bool { bottomInset >= stripBelowMinInset }
+
+    @ViewBuilder
+    private func trophyStripOverlay(width: CGFloat, bottomInset: CGFloat, visible: Bool) -> some View {
+        if let advance = liveAdvance {
+            let below = Self.stripGoesBelow(bottomInset: bottomInset)
+            let height = below ? TrophyAdvanceStrip.regularHeight : TrophyAdvanceStrip.compactHeight
+            // Below: top `stripRowGap` under the row. Above: bottom 1 pt over it.
+            let shift = below ? height + Self.stripRowGap : -(height + 1)
+            TrophyAdvanceStrip(advance: advance, compact: !below)
+                .frame(width: width)
+                .opacity(visible ? 1 : 0)
+                // Reduce Motion: no slide, a plain fade.
+                .offset(y: shift + ((visible || reduceMotion) ? 0 : 6))
+                .animation(.easeOut(duration: 0.35), value: visible)
+                .allowsHitTesting(visible)
+                // Tapping it does nothing (and must not fall through to the
+                // dismiss catcher behind, like the card back).
+                .contentShape(Rectangle())
+                .onTapGesture {}
+        }
     }
 
     /// Vertical padding of the CTA strip, plus its ~19 pt text line — the
@@ -1666,7 +1737,8 @@ struct CatchRevealView: View {
     /// `maxHeight: .infinity`) because ImageRenderer double-renders greedy
     /// frames — a snapshot-only artifact, not a device behavior. DEBUG-only.
     @MainActor func _snapshotScreen(
-        width: CGFloat, size: CGSize, guessState: GuessSnapshotState? = nil
+        width: CGFloat, size: CGSize, guessState: GuessSnapshotState? = nil,
+        bottomInset: CGFloat = 0
     ) -> some View {
         revealColumn(height: size.height, scrolls: false, card: {
             // FlipCard's turn row under the card, as on device (hidden, but
@@ -1684,8 +1756,16 @@ struct CatchRevealView: View {
             // (on the card's callsign line) hides while the bonus-round
             // chips are up, as on device.
             ctaRow()
+                .modifier(TrophyStripSlot(
+                    strip: trophyStripOverlay(
+                        width: width, bottomInset: bottomInset,
+                        visible: liveAdvance != nil && guessState?.render.chipsInLayout != true),
+                    below: Self.stripGoesBelow(bottomInset: bottomInset)))
         })
         .frame(width: size.width, height: size.height)
+        // The device's bottom safe-area inset (home indicator), which the
+        // strip may draw into; zero for the SE-class renders.
+        .padding(.bottom, bottomInset)
         .background(RP.bg)
     }
 
@@ -2202,5 +2282,16 @@ struct CatchRevealView: View {
         let c1 = 1.70158
         let c3 = c1 + 1
         return 1 + c3 * pow(u - 1, 3) + c1 * pow(u - 1, 2)
+    }
+}
+
+/// Attaches the trophy strip as an overlay at the top or bottom of the CTA
+/// row (a separate modifier so the alignment can switch without a branch in
+/// the reveal's already large `layout`).
+private struct TrophyStripSlot<Strip: View>: ViewModifier {
+    let strip: Strip
+    let below: Bool
+    func body(content: Content) -> some View {
+        content.overlay(alignment: below ? .bottom : .top) { strip }
     }
 }

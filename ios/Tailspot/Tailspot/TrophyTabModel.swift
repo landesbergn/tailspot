@@ -87,6 +87,17 @@ nonisolated enum TrophyAnalytics {
     static let detailOpened = "trophy_detail_opened"
     static let shareOpened = "trophy_share_opened"
     static let shareCompleted = "trophy_share_completed"
+    /// The reveal strip (which track the catch moved) was displayed.
+    static let progressShown = "trophy_progress_shown"
+
+    static func progressShownProperties(_ advance: TrophyAdvance) -> [String: AnalyticsValue] {
+        [
+            "track": .string(advance.track.id),
+            "level": .int(advance.level),
+            "progress": .int(advance.progress),
+            "goal": .int(advance.goal),
+        ]
+    }
 
     static func tabViewedProperties(_ content: TrophyTabContent) -> [String: AnalyticsValue] {
         [

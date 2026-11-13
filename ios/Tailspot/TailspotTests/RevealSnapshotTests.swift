@@ -161,6 +161,178 @@ struct RevealSnapshotTests {
         }
     }
 
+    // MARK: - Trophy strip
+
+    /// "Airlines III, 28 / 30" — the doc's reference strip.
+    private static var airlinesAdvance: TrophyAdvance {
+        TrophyAdvance(
+            track: TrophyTracks.all.first { $0.id == "airlines" }!,
+            level: 3, progress: 28, goal: 30,
+            achievement: Trophies.roster.first { $0.id == "airlines3" }!)
+    }
+
+    private static func render(_ view: some View, scale: CGFloat) -> UIImage? {
+        let renderer = ImageRenderer(content: view)
+        renderer.scale = scale
+        return renderer.uiImage
+    }
+
+    /// Bounding box (pixels) of everything that differs between two renders
+    /// of the same size; nil when identical.
+    private static func diffBounds(_ a: UIImage, _ b: UIImage) -> CGRect? {
+        guard let ca = a.cgImage, let cb = b.cgImage,
+              ca.width == cb.width, ca.height == cb.height else { return .infinite }
+        func bytes(_ c: CGImage) -> [UInt8] {
+            var px = [UInt8](repeating: 0, count: c.width * c.height * 4)
+            let ctx = CGContext(data: &px, width: c.width, height: c.height, bitsPerComponent: 8,
+                                bytesPerRow: c.width * 4, space: CGColorSpaceCreateDeviceRGB(),
+                                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+            ctx.draw(c, in: CGRect(x: 0, y: 0, width: c.width, height: c.height))
+            return px
+        }
+        let pa = bytes(ca), pb = bytes(cb)
+        var minX = Int.max, minY = Int.max, maxX = -1, maxY = -1
+        for y in 0..<ca.height {
+            for x in 0..<ca.width {
+                let i = (y * ca.width + x) * 4
+                if pa[i] != pb[i] || pa[i+1] != pb[i+1] || pa[i+2] != pb[i+2] {
+                    minX = min(minX, x); maxX = max(maxX, x); minY = min(minY, y); maxY = max(maxY, y)
+                }
+            }
+        }
+        guard maxX >= 0 else { return nil }
+        return CGRect(x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1)
+    }
+
+    /// The reveal WITH the trophy strip, at the standard phone, the iPhone SE
+    /// safe area and with a bonus-round card, each next to the same reveal
+    /// WITHOUT it. The with/without pair must differ only inside the strip's
+    /// own box: that is the "no reflow" guarantee, checked, not eyeballed.
+    @Test func renderTrophyStripReveals() throws {
+        let dir = URL(fileURLWithPath: "/private/tmp/tailspot_snaps", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+
+        let a220 = CardPlane(
+            callsign: "JBU613", model: "Airbus A220-300", carrier: "JetBlue",
+            rarity: .uncommon, type: .narrow,
+            altText: "35,433 ft", speedText: "451 kt", distText: "14.5 km",
+            originIcao: "KBOS", destIcao: "KSFO",
+            originName: "Boston Logan", destName: "San Francisco")
+        let bell = CardPlane(
+            callsign: "N217MH", model: "Bell 206 JetRanger / LongRanger", carrier: "Private",
+            rarity: .uncommon, type: .ga,
+            altText: "1,975 ft", speedText: "65 kt", distText: "0.6 km")
+        let c17 = CardPlane(
+            callsign: "RCH872", model: "Boeing C-17 Globemaster III", carrier: "U.S. Air Force",
+            rarity: .epic, type: .mil,
+            altText: "27,887 ft", speedText: "418 kt", distText: "9.2 km",
+            originIcao: "KSUU", destIcao: "PHIK",
+            originName: "Travis AFB", destName: "Honolulu")
+
+        let standard = CGSize(width: 393, height: 852 - 93)   // safe area, as on device
+        let homeIndicatorInset: CGFloat = 34              // iPhone 16 bottom inset
+        let se = CGSize(width: 375, height: 647)
+
+        // name, plane, size, streak
+        let cases: [(String, CardPlane, CGSize, Int?)] = [
+            ("standard_a220", a220, standard, nil),
+            ("standard_c17_streak", c17, standard, 5),
+            ("se_a220", a220, se, nil),
+            ("se_bell_threeLineName", bell, se, 1),
+            ("se_c17_twoLineName", c17, se, 3),
+        ]
+        for (name, plane, size, streak) in cases {
+            func screen(advance: TrophyAdvance?) -> some View {
+                var reveal = CatchRevealView(plane: plane, entryNumber: 62, onDismiss: {}, onViewInHangar: {})
+                reveal.streakDays = streak
+                reveal.trophyAdvance = advance
+                return reveal._snapshotScreen(width: min(size.width - 28, 420), size: size,
+                                             bottomInset: size == standard ? homeIndicatorInset : 0)
+                    .environment(\.replayMaskingDisabled, true)
+            }
+            let with = Self.render(screen(advance: Self.airlinesAdvance), scale: 3)
+            let without = Self.render(screen(advance: nil), scale: 3)
+            let w = try #require(with), wo = try #require(without)
+            try? w.pngData()?.write(to: dir.appendingPathComponent("reveal_trophy_strip_\(name).png"))
+            try? wo.pngData()?.write(to: dir.appendingPathComponent("reveal_trophy_strip_\(name)_baseline.png"))
+
+            // Only the strip's own box may differ.
+            let box = try #require(Self.diffBounds(w, wo), "\(name): the strip drew nothing")
+            let compact = size != standard
+            let stripH = (compact ? TrophyAdvanceStrip.compactHeight : TrophyAdvanceStrip.regularHeight) * 3
+            #expect(box.height <= stripH + 3, "\(name): diff box \(box) is taller than the strip")
+            #expect(box.width <= (size.width - 28) * 3 + 3, "\(name): diff box \(box) is wider than the card")
+        }
+
+        // Bonus round (chips collapsed, route resolved) with the strip, and
+        // the chips-up beat, where the strip is held back so the card is
+        // exactly the card the player is answering on.
+        var rng = SeededRNG(seed: 7)
+        guard let route = GuessOptions.routeQuestion(
+            originIcao: "KSFO", destIcao: "VHHH", observerLat: 37.87, observerLon: -122.27,
+            using: &rng) else {
+            Issue.record("route question fixture failed to build")
+            return
+        }
+        let question = GuessRoundQuestion(route: route)
+        let ual = CardPlane(
+            callsign: "UAL248", model: "Boeing 787-9", carrier: "United Airlines",
+            rarity: .rare, type: .wide,
+            altText: "37,004 ft", speedText: "478 kt", distText: "12.0 km",
+            originIcao: "SFO", destIcao: "HKG",
+            originName: "San Francisco", destName: "Hong Kong", isFirstOfType: true)
+        let resolved = CatchRevealView.GuessSnapshotState(
+            render: .init(question: question,
+                          resolution: .init(answeredValue: question.correctValue, correct: true),
+                          chipsInLayout: false, popClock: 1),
+            bt: 1)
+        let popped = CatchRevealView.GuessSnapshotState(
+            render: .init(question: question, resolution: nil, chipsInLayout: true, popClock: 1),
+            bt: 0)
+        for (suffix, state, size) in [("guess_settled", resolved, standard), ("guess_settled_se", resolved, se),
+                                      ("guess_chips_up", popped, standard)] {
+            func screen(advance: TrophyAdvance?) -> some View {
+                var reveal = CatchRevealView(plane: ual, entryNumber: 62, onDismiss: {}, onViewInHangar: {},
+                                             guess: question)
+                reveal.trophyAdvance = advance
+                return reveal._snapshotScreen(width: min(size.width - 28, 420), size: size, guessState: state,
+                                             bottomInset: size == standard ? homeIndicatorInset : 0)
+                    .environment(\.replayMaskingDisabled, true)
+            }
+            let w = try #require(Self.render(screen(advance: Self.airlinesAdvance), scale: 3))
+            let wo = try #require(Self.render(screen(advance: nil), scale: 3))
+            try? w.pngData()?.write(to: dir.appendingPathComponent("reveal_trophy_strip_\(suffix).png"))
+            try? wo.pngData()?.write(to: dir.appendingPathComponent("reveal_trophy_strip_\(suffix)_baseline.png"))
+            let box = Self.diffBounds(w, wo)
+            if state.render.chipsInLayout {
+                #expect(box == nil, "the strip must not show while the chips are up")
+            } else {
+                let stripH = (size != standard ? TrophyAdvanceStrip.compactHeight : TrophyAdvanceStrip.regularHeight) * 3
+                #expect((box?.height ?? .infinity) <= stripH + 3, "\(suffix): diff box \(String(describing: box))")
+            }
+        }
+
+        // A duplicate or simulated reveal ignores any advance it is handed.
+        func plain(dup: Bool, sim: Bool) -> UIImage? {
+            var reveal = CatchRevealView(plane: a220, entryNumber: 62, onDismiss: {}, onViewInHangar: {},
+                                         isDuplicate: dup)
+            reveal.isSimulated = sim
+            reveal.trophyAdvance = Self.airlinesAdvance
+            return Self.render(reveal._snapshotScreen(width: standard.width - 28, size: standard)
+                .environment(\.replayMaskingDisabled, true), scale: 1)
+        }
+        for (dup, sim) in [(true, false), (false, true)] {
+            var base = CatchRevealView(plane: a220, entryNumber: 62, onDismiss: {}, onViewInHangar: {},
+                                       isDuplicate: dup)
+            base.isSimulated = sim
+            let baseline = Self.render(base._snapshotScreen(width: standard.width - 28, size: standard)
+                .environment(\.replayMaskingDisabled, true), scale: 1)
+            let handed = plain(dup: dup, sim: sim)
+            #expect(Self.diffBounds(try #require(handed), try #require(baseline)) == nil,
+                    "duplicate/simulated reveal must ignore a handed advance")
+        }
+    }
+
     /// A stand-in for the tap-time viewfinder frame: a portrait sky
     /// gradient with a small aircraft speck, so the freeze-frame snapshot
     /// exercises the same aspect-fill + clip path as a real 1080×1920 frame.

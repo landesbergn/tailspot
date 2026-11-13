@@ -278,6 +278,38 @@ struct TrophyTracksTests {
         #expect(second[1].id == "freighter")
     }
 
+    /// A player who has maxed nearly every track: only the heritage track is
+    /// left (no heritage catches), and no aircraft tags are earned, so the
+    /// feats that need tags stay open.
+    private var nearlyMaxed: TrophyProgressInputs {
+        let big = 100_000
+        return TrophyProgressInputs(
+            totalCatches: big, uniqueAirframes: big, wideBodyCatches: big, regionalCatches: big,
+            heritageCatches: 0, rareTierCatches: big, epicTierCatches: big, legendaryTierCatches: big,
+            rarePlusUnique: big, longestSlantKm: 500, bestMultiCatchCount: 5, nightCatches: big,
+            narrowBodyCatches: big, uniqueOperators: big, uniquePlaces: big, completedSets: big,
+            distinctDays: big, distinctCountries: big, farCatchCount: big, redEyeCatches: big,
+            bestBurstWithinTenMin: big, longestDayStreak: big, distinctTypes: big, fullDeckTypes: big,
+            totalPoints: big * 100, correctGuesses: big, bestGuessStreak: big)
+    }
+
+    @Test func aNearlyMaxedPlayerStillGetsThreeDistinctChases() {
+        let input = nearlyMaxed
+        let unmaxed = TrophyTrackState.all(inputs: input, roster: roster).filter { !$0.isMaxed }
+        #expect(unmaxed.count < 3, "fixture should leave fewer than three open tracks")
+
+        let chases = TrophyChases.pick(inputs: input, roster: roster)
+        #expect(chases.count == 3)
+        #expect(Set(chases.map(\.id)).count == chases.count, "no duplicates")
+        for c in chases {
+            #expect(!c.achievement.secret, "\(c.id) is secret")
+            #expect(!c.achievement.isEarned(inputs: input), "\(c.id) is already earned")
+        }
+        // The open tracks come first, feats fill the rest.
+        #expect(chases.filter { $0.kind == .trackLevel }.count == unmaxed.count)
+        #expect(chases.filter { $0.kind == .feat }.count == 3 - unmaxed.count)
+    }
+
     // MARK: Advance
 
     @Test func advanceIsNilWhenNothingChanged() {
@@ -390,5 +422,41 @@ struct TrophyTracksTests {
         let feat = TrophyUnlockEvent(achievement: ach("redeye"), newTier: .gold, kind: .badgeEarned)
         let f = TrophyUnlockCenter.unlockProperties(feat)
         #expect(f["track"] == nil && f["level"] == nil)
+    }
+
+    // MARK: Reveal strip
+
+    @Test func progressShownPropertiesCarryTrackLevelProgressGoal() {
+        let adv = TrophyAdvance.best(before: inputs(totalCatches: 3, operators: 27),
+                                     after: inputs(totalCatches: 4, operators: 28), roster: roster)!
+        let p = TrophyAnalytics.progressShownProperties(adv)
+        #expect(TrophyAnalytics.progressShown == "trophy_progress_shown")
+        #expect(p["track"]?.jsonValue as? String == "airlines")
+        #expect(p["level"]?.jsonValue as? Int == adv.level)
+        #expect(p["progress"]?.jsonValue as? Int == 28)
+        #expect(p["goal"]?.jsonValue as? Int == adv.goal)
+        #expect(p.count == 4)
+    }
+
+    @Test func advanceStripCopy() {
+        let adv = TrophyAdvance.best(before: inputs(totalCatches: 3, operators: 27),
+                                     after: inputs(totalCatches: 4, operators: 28), roster: roster)!
+        #expect(adv.title == "Airlines \(TrophyTracks.roman(adv.level))")
+        #expect(adv.countText == "28 / \(adv.goal)")
+        #expect(adv.accessibilityText == "Airlines level \(adv.level), 28 of \(adv.goal)")
+        // The ring lights the levels below the one being chased.
+        #expect(adv.badgeSpec.filled == adv.level - 1)
+        #expect(adv.badgeSpec.segments == adv.track.levelIDs.count)
+    }
+
+    @Test func multiRevealPutsTheStripOnTheLastFreshPlane() {
+        func entry(_ dup: Bool) -> MultiCatchReveal.Entry {
+            .init(plane: CardPlane(callsign: "X", model: "Boeing 737", carrier: "Y",
+                                   rarity: .common, type: .narrow,
+                                   altText: nil, speedText: nil, distText: "1 km"),
+                  isDuplicate: dup)
+        }
+        #expect(MultiCatchReveal.lastFreshIndex([entry(false), entry(false), entry(true)]) == 1)
+        #expect(MultiCatchReveal.lastFreshIndex([entry(true), entry(true)]) == nil)
     }
 }
