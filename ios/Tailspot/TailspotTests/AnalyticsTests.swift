@@ -521,6 +521,41 @@ struct AnalyticsFacadeTests {
         }
     }
 
+    /// More than three reseed grants become one recap, but analytics still
+    /// fires `trophy_unlocked` (via "reseed") once per grant.
+    @MainActor
+    @Test func bigRosterReseedRecapsButStillFiresOncePerGrant() {
+        let tag = "bigreseed-\(UUID().uuidString.prefix(8))"
+        func ach(_ n: String) -> Achievement {
+            Achievement(id: "\(tag)-\(n)", title: n, summary: "", iconName: "catcher",
+                        tiers: [.init(tier: .gold, at: 1)], progress: { $0.totalCatches })
+        }
+        let old = ach("old")
+        let added = ["a", "b", "c", "d"].map(ach)
+        let ledger = UserDefaultsTrophyLedger(defaults: UserDefaults(suiteName: "test.\(tag)")!)
+        let suite = UserDefaults(suiteName: "test.\(tag).facts")!
+        let events = TrophyEventStore(defaults: suite)
+        let standing = LeaderboardStandingCache(defaults: suite)
+        let hangar = [Catch(icao24: "abc123", callsign: nil, model: nil, manufacturer: nil,
+                            caughtAt: Date(timeIntervalSince1970: 1_716_000_000),
+                            observerLat: 0, observerLon: 0, slantDistanceMeters: 0)]
+        withSink { sink in
+            TrophyUnlockCenter(ledger: ledger, roster: [old], events: events, standing: standing,
+                               rosterVersion: 1).enqueueNewUnlocks(from: hangar)
+            let new = TrophyUnlockCenter(ledger: ledger, roster: [old] + added, events: events,
+                                         standing: standing, rosterVersion: 2)
+            new.enqueueNewUnlocks(from: hangar)
+            #expect(new.pendingEvents.isEmpty)
+            #expect(new.pendingRecap?.achievements.map(\.id) == added.map(\.id))
+            let mine = sink.captured.filter {
+                $0.event == "trophy_unlocked"
+                    && ($0.properties["achievement"]?.jsonValue as? String)?.hasPrefix(tag) == true
+            }
+            #expect(mine.count == 4)
+            #expect(mine.allSatisfy { $0.properties["via"]?.jsonValue as? String == "reseed" })
+        }
+    }
+
     // MARK: - reveal_dismissed (lives here for the same reason)
 
     @Test @MainActor func revealDismissedSendsOnceAndMutedSendsNothing() {

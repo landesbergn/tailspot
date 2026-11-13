@@ -786,11 +786,12 @@ struct TrophyRosterExpansionTests {
 
     // MARK: Roster generation
 
-    @Test func rosterVersionIsStampedAtFour() {
-        // The 2026-10-21 unearnable-trophies fix. Bumping this constant is
-        // what triggers the reseed + unlock cards on devices stamped behind it —
-        // pin it so an accidental edit is loud.
-        #expect(Trophies.rosterVersion == 4)
+    @Test func rosterVersionIsStampedAtFive() {
+        // The 2026-11 trophies rebuild (13 new track levels). Bumping this
+        // constant is what triggers the reseed (cards, or the recap past three
+        // grants) on devices stamped behind it — pin it so an accidental edit
+        // is loud.
+        #expect(Trophies.rosterVersion == 5)
     }
 
     @Test func newIdsPresentExactlyOnce() {
@@ -1124,7 +1125,7 @@ struct TrophiesUnearnableFixTests {
         // Catch & co., which the old ledger already had.
         #expect(Set(new.pendingEvents.map(\.achievementID)) == Set(newlyEarnable))
         #expect(new.pendingEvents.count == newlyEarnable.count)
-        #expect(ledger.rosterVersion == 4)
+        #expect(ledger.rosterVersion == Trophies.rosterVersion)
 
         // Once seen, a re-diff stays quiet.
         while let head = new.head { new.markShown(head); new.advance() }

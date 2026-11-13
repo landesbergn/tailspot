@@ -21,8 +21,9 @@ import Combine
 /// The one-time "trophy case" recap shown on the very first seed (every
 /// earned trophy, e.g. an older install meeting the unlock machinery), so
 /// that user gets one celebratory moment instead of a per-trophy flood. A
-/// roster-bump reseed does NOT use it: its few new grants get ordinary
-/// unlock cards (see `enqueueNewUnlocks`). Carries the trophies
+/// roster-bump reseed uses it only when it grants MORE than three trophies
+/// (see `enqueueNewUnlocks`); three or fewer get ordinary unlock cards.
+/// Carries the trophies
 /// themselves so the recap sheet can render them, not just a count.
 nonisolated struct TrophyRecap: Equatable, Sendable {
     /// The recapped achievements, in roster order (earned secrets included
@@ -143,6 +144,14 @@ final class TrophyUnlockCenter: ObservableObject {
     @Published private(set) var pendingEvents: [TrophyUnlockEvent] = []
     /// A pending one-time recap, or nil. Presented before the queue.
     @Published private(set) var pendingRecap: TrophyRecap?
+    /// The track a just-finished catch moved closer, for the reveal strip.
+    /// Set only when the catch COUNT grew since the previous evaluation (so
+    /// sheet closes, relaunches and restores never produce one); the first
+    /// evaluation after launch never does. Cleared by `consumeAdvance()`.
+    @Published private(set) var lastAdvance: TrophyAdvance?
+    /// Inputs of the previous `enqueueNewUnlocks` evaluation, the "before" of
+    /// the next advance. Reuses the memoized inputs: no extra full pass.
+    private var previousInputs: TrophyProgressInputs?
 
     private let ledger: UserDefaultsTrophyLedger
     private let roster: [Achievement]
@@ -206,6 +215,9 @@ final class TrophyUnlockCenter: ObservableObject {
     var head: TrophyUnlockEvent? { pendingEvents.first }
     var hasPending: Bool { pendingRecap != nil || !pendingEvents.isEmpty }
 
+    /// Clear `lastAdvance` once the reveal has taken it.
+    func consumeAdvance() { lastAdvance = nil }
+
     /// Diff the Hangar against the ledger and queue newly-crossed trophies.
     ///
     /// Two paths bypass the diff and (re)seed instead:
@@ -217,16 +229,20 @@ final class TrophyUnlockCenter: ObservableObject {
     ///    the user already qualifies for (e.g. Four Figures on an existing
     ///    2,000-point Hangar) are acknowledged in the ledger and each one is
     ///    queued as an ordinary "NEW TROPHY" card, the same card a live
-    ///    unlock gets (with "SKIP ALL" when several are pending). Only what
+    ///    unlock gets (with "SKIP ALL" when several are pending) — or, when
+    ///    the reseed newly acknowledges MORE THAN THREE (a roster that adds
+    ///    many levels at once), as the one-time recap instead of a card
+    ///    flood. Only what
     ///    the reseed newly acknowledged (earned now, not in the previous
     ///    ledger) is queued — a user with nothing new sees nothing — and
     ///    each fires `trophy_unlocked` with `via: "reseed"` here (the card's
     ///    `markShown` then stays silent because the tier is already
     ///    acknowledged), so the bump's effect is visible in analytics.
-    /// Both stamp the current roster version. Only the first-ever seed queues
-    /// the one-time "trophy case" recap (it can cover a whole Hangar, where
-    /// per-trophy cards would flood), and only when something is earned — a
-    /// fresh install never sees it.
+    /// Both stamp the current roster version. The one-time "trophy case"
+    /// recap is queued by the first-ever seed (it can cover a whole Hangar,
+    /// where per-trophy cards would flood) and by a reseed that grants more
+    /// than three, and only when something is earned — a fresh install never
+    /// sees it.
     /// Callers should fire this once at app launch so the seed lands before
     /// the user's first crossing.
     ///
@@ -252,6 +268,13 @@ final class TrophyUnlockCenter: ObservableObject {
     func enqueueNewUnlocks(from catches: [Catch]) {
         let token = TrophyInputsToken.of(catches, events: events, standing: standing)
         let inputs = inputsMemo.cached(for: token) ?? computeInputs(catches, token: token)
+        // Advance: only when the catch COUNT grew versus the previous
+        // evaluation (the count task after a catch). Re-diffs at the same
+        // count (post-geocode, sheet close) leave `lastAdvance` alone.
+        if let before = previousInputs, inputs.totalCatches > before.totalCatches {
+            lastAdvance = TrophyAdvance.best(before: before, after: inputs, roster: roster)
+        }
+        previousInputs = inputs
         if datesToken != token {
             recordDatesWithinBudget(catches: catches, inputs: inputs, token: token)
         } else if !memoDatesDone, pendingDateBackfill == nil {
@@ -272,14 +295,22 @@ final class TrophyUnlockCenter: ObservableObject {
             let newlyAcknowledged = TrophyUnlock.pending(inputs: inputs, roster: roster, ledger: ledger)
             TrophyUnlock.seed(inputs: inputs, roster: roster, into: ledger)
             ledger.markRosterVersion(rosterVersion)
-            // Present each grant as a normal "NEW TROPHY" card. The seed above
-            // already acknowledged them, so `markShown` treats the card as a
-            // re-presentation and fires nothing — the reseed event below is
-            // the one `trophy_unlocked` per grant.
-            for event in newlyAcknowledged where !pendingEvents.contains(event) {
-                Analytics.capture("trophy_unlocked", Self.unlockProperties(event, via: "reseed"))
-                pendingEvents.append(event)
+            // Up to three grants: present each as a normal "NEW TROPHY" card.
+            // The seed above already acknowledged them, so `markShown` treats
+            // the card as a re-presentation and fires nothing — the reseed
+            // event below is the one `trophy_unlocked` per grant. More than
+            // three: one recap sheet instead of a card flood (the analytics
+            // event still fires once per grant).
+            let asRecap = newlyAcknowledged.count > Self.reseedCardLimit
+            for event in newlyAcknowledged {
+                if asRecap {
+                    Analytics.capture("trophy_unlocked", Self.unlockProperties(event, via: "reseed"))
+                } else if !pendingEvents.contains(event) {
+                    Analytics.capture("trophy_unlocked", Self.unlockProperties(event, via: "reseed"))
+                    pendingEvents.append(event)
+                }
             }
+            if asRecap { queueRecap(newlyAcknowledged.map(\.achievement)) }
             return
         }
         let fresh = TrophyUnlock.pending(inputs: inputs, roster: roster, ledger: ledger)
@@ -287,6 +318,10 @@ final class TrophyUnlockCenter: ObservableObject {
             pendingEvents.append(event)
         }
     }
+
+    /// Most grants a roster-bump reseed presents as individual cards; more
+    /// than this become the one-time recap.
+    static let reseedCardLimit = 3
 
     /// After a bulk Hangar restore, silently re-align the ledger with the
     /// restored collection: acknowledge every currently-earned tier (the same
@@ -298,6 +333,9 @@ final class TrophyUnlockCenter: ObservableObject {
     func reseedAfterRestore(from catches: [Catch]) {
         let token = TrophyInputsToken.of(catches, events: events, standing: standing)
         let inputs = computeInputs(catches, token: token)
+        // A restore is not a catch: re-baseline the advance, show none.
+        previousInputs = inputs
+        lastAdvance = nil
         recordDatesWithinBudget(catches: catches, inputs: inputs, token: token)
         TrophyUnlock.seed(inputs: inputs, roster: roster, into: ledger)
         // A restore only ever runs on an empty Hangar, so anything pending
@@ -366,6 +404,11 @@ final class TrophyUnlockCenter: ObservableObject {
             "kind": .string(event.kind == .badgeEarned ? "badge" : "tier_up"),
             "secret": .bool(event.achievement.secret),
         ]
+        if let track = TrophyTracks.track(forAchievementID: event.achievementID),
+           let level = TrophyTracks.level(ofAchievementID: event.achievementID) {
+            props["track"] = .string(track.id)
+            props["level"] = .int(level)
+        }
         if let via { props["via"] = .string(via) }
         return props
     }
