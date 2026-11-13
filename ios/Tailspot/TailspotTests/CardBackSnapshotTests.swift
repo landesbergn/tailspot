@@ -38,7 +38,7 @@ nonisolated enum BackFixtures {
     // Test copy written for the fixture (not real Wikipedia text).
     static let b738Summary = WikipediaSummary(
         extract: "The Boeing 737-800 is a stretched member of the 737 Next Generation family of narrow-body airliners. It entered service in 1998 and became the most widely flown variant of the family.",
-        intro: "The Boeing 737-800 is a stretched member of the 737 Next Generation family of narrow-body airliners. It entered service in 1998 and became the most widely flown variant of the family. A third sentence only the sheet shows.",
+        intro: "The Boeing 737-800 is a stretched member of the 737 Next Generation family of narrow-body airliners. It entered service in 1998 and became the most widely flown variant of the family. A third sentence the card shows when it has room.",
         pageURL: URL(string: "https://en.m.wikipedia.org/wiki/Boeing_737_Next_Generation")!)
 
     static let planespotters = PlanePhoto(
@@ -190,6 +190,14 @@ struct CardBackFormatTests {
             #expect(CardBackFormat.credit(for: quiet) == nil)
             #expect(CardBackFormat.link(for: quiet) == nil)
         }
+    }
+
+    @Test func teaserUsesTheWholeIntroElseTheExtract() {
+        #expect(CardBackFormat.teaserText(BackFixtures.b738Summary)
+                == BackFixtures.b738Summary.intro)
+        let noIntro = WikipediaSummary(extract: "Two sentences. Only.",
+                                       pageURL: BackFixtures.b738Summary.pageURL)
+        #expect(CardBackFormat.teaserText(noIntro) == "Two sentences. Only.")
     }
 
     @Test func wikipediaBlockShowsOnlyWithSummaryOrLoading() {
