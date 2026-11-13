@@ -272,7 +272,12 @@ nonisolated struct TrophyTrackState: Sendable {
     /// Pure function of the inputs + roster. Levels missing from `roster`
     /// (a custom test roster) are skipped; nil when none are present.
     static func make(track: TrophyTrack, inputs: TrophyProgressInputs, roster: [Achievement]) -> TrophyTrackState? {
-        let byID = Dictionary(roster.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        make(track: track, inputs: inputs,
+             byID: Dictionary(roster.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a }))
+    }
+
+    /// `make` against a prebuilt id index, so `all` builds it once.
+    static func make(track: TrophyTrack, inputs: TrophyProgressInputs, byID: [String: Achievement]) -> TrophyTrackState? {
         let levels = track.levelIDs.compactMap { byID[$0] }
         guard !levels.isEmpty else { return nil }
         var earned = 0
@@ -288,7 +293,8 @@ nonisolated struct TrophyTrackState: Sendable {
 
     /// States for every track the roster carries, in `TrophyTracks.all` order.
     static func all(inputs: TrophyProgressInputs, roster: [Achievement] = Trophies.roster) -> [TrophyTrackState] {
-        TrophyTracks.all.compactMap { make(track: $0, inputs: inputs, roster: roster) }
+        let byID = Dictionary(roster.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        return TrophyTracks.all.compactMap { make(track: $0, inputs: inputs, byID: byID) }
     }
 }
 
@@ -375,15 +381,8 @@ nonisolated enum TrophyChases {
             takeTrack(s)
         }
 
-        // 3. The nearest remaining track, else the next feat.
-        if let s = best(states.filter { !chosenTracks.contains($0.track.id) }) {
-            takeTrack(s)
-        } else if let f = nextFeat(from: nil) {
-            takeFeat(f)
-        }
-
-        // Top up to three. A player who has maxed most tracks would
-        // otherwise see one or two; unearned feats fill the rest.
+        // 3. Fill to three: the nearest remaining tracks, then unearned
+        // feats (a player who has maxed most tracks still gets three).
         while result.count < 3 {
             if let s = best(states.filter({ !chosenTracks.contains($0.track.id) })) {
                 takeTrack(s)

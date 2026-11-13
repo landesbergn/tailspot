@@ -47,7 +47,7 @@ struct TrophyRecapView: View {
         .onAppear {
             began = Date()
             AccessibilityNotification.Announcement(
-                "Trophy case: \(recap.earned) \(recap.earned == 1 ? "trophy" : "trophies") already earned."
+                "\(recap.isUpdate ? "New in your trophy case" : "Trophy case"): \(recap.earned) \(recap.earned == 1 ? "trophy" : "trophies") already earned."
             ).post()
         }
         .task {
@@ -109,7 +109,7 @@ struct TrophyRecapView: View {
         // reveal-ledger style.
         let count = Int((Double(recap.earned) * easeOutQuad(ss(0.10, 0.55, t))).rounded())
         return VStack(spacing: 8) {
-            Text("YOUR TROPHY CASE")
+            Text(recap.isUpdate ? "NEW IN YOUR TROPHY CASE" : "YOUR TROPHY CASE")
                 .font(.system(size: 12, weight: .bold, design: .monospaced))
                 .tracking(3)
                 .foregroundColor(RP.gold)
@@ -119,7 +119,9 @@ struct TrophyRecapView: View {
                 .foregroundColor(RP.ink)
                 .monospacedDigit()
                 .opacity(ss(0.05, 0.2, t))
-            Text(recap.earned == 1 ? "TROPHY ALREADY EARNED" : "TROPHIES ALREADY EARNED")
+            Text(recap.isUpdate
+                 ? (recap.earned == 1 ? "NEW TROPHY ALREADY EARNED" : "NEW TROPHIES ALREADY EARNED")
+                 : (recap.earned == 1 ? "TROPHY ALREADY EARNED" : "TROPHIES ALREADY EARNED"))
                 .font(.system(size: 11, weight: .semibold, design: .monospaced))
                 .tracking(2)
                 .foregroundColor(RP.muted)
@@ -132,7 +134,7 @@ struct TrophyRecapView: View {
                 .scaleEffect(x: ss(0.12, 0.4, t), anchor: .center)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Trophy case: \(recap.earned) \(recap.earned == 1 ? "trophy" : "trophies") already earned")
+        .accessibilityLabel("\(recap.isUpdate ? "New in your trophy case" : "Trophy case"): \(recap.earned) \(recap.earned == 1 ? "trophy" : "trophies") already earned")
     }
 
     private func grid(t: Double) -> some View {

@@ -125,9 +125,6 @@ struct TrophyTracksTests {
             let thresholds = levels.map(\.threshold)
             #expect(thresholds == thresholds.sorted() && Set(thresholds).count == thresholds.count,
                     "\(t.id) thresholds must strictly ascend: \(thresholds)")
-            for (i, level) in levels.enumerated().dropFirst() {
-                #expect(level.prerequisite == levels[i - 1].id, "\(level.id) should require \(levels[i - 1].id)")
-            }
         }
     }
 

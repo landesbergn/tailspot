@@ -29,6 +29,10 @@ nonisolated struct TrophyRecap: Equatable, Sendable {
     /// The recapped achievements, in roster order (earned secrets included
     /// — earning reveals them, house rule).
     let achievements: [Achievement]
+    /// True when this recap covers only what a roster update newly granted
+    /// (not the whole case), so the sheet says "new" instead of implying
+    /// this is everything the player holds.
+    var isUpdate = false
     var earned: Int { achievements.count }
 }
 
@@ -216,7 +220,11 @@ final class TrophyUnlockCenter: ObservableObject {
     var hasPending: Bool { pendingRecap != nil || !pendingEvents.isEmpty }
 
     /// Clear `lastAdvance` once the reveal has taken it.
-    func consumeAdvance() { lastAdvance = nil }
+    func consumeAdvance() {
+        // Assigning nil over nil would still publish and re-run
+        // ContentView.body on every shutter press.
+        if lastAdvance != nil { lastAdvance = nil }
+    }
 
     /// Diff the Hangar against the ledger and queue newly-crossed trophies.
     ///
@@ -310,7 +318,7 @@ final class TrophyUnlockCenter: ObservableObject {
                     pendingEvents.append(event)
                 }
             }
-            if asRecap { queueRecap(newlyAcknowledged.map(\.achievement)) }
+            if asRecap { queueRecap(newlyAcknowledged.map(\.achievement), isUpdate: true) }
             return
         }
         let fresh = TrophyUnlock.pending(inputs: inputs, roster: roster, ledger: ledger)
@@ -440,11 +448,11 @@ final class TrophyUnlockCenter: ObservableObject {
         pendingRecap = nil
     }
 
-    private func queueRecap(_ achievements: [Achievement]) {
+    private func queueRecap(_ achievements: [Achievement], isUpdate: Bool = false) {
         // Nothing to show (fresh install, or an install that never caught)
         // → no recap; the version stamp is already written, so no re-check.
         guard !achievements.isEmpty else { return }
-        pendingRecap = TrophyRecap(achievements: achievements)
+        pendingRecap = TrophyRecap(achievements: achievements, isUpdate: isUpdate)
     }
 
     #if DEBUG

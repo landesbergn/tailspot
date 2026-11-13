@@ -14,6 +14,13 @@ Git history + PLAN.md §9 remain the authoritative record.
 - The catch reveal shows one line for the track the catch advanced. It is an overlay by the exits, hidden for duplicates and while bonus chips are up.
 - New events: `trophies_tab_viewed`, `trophy_detail_opened`, `trophy_share_opened`, `trophy_share_completed`, `trophy_progress_shown`. `trophy_unlocked` gains `track` and `level`.
 - Built by three Sonnet subagents (model, tab, reveal) with a review after each. Not yet checked on a device.
+## 2026-11-13 — CLAUDE.md cleanup (branch `claude/claude-md-cleanup-6fcac8`)
+
+- Both CLAUDE.md files trimmed to Anthropic's current guidance (under 200 lines, nothing Claude can read from the code, plain wording): root 203 → ~130 lines, `ios/CLAUDE.md` 225 → ~140.
+- Working model updated: Noah weighs in on UI, workflows and product; code decisions are Claude's, without narration.
+- Removed the doc-staleness Stop hook (`bin/doc-staleness-check`). It only fired on `main` with unpushed commits, which branch protection rules out, so it never ran.
+- New `.claude/rules/` holds path-scoped rules (analytics identity, the `Catch` model contract, ADS-B errors) that load only when Claude touches matching files. `.gitignore` now keeps `.claude/` local except `rules/`.
+- Test-timing measurement steps moved to CONTRIBUTING.md.
 
 ## 2026-11-12 — Placeholder callsigns show the tail number (branch `claude/catch-000000-issue-5eeec5`)
 

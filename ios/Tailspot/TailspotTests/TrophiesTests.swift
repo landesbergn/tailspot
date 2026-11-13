@@ -654,7 +654,6 @@ struct TrophyRosterExpansionTests {
     }
 
     @Test func highRollerAtFiveThousandChainedBehindFourFigures() {
-        #expect(ach("highroller").prerequisite == "fourfigures")
         // 9 legendaries = 4500 → locked; 10 = 5000 → earned.
         let nine = (0..<9).map { mk(typecode: "B2", minute: $0) }
         #expect(ach("highroller").isEarned(inputs: Trophies.inputs(from: nine)) == false)
@@ -664,7 +663,6 @@ struct TrophyRosterExpansionTests {
     @Test func pointsMilestonesAreVisibleNotSecret() {
         #expect(ach("fourfigures").secret == false)
         #expect(ach("highroller").secret == false)
-        #expect(ach("fourfigures").prerequisite == nil)
     }
 
     // MARK: correctGuesses / Called It / Clairvoyant
@@ -687,7 +685,6 @@ struct TrophyRosterExpansionTests {
     }
 
     @Test func clairvoyantBoundaryAtTenCorrect() {
-        #expect(ach("clairvoyant").prerequisite == "calledit")
         let nine = (0..<9).map { guessed(true, minute: $0) }
         #expect(ach("clairvoyant").isEarned(inputs: Trophies.inputs(from: nine)) == false)
         #expect(ach("clairvoyant").isEarned(inputs: Trophies.inputs(from: nine + [guessed(true, minute: 9)])))
@@ -846,9 +843,6 @@ struct TrophiesWinnerTests {
         let t = ach("dynasty")
         #expect(t.secret)
         #expect(t.tiers.count == 1)
-        // No prereq chain: secrets are always listed (masked), so chaining
-        // behind Top Flight would be a silent no-op — pin the deliberate nil.
-        #expect(t.prerequisite == nil)
         // Locked → present in the feats grid, masked as "???".
         let locked = TrophyTabContent.make(inputs: inputs(wins: 1)).feats
         #expect(locked.first { $0.id == "dynasty" }?.masked == true)

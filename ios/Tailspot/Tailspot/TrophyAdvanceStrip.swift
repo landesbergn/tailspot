@@ -56,6 +56,9 @@ struct TrophyAdvanceStrip: View {
         Group {
             if compact { compactBody } else { regularBody }
         }
+        // The strip has a fixed height (it overlays a fixed slot), so its
+        // text scales with Dynamic Type only up to what that height holds.
+        .dynamicTypeSize(...DynamicTypeSize.xLarge)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(advance.accessibilityText)
     }
@@ -66,7 +69,8 @@ struct TrophyAdvanceStrip: View {
             VStack(spacing: 5) {
                 HStack(alignment: .firstTextBaseline) {
                     Text(advance.title)
-                        .font(.system(size: 13, weight: .medium))
+                        .font(.footnote.weight(.medium))
+                        .minimumScaleFactor(0.8)
                         .foregroundColor(RP.ink)
                         .lineLimit(1)
                     Spacer(minLength: 8)
@@ -85,7 +89,7 @@ struct TrophyAdvanceStrip: View {
         HStack(spacing: 8) {
             TrophyBadge(advance.badgeSpec, size: 20)
             Text(advance.title)
-                .font(.system(size: 12, weight: .medium))
+                .font(.caption.weight(.medium))
                 .foregroundColor(RP.ink)
                 .lineLimit(1)
                 .fixedSize()
