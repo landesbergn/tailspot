@@ -377,11 +377,16 @@ struct CatchCardBack: View {
                         if let first { ledgerLine("FIRST CAUGHT", first, scale: scale) }
                         if !log.rows.isEmpty { catchLogBlock(log, scale: scale) }
                     }
+                    // Never squeezed: on a tight face the stack shrank the
+                    // FIRST CAUGHT date (minimumScaleFactor) before taking
+                    // lines from the Wikipedia teaser.
+                    .fixedSize(horizontal: false, vertical: true)
                 }
 
                 if !specs.isEmpty {
                     Rectangle().fill(RP.rule).frame(height: 1)
                     specGrid(specs, scale: scale)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 if CardBackFormat.showsWikipedia(model) {
