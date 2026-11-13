@@ -2,67 +2,57 @@
 //  HangarTrophiesView.swift
 //  Tailspot
 //
-//  Trophies-view body for the Hangar sheet. Achievements are BINARY —
-//  earned or not, one flat pool (no medals/badges split, no metal tiers,
-//  no header). Redesigned 2026-06-20 (Noah) after the leveled-metal model
-//  conflated with the aircraft rarity/type pills:
+//  Trophies segment of the Hangar sheet. Rebuilt 2026-11 around three
+//  sections in one scroll (see STRATEGY: collection & progression):
 //
-//    • Earned achievements lead, in a distinct CYAN hex (the brand accent,
-//      deliberately NOT the gold that read as "legendary" rarity).
-//    • Visible-locked achievements show their real name + a quiet "62 / 100"
-//      toward the single goal — it's still binary, just "how close".
-//    • SECRET achievements are absent from the list entirely until earned,
-//      then they appear (with a moment from TrophyUnlockView).
+//    CHASING NOW  up to three live goals side by side (a vertical stack of
+//                 full-width rows at accessibility text sizes),
+//    TRACKS       one row per ladder (Heavies I-III…): badge at the current
+//                 level, level pips, progress to the next,
+//    FEATS        a 3-column grid of one-offs, earned first; secrets stay
+//                 a "???" until earned.
 //
-//  Layout matches the Sets/Recent feeds: a ScrollView + LazyVStack of
-//  rounded cards. TrophyView caches each hex (drawingGroup) so paging stays
-//  smooth.
+//  Every card, row and cell is a Button that opens `TrophyDetailSheet`.
+//  Badges are `TrophyBadge` (art direction "C": one monoline symbol in a
+//  segmented ring).
+//
+//  Structure: `TrophiesTabContentView` is a plain function of
+//  `TrophyTabContent` (so snapshots feed it synthetic inputs); the thin
+//  `HangarTrophiesView` wrapper owns the @Query, the memo (a token compare
+//  when nothing changed), the date backfill, analytics and the sheet.
 //
 
 import SwiftUI
 import SwiftData
 
-/// Which achievements the Trophies tab shows, and in what order. Pure so the
-/// "secret stays hidden until earned" + "earned first" rules are unit-testable
-/// without SwiftUI.
-nonisolated enum TrophyBoard {
-    static func visible(
-        roster: [Achievement] = Trophies.roster,
-        inputs: TrophyProgressInputs
-    ) -> [Achievement] {
-        let earnedIds = Set(roster.filter { $0.isEarned(inputs: inputs) }.map(\.id))
-        func shows(_ ach: Achievement) -> Bool {
-            // Secret achievements are always in the list (masked while locked).
-            if ach.secret { return true }
-            // Earned ones always show; otherwise a chained milestone appears
-            // only once its prerequisite is earned (progressive reveal).
-            if earnedIds.contains(ach.id) { return true }
-            if let prereq = ach.prerequisite { return earnedIds.contains(prereq) }
-            return true
-        }
-        // `filter` preserves roster order, so partitioning earned-first keeps a
-        // stable order within each group.
-        let shown = roster.filter(shows)
-        let earned = shown.filter { earnedIds.contains($0.id) }
-        let locked = shown.filter { !earnedIds.contains($0.id) }
-        return earned + locked
-    }
+// MARK: - Wrapper (data + presentation)
+
+/// The sheet's subject: an achievement plus where it was opened from.
+struct TrophyDetailTarget: Identifiable {
+    let achievement: Achievement
+    let source: TrophyDetailSource
+    var id: String { achievement.id }
 }
 
 struct HangarTrophiesView: View {
+    /// True while the Trophies segment is the visible page. HangarView keeps
+    /// every segment alive in a paged TabView, so `onAppear` fires at sheet
+    /// open whichever segment is showing; this flag is what "became visible"
+    /// keys off.
+    var isActive: Bool = true
+
     @Query private var catches: [Catch]
     @AppStorage(UserDefaultsTrophyLedger.achievedDatesKey) private var achievedDatesData = Data()
-    /// Memoizes the inputs + board so segment switches (which re-eval this
+    /// Memoizes the derived content so segment switches (which re-eval this
     /// kept-alive page's body) render from cache — see HangarDerivedCache.
-    @State private var cache = DerivedCacheBox<(inputs: TrophyProgressInputs, items: [Achievement])>()
+    @State private var cache = DerivedCacheBox<TrophyTabContent>()
+    @State private var detail: TrophyDetailTarget?
 
     /// The memo key: `TrophyInputsToken`, the same key TrophyUnlockCenter
     /// and ProfileScreen use. It covers every input `Trophies.inputs` reads
     /// (rows incl. the late `guessCorrect` stamp and `caughtDayKey`, the time
     /// zone, the event and standing stores), so this tab and Profile can't
-    /// disagree. It used to hash only `CatchFingerprint` + event counts +
-    /// standing, which left Sharp Eye / Hot Streak progress here stale after
-    /// a bonus-round verdict or a time-zone change while Profile updated.
+    /// disagree.
     static func memoKey(
         _ catches: [Catch],
         events: TrophyEventStore = TrophyEventStore(),
@@ -78,167 +68,159 @@ struct HangarTrophiesView: View {
         // The inputs come from the shared memo: the app-root unlock center
         // has usually computed them for this exact token already (launch
         // diff, post-catch diff), so opening the Hangar is a token compare
-        // instead of a full pass. This box only keeps the board ordering.
-        let derived = cache.value(for: token) {
+        // instead of a full pass. This box only keeps the derived content.
+        let content = cache.value(for: token) {
             let inputs = TrophyInputsMemo.shared.inputs(for: token) { Trophies.inputs(from: catches) }
-            return (inputs: inputs, items: TrophyBoard.visible(inputs: inputs))
+            return TrophyTabContent.make(inputs: inputs)
         }
-        let inputs = derived.inputs
-        let items = derived.items
         let dates = UserDefaultsTrophyLedger.achievedDates(from: achievedDatesData)
-        return ScrollView {
-            LazyVStack(alignment: .leading, spacing: 10) {
-                ForEach(items) { TrophyCardRow(ach: $0, inputs: inputs, achievedAt: dates[$0.id]) }
+        return TrophiesTabContentView(content: content, dates: dates, units: UnitPreferences.shared.units) { ach, source in
+            let earned = ach.isEarned(inputs: content.inputs)
+            Analytics.capture(TrophyAnalytics.detailOpened,
+                              TrophyAnalytics.detailOpenedProperties(ach, earned: earned, source: source))
+            detail = TrophyDetailTarget(achievement: ach, source: source)
+        }
+        .task(id: token) {
+            await TrophyAchievementDates.backfill(from: catches, inputs: content.inputs)
+        }
+        // Fires each time the segment becomes visible (and once at sheet
+        // open when Trophies is the remembered segment).
+        .onChange(of: isActive, initial: true) { _, active in
+            guard active else { return }
+            Analytics.capture(TrophyAnalytics.tabViewed, TrophyAnalytics.tabViewedProperties(content))
+        }
+        .sheet(item: $detail) { target in
+            TrophyDetailSheet(
+                achievement: target.achievement, inputs: content.inputs, dates: dates,
+                units: UnitPreferences.shared.units
+            ) { detail = nil }
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+            .presentationBackground(Brand.Color.bgPrimary)
+        }
+    }
+}
+
+// MARK: - The tab body
+
+struct TrophiesTabContentView: View {
+    let content: TrophyTabContent
+    var dates: [String: Date] = [:]
+    var units: DisplayUnits = UnitPreferences.shared.units
+    var onOpen: (Achievement, TrophyDetailSource) -> Void = { _, _ in }
+
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                chasing
+                tracks
+                feats
             }
             .padding(.horizontal, 16)
             .padding(.top, 12)
             .padding(.bottom, 32)
         }
         .background(Brand.Color.bgPrimary)
-        .task(id: token) {
-            await TrophyAchievementDates.backfill(from: catches, inputs: inputs)
-        }
     }
-}
 
-/// One trophy card — earned (cyan hex), locked-with-progress, or the masked
-/// `???` secret placeholder. A standalone view (not a private builder on
-/// HangarTrophiesView) so the snapshot harness can render the exact same
-/// cards in a plain non-lazy column, without a SwiftData container.
-struct TrophyCardRow: View {
-    let ach: Achievement
-    let inputs: TrophyProgressInputs
-    var achievedAt: Date? = nil
+    // MARK: CHASING NOW
 
-    /// The single accent for an earned achievement hex — cyan-family metal,
-    /// chosen to sit apart from the rarity/type palettes (grey/green/cyan/
-    /// purple/gold pills) by shape + a consistent cool tone, not gold.
-    private let earnedTier: TrophyTier = .platinum
-
-    var body: some View {
-        let earned = ach.isEarned(inputs: inputs)
-        // Secret + locked → a `???` placeholder with no name or details, so it
-        // exists in the list without spoiling what it is.
-        let masked = ach.secret && !earned
-        let progress = ach.currentProgress(inputs: inputs)
-        VStack(spacing: 0) {
-            HStack(alignment: .center, spacing: 14) {
-                TrophyView(tier: earnedTier, iconName: ach.iconName, size: 52, locked: !earned)
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(masked ? "???" : ach.title)
-                        .font(Brand.Font.cardTitle)
-                        .foregroundStyle(earned ? Brand.Color.textPrimary : Brand.Color.textSecondary)
-                    Text(masked ? "Hidden achievement" : ach.displaySummary)
-                        .font(Brand.Font.caption)
-                        .foregroundStyle(Brand.Color.textSecondary)
-                        // Two lines, not one: at larger Dynamic Type sizes a
-                        // one-line cap truncates the goal text mid-sentence.
-                        .lineLimit(2)
-                    footer(masked: masked, earned: earned, ach: ach, progress: progress)
+    @ViewBuilder
+    private var chasing: some View {
+        if !content.chases.isEmpty {
+            TrophyEyebrow(title: "CHASING NOW", trailing: "\(content.chases.count) LIVE")
+            if typeSize.isAccessibilitySize {
+                VStack(spacing: 8) {
+                    ForEach(content.chases) { chaseCard($0, wide: true) }
                 }
-                Spacer(minLength: 0)
+            } else {
+                HStack(alignment: .top, spacing: 8) {
+                    ForEach(content.chases) { chaseCard($0, wide: false) }
+                }
             }
-            .padding(12)
-            if earned { achievementStrip }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            earned ? Brand.Color.bgElevated : Brand.Color.bgElevated.opacity(0.5),
-            in: .rect(cornerRadius: Brand.Radius.card)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: Brand.Radius.card)
-                .strokeBorder(Brand.Color.textPrimary.opacity(earned ? 0.06 : 0.04), lineWidth: 1)
-        )
-        .clipShape(.rect(cornerRadius: Brand.Radius.card))
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(masked
-            ? "Hidden achievement, locked"
-            : "\(ach.title), \(earned ? "earned" : "locked"). \(ach.displaySummary)\(earned ? achievementAccessibility : "")")
-    }
-
-    private var achievementAccessibility: String {
-        guard let achievedAt else { return ". Achievement date unavailable" }
-        return ". Achieved \(achievedAt.formatted(date: .long, time: .omitted))"
-    }
-
-    private var achievementStrip: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 12) {
-                achievedLabel
-                Spacer(minLength: 0)
-                achievementDate.fixedSize()
-            }
-            VStack(alignment: .leading, spacing: 6) {
-                achievedLabel
-                achievementDate
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .foregroundStyle(Brand.Color.textSecondary)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background { Rectangle().fill(Brand.Color.bgPrimary.opacity(0.4)) }
-        .overlay(alignment: .top) {
-            Rectangle().fill(Brand.Color.textPrimary.opacity(0.06)).frame(height: 1)
         }
     }
 
-    private var achievedLabel: some View {
-        Label {
-            Text("Achieved")
-        } icon: {
-            Image(systemName: "checkmark").foregroundStyle(Brand.Color.cyan)
+    private func chaseCard(_ item: TrophyChaseItem, wide: Bool) -> some View {
+        Button { onOpen(item.chase.achievement, .chase) } label: {
+            TrophyChaseCard(item: item, units: units, wide: wide)
         }
-        .font(Brand.Font.caption)
-        .fixedSize()
+        .buttonStyle(.plain)
     }
+
+    // MARK: TRACKS
 
     @ViewBuilder
-    private var achievementDate: some View {
-        if let achievedAt {
-            Text(achievedAt, format: .dateTime.month(.abbreviated).day().year())
-                .font(Brand.Font.mono(size: 11, relativeTo: .caption2))
-        } else {
-            Text("Date unavailable")
-                .font(Brand.Font.caption)
-                .foregroundStyle(Brand.Color.textTertiary)
+    private var tracks: some View {
+        TrophyEyebrow(
+            title: "TRACKS",
+            trailing: "\(content.levelsEarned) \(content.levelsEarned == 1 ? "LEVEL" : "LEVELS")"
+        ).padding(.top, 10)
+        VStack(spacing: 8) {
+            ForEach(content.tracks, id: \.track.id) { state in
+                Button {
+                    if let focus = TrophyTabContent.focusAchievement(for: state, roster: content.roster) {
+                        onOpen(focus, .track)
+                    }
+                } label: {
+                    TrophyTrackRow(state: state)
+                }
+                .buttonStyle(.plain)
+            }
         }
     }
 
+    // MARK: FEATS
+
     @ViewBuilder
-    private func footer(masked: Bool, earned: Bool, ach: Achievement, progress: Int) -> some View {
-        if earned {
-            // The cyan hex already signals earned — no "EARNED" label needed.
-            EmptyView()
-        } else if !masked && ach.threshold > 1 {
-            // Binary, but show how close you are to the single goal.
-            let frac = Double(min(progress, ach.threshold)) / Double(ach.threshold)
-            HStack(spacing: 6) {
-                Text("\(min(progress, ach.threshold)) / \(ach.threshold)")
-                    .font(Brand.Font.mono(size: 11, weight: .semibold, relativeTo: .caption2))
-                    .foregroundStyle(Brand.Color.textTertiary)
-                    .monospacedDigit()
-                Spacer(minLength: 6)
-                ProgressBar(fill: frac, tint: Brand.Color.cyan)
-                    .frame(width: 76, height: 4)
+    private var feats: some View {
+        TrophyEyebrow(title: "FEATS", trailing: "\(content.featsEarned) OF \(content.feats.count)")
+            .padding(.top, 10)
+        let columns = Array(repeating: GridItem(.flexible(), spacing: 8, alignment: .top),
+                            count: typeSize.isAccessibilitySize ? 2 : 3)
+        LazyVGrid(columns: columns, spacing: 14) {
+            ForEach(content.feats) { item in
+                Button { onOpen(item.achievement, .feat) } label: {
+                    TrophyFeatCell(item: item)
+                }
+                .buttonStyle(.plain)
             }
-            .padding(.top, 1)
-        } else {
-            Label("LOCKED", systemImage: "lock.fill")
-                .font(Brand.Font.mono(size: 10, weight: .bold, relativeTo: .caption2))
-                .tracking(0.8)
-                .foregroundStyle(Brand.Color.textTertiary)
-                .padding(.top, 1)
         }
+        .padding(.vertical, 14)
+        .padding(.horizontal, 6)
+        .background(Brand.Color.bgElevated.opacity(0.5), in: .rect(cornerRadius: Brand.Radius.card))
     }
 }
 
-// MARK: - Progress bar
+// MARK: - Pieces
 
-private struct ProgressBar: View {
+/// Section header: mono label + trailing count.
+struct TrophyEyebrow: View {
+    let title: String
+    var trailing: String? = nil
+    var body: some View {
+        HStack {
+            Text(title)
+                .font(Brand.Font.mono(size: 11, weight: .bold, relativeTo: .caption))
+                .tracking(1.4)
+                .foregroundStyle(Brand.Color.textSecondary)
+            Spacer(minLength: 8)
+            if let trailing {
+                Text(trailing)
+                    .font(Brand.Font.mono(size: 11, relativeTo: .caption))
+                    .foregroundStyle(Brand.Color.textTertiary)
+            }
+        }
+        .accessibilityAddTraits(.isHeader)
+    }
+}
+
+struct TrophyProgressBar: View {
     let fill: Double
-    let tint: Color
+    var tint: Color = Brand.Color.cyan
+    var height: CGFloat = 4
     var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .leading) {
@@ -247,6 +229,171 @@ private struct ProgressBar: View {
                     .frame(width: geo.size.width * CGFloat(max(0, min(1, fill))))
             }
         }
+        .frame(height: height)
+        .accessibilityHidden(true)
+    }
+}
+
+/// Copy shared by the tab, the detail sheet and their accessibility labels.
+nonisolated enum TrophyCopy {
+    /// "27 / 30"
+    static func fraction(_ progress: Int, _ goal: Int) -> String {
+        "\(TrophyTracks.grouped(min(progress, goal))) / \(TrophyTracks.grouped(goal))"
+    }
+
+    /// "27 / 30 to level III", or "All levels complete".
+    static func trackCaption(_ state: TrophyTrackState) -> String {
+        guard let goal = state.nextGoal else { return "All levels complete" }
+        return "\(fraction(state.progress, goal)) to level \(TrophyTracks.roman(state.level + 1))"
+    }
+}
+
+struct TrophyChaseCard: View {
+    let item: TrophyChaseItem
+    let units: DisplayUnits
+    var wide = false
+
+    private var chase: TrophyChase { item.chase }
+    private var isFeat: Bool { chase.kind == .feat }
+    private var title: String { TrophyTracks.displayTitle(for: chase.achievement) }
+    private var blurb: String {
+        isFeat ? TrophyTracks.displaySummary(for: chase.achievement, units: units) : chase.blurb
+    }
+    private var footer: String { isFeat ? "FEAT" : TrophyCopy.fraction(chase.progress, chase.goal) }
+
+    var body: some View {
+        Group {
+            if wide {
+                HStack(alignment: .top, spacing: 14) {
+                    TrophyBadge(item.badge, size: 46)
+                    text(reservesBlurb: false)
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 8) {
+                    TrophyBadge(item.badge, size: 46)
+                    text(reservesBlurb: true)
+                }
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Brand.Color.bgElevated, in: .rect(cornerRadius: Brand.Radius.card))
+        .overlay(RoundedRectangle(cornerRadius: Brand.Radius.card)
+            .strokeBorder(Brand.Color.cyan.opacity(0.25), lineWidth: 1))
+        .contentShape(.rect(cornerRadius: Brand.Radius.card))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Chasing \(title). \(blurb)\(isFeat ? "" : ", \(chase.progress) of \(chase.goal)")")
+        .accessibilityAddTraits(.isButton)
+    }
+
+    private var blurbText: some View {
+        Text(blurb)
+            .font(.caption)
+            .foregroundStyle(Brand.Color.textSecondary)
+            .multilineTextAlignment(.leading)
+    }
+
+    private func text(reservesBlurb: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Brand.Color.textPrimary)
+                .lineLimit(wide ? 2 : 1)
+                .minimumScaleFactor(0.8)
+            if reservesBlurb {
+                blurbText.lineLimit(2, reservesSpace: true)
+            } else {
+                blurbText
+            }
+            TrophyProgressBar(fill: isFeat ? 0 : chase.fraction)
+            Text(footer)
+                .font(Brand.Font.mono(size: 10, weight: .semibold, relativeTo: .caption2))
+                .tracking(isFeat ? 1 : 0)
+                .foregroundStyle(Brand.Color.textTertiary)
+                .monospacedDigit()
+        }
+    }
+}
+
+struct TrophyTrackRow: View {
+    let state: TrophyTrackState
+
+    @Environment(\.dynamicTypeSize) private var typeSize
+    private var earned: Bool { state.level > 0 }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            TrophyBadge(TrophyBadgeSpec(state: state), size: 50)
+            VStack(alignment: .leading, spacing: 6) {
+                // One decision for every row (not per-row ViewThatFits), so
+                // rows don't flip layout individually at large text sizes.
+                if typeSize.isAccessibilitySize {
+                    VStack(alignment: .leading, spacing: 4) {
+                        name
+                        pips
+                    }
+                } else {
+                    HStack(alignment: .firstTextBaseline) {
+                        name
+                        Spacer(minLength: 8)
+                        pips
+                    }
+                }
+                TrophyProgressBar(fill: state.fraction)
+                Text(TrophyCopy.trackCaption(state))
+                    .font(Brand.Font.mono(size: 10, weight: .semibold, relativeTo: .caption2))
+                    .foregroundStyle(Brand.Color.textTertiary)
+                    .monospacedDigit()
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Brand.Color.bgElevated.opacity(earned ? 1 : 0.5), in: .rect(cornerRadius: Brand.Radius.card))
+        .contentShape(.rect(cornerRadius: Brand.Radius.card))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(state.track.name), \(state.level) of \(state.levelCount) levels. \(TrophyCopy.trackCaption(state))")
+        .accessibilityAddTraits(.isButton)
+    }
+
+    private var name: some View {
+        Text(state.track.name)
+            .font(Brand.Font.cardTitle)
+            .foregroundStyle(earned ? Brand.Color.textPrimary : Brand.Color.textSecondary)
+    }
+
+    private var pips: some View {
+        HStack(spacing: 5) {
+            ForEach(1...max(1, state.levelCount), id: \.self) { i in
+                Text(TrophyTracks.roman(i))
+                    .font(Brand.Font.mono(size: 10, weight: .bold, relativeTo: .caption2))
+                    .foregroundStyle(i <= state.level ? Brand.Color.cyan : Brand.Color.textTertiary.opacity(0.7))
+            }
+        }
+        .fixedSize()
+    }
+}
+
+struct TrophyFeatCell: View {
+    let item: TrophyFeatItem
+
+    private var title: String { item.masked ? "???" : item.achievement.title }
+
+    var body: some View {
+        VStack(spacing: 6) {
+            TrophyBadge(TrophyBadgeSpec(feat: item.achievement, earned: item.earned), size: 62)
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(item.earned ? Brand.Color.textPrimary : Brand.Color.textTertiary)
+                .multilineTextAlignment(.center)
+                .lineLimit(2, reservesSpace: true)
+        }
+        .frame(maxWidth: .infinity)
+        .contentShape(.rect)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(item.masked ? "Hidden feat, locked"
+                            : "\(item.achievement.title), \(item.earned ? "earned" : "locked")")
+        .accessibilityAddTraits(.isButton)
     }
 }
 

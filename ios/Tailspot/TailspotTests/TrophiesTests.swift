@@ -412,52 +412,6 @@ struct TrophiesHiddenAndMetricsTests {
     }
 }
 
-@Suite("TrophyBoard")
-@MainActor
-struct TrophyBoardTests {
-
-    private func ach(_ id: String, secret: Bool = false, prerequisite: String? = nil, at: Int) -> Achievement {
-        Achievement(id: id, title: id, summary: "", iconName: "crown",
-                    tiers: [.init(tier: .gold, at: at)], secret: secret, prerequisite: prerequisite,
-                    progress: { $0.totalCatches })
-    }
-
-    private func inputs(total: Int) -> TrophyProgressInputs {
-        TrophyProgressInputs(
-            totalCatches: total, uniqueAirframes: 0,
-            wideBodyCatches: 0, regionalCatches: 0, heritageCatches: 0,
-            rareTierCatches: 0, epicTierCatches: 0, legendaryTierCatches: 0,
-            rarePlusUnique: 0, longestSlantKm: 0,
-            bestMultiCatchCount: 0, nightCatches: 0
-        )
-    }
-
-    @Test func secretAlwaysPresentVisibleLockedShownEarnedFirst() {
-        let roster = [
-            ach("v1", at: 1),                  // earned at total>=1
-            ach("v2", at: 10),                 // visible, locked
-            ach("s1", secret: true, at: 1),    // secret, earned
-            ach("s2", secret: true, at: 10),   // secret, locked → masked but present
-        ]
-        let shown = TrophyBoard.visible(roster: roster, inputs: inputs(total: 1)).map(\.id)
-        #expect(shown.contains("s2"))   // secret-locked is present (rendered masked)
-        #expect(shown.contains("v2"))
-        // Earned (v1, s1) first, then locked (v2, s2) in roster order.
-        #expect(shown == ["v1", "s1", "v2", "s2"])
-    }
-
-    @Test func milestonePrerequisiteGatesNextUntilPriorEarned() {
-        let roster = [
-            ach("m1", at: 5),                       // first milestone, no prereq
-            ach("m2", prerequisite: "m1", at: 50),  // hidden until m1 earned
-        ]
-        // m1 not earned → m2 absent.
-        #expect(TrophyBoard.visible(roster: roster, inputs: inputs(total: 1)).map(\.id) == ["m1"])
-        // m1 earned → m2 appears.
-        #expect(TrophyBoard.visible(roster: roster, inputs: inputs(total: 5)).map(\.id) == ["m1", "m2"])
-    }
-}
-
 @Suite("Trophies — 2026-06-21 expansion")
 @MainActor
 struct TrophiesExpansionTests {
@@ -892,18 +846,18 @@ struct TrophiesWinnerTests {
         let t = ach("dynasty")
         #expect(t.secret)
         #expect(t.tiers.count == 1)
-        // No prereq chain: TrophyBoard ignores prerequisites for secrets
-        // (always listed, masked), so chaining behind Top Flight would be
-        // a silent no-op — pin the deliberate nil.
+        // No prereq chain: secrets are always listed (masked), so chaining
+        // behind Top Flight would be a silent no-op — pin the deliberate nil.
         #expect(t.prerequisite == nil)
-        // Locked → present in the board (rendered as the masked "???" row).
-        let locked = TrophyBoard.visible(inputs: inputs(wins: 1))
-        #expect(locked.contains { $0.id == "dynasty" })
-        // Earned → sorts into the earned block with the others.
-        let earned = TrophyBoard.visible(inputs: inputs(wins: 3, topped: true))
+        // Locked → present in the feats grid, masked as "???".
+        let locked = TrophyTabContent.make(inputs: inputs(wins: 1)).feats
+        #expect(locked.first { $0.id == "dynasty" }?.masked == true)
+        // Earned → sorts into the earned block with the others, unmasked.
+        let earned = TrophyTabContent.make(inputs: inputs(wins: 3, topped: true)).feats
         let earnedIds = earned.prefix(3).map(\.id)
         #expect(earnedIds.contains("dynasty") && earnedIds.contains("topflight")
                 && earnedIds.contains("charttopper"))
+        #expect(earned.first { $0.id == "dynasty" }?.masked == false)
     }
 
     // MARK: Cache semantics

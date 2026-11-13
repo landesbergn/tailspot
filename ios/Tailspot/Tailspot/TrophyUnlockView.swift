@@ -26,10 +26,6 @@ struct TrophyUnlockView: View {
     @State private var hapticTick = 0
     @State private var rayAngle = 0.0
 
-    /// Achievements render in a single cyan-family hex — set apart from the
-    /// rarity/type pills by shape + a consistent cool tone (not gold).
-    private let tier: TrophyTier = .platinum
-
     var body: some View {
         ZStack {
             // Opaque branded spotlight — a clean full takeover, not a
@@ -68,10 +64,10 @@ struct TrophyUnlockView: View {
         }
     }
 
-    // MARK: - Celebratory hex (glow halo + rotating ray burst behind it)
+    // MARK: - Celebratory badge (glow halo + rotating ray burst behind it)
 
     @ViewBuilder
-    private func celebratoryHex(_ iconName: String, size: CGFloat) -> some View {
+    private func celebratoryHex(_ achievement: Achievement, size: CGFloat) -> some View {
         ZStack {
             // Soft cyan halo.
             Circle()
@@ -80,7 +76,7 @@ struct TrophyUnlockView: View {
                     center: .center, startRadius: 0, endRadius: size * 1.25))
                 .frame(width: size * 2.6, height: size * 2.6)
             // Slowly-rotating rays, faded at the center so they don't cover the
-            // hex, and at the rim. Suppressed under Reduce Motion.
+            // badge, and at the rim. Suppressed under Reduce Motion.
             if !reduceMotion {
                 RayBurst(count: 12)
                     .fill(Brand.Color.cyan.opacity(0.18))
@@ -90,7 +86,7 @@ struct TrophyUnlockView: View {
                         center: .center, startRadius: size * 0.55, endRadius: size * 1.2))
                     .rotationEffect(.degrees(rayAngle))
             }
-            TrophyView(tier: tier, iconName: iconName, size: size)
+            TrophyBadge(TrophyBadgeSpec(earnedAchievement: achievement), size: size)
         }
         .scaleEffect(appeared ? 1 : (reduceMotion ? 1 : 0.4))
         .opacity(appeared ? 1 : 0)
@@ -106,17 +102,17 @@ struct TrophyUnlockView: View {
                 .tracking(4)
                 .foregroundStyle(Brand.Color.cyan)
 
-            celebratoryHex(event.achievement.iconName, size: 132)
+            celebratoryHex(event.achievement, size: 132)
 
             // The trophy's name is prose (a title, not a readout), so it
             // takes the display face; mono stays on the NEW TROPHY label.
-            Text(event.achievement.title)
+            Text(TrophyTracks.displayTitle(for: event.achievement))
                 .brandDisplayFont()
                 .foregroundStyle(Brand.Color.textPrimary)
                 .multilineTextAlignment(.center)
                 .minimumScaleFactor(0.7)
 
-            Text(event.achievement.displaySummary)
+            Text(TrophyTracks.displaySummary(for: event.achievement, units: UnitPreferences.shared.units))
                 .font(Brand.Font.caption)
                 .foregroundStyle(Brand.Color.textSecondary)
                 .multilineTextAlignment(.center)
@@ -130,7 +126,7 @@ struct TrophyUnlockView: View {
         .onTapGesture { center.advance() }
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isModal)
-        .accessibilityLabel("\(event.achievement.title) unlocked. \(event.achievement.displaySummary)")
+        .accessibilityLabel("\(TrophyTracks.displayTitle(for: event.achievement)) unlocked. \(TrophyTracks.displaySummary(for: event.achievement, units: UnitPreferences.shared.units))")
         .accessibilityAction(named: "Dismiss") { center.advance() }
     }
 
@@ -180,7 +176,7 @@ struct TrophyUnlockView: View {
         center.markShown(event)                       // commit-on-shown
         hapticTick &+= 1
         animateIn()
-        AccessibilityNotification.Announcement("\(event.achievement.title) unlocked").post()
+        AccessibilityNotification.Announcement("\(TrophyTracks.displayTitle(for: event.achievement)) unlocked").post()
     }
 
     private func animateIn() {

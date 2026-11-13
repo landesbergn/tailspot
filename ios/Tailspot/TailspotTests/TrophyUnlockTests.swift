@@ -26,13 +26,11 @@ struct TrophyUnlockTests {
     /// one-shot badge (silver@1 on a legendary catch).
     private let roster: [Achievement] = [
         Achievement(
-            id: "m", title: "Medal", summary: "", iconName: "catcher",
-            tiers: [.init(tier: .bronze, at: 1), .init(tier: .silver, at: 2), .init(tier: .gold, at: 3)],
+            id: "m", title: "Medal", summary: "", tiers: [.init(tier: .bronze, at: 1), .init(tier: .silver, at: 2), .init(tier: .gold, at: 3)],
             progress: { $0.totalCatches }
         ),
         Achievement(
-            id: "b", title: "Badge", summary: "", iconName: "crown",
-            tiers: [.init(tier: .silver, at: 1)],
+            id: "b", title: "Badge", summary: "", tiers: [.init(tier: .silver, at: 1)],
             progress: { min(1, $0.legendaryTierCatches) }
         ),
     ]

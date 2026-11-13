@@ -168,7 +168,7 @@ struct HangarView: View {
                         .tag(HangarSegment.sets)
                     HangarRecentView()
                         .tag(HangarSegment.recent)
-                    HangarTrophiesView()
+                    HangarTrophiesView(isActive: segment.wrappedValue == .trophies)
                         .tag(HangarSegment.trophies)
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))

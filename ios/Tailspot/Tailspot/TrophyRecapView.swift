@@ -158,8 +158,8 @@ struct TrophyRecapView: View {
         let start = 0.30 + 0.45 * Double(staggered) / 12.0
         let p = easeOutQuad(ss(start, min(start + 0.18, 1.0), t))
         return VStack(spacing: 8) {
-            TrophyView(tier: .platinum, iconName: ach.iconName, size: 72)
-            Text(ach.title)
+            TrophyBadge(TrophyBadgeSpec(earnedAchievement: ach), size: 72)
+            Text(TrophyTracks.displayTitle(for: ach))
                 .font(.system(size: 10, weight: .semibold, design: .monospaced))
                 .foregroundColor(RP.muted)
                 .multilineTextAlignment(.center)
@@ -170,7 +170,7 @@ struct TrophyRecapView: View {
         .opacity(p)
         .scaleEffect(0.7 + 0.3 * p)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(ach.title), earned")
+        .accessibilityLabel("\(TrophyTracks.displayTitle(for: ach)), earned")
     }
 
     private func footer(t: Double) -> some View {

@@ -381,6 +381,18 @@ nonisolated enum TrophyChases {
         } else if let f = nextFeat(from: nil) {
             takeFeat(f)
         }
+
+        // Top up to three. A player who has maxed most tracks would
+        // otherwise see one or two; unearned feats fill the rest.
+        while result.count < 3 {
+            if let s = best(states.filter({ !chosenTracks.contains($0.track.id) })) {
+                takeTrack(s)
+            } else if let f = nextFeat(from: nil) {
+                takeFeat(f)
+            } else {
+                break
+            }
+        }
         return result
     }
 }

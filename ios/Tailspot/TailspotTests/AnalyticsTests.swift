@@ -491,10 +491,8 @@ struct AnalyticsFacadeTests {
     @MainActor
     @Test func rosterReseedFiresTrophyUnlockedViaReseed() {
         let tag = "reseed-\(UUID().uuidString.prefix(8))"
-        let old = Achievement(id: "\(tag)-old", title: "Old", summary: "", iconName: "catcher",
-                              tiers: [.init(tier: .gold, at: 1)], progress: { $0.totalCatches })
-        let added = Achievement(id: "\(tag)-new", title: "New", summary: "", iconName: "catcher",
-                                tiers: [.init(tier: .gold, at: 1)], progress: { $0.totalCatches })
+        let old = Achievement(id: "\(tag)-old", title: "Old", summary: "", tiers: [.init(tier: .gold, at: 1)], progress: { $0.totalCatches })
+        let added = Achievement(id: "\(tag)-new", title: "New", summary: "", tiers: [.init(tier: .gold, at: 1)], progress: { $0.totalCatches })
         let ledger = UserDefaultsTrophyLedger(defaults: UserDefaults(suiteName: "test.\(tag)")!)
         let suite = UserDefaults(suiteName: "test.\(tag).facts")!
         let events = TrophyEventStore(defaults: suite)
@@ -527,8 +525,7 @@ struct AnalyticsFacadeTests {
     @Test func bigRosterReseedRecapsButStillFiresOncePerGrant() {
         let tag = "bigreseed-\(UUID().uuidString.prefix(8))"
         func ach(_ n: String) -> Achievement {
-            Achievement(id: "\(tag)-\(n)", title: n, summary: "", iconName: "catcher",
-                        tiers: [.init(tier: .gold, at: 1)], progress: { $0.totalCatches })
+            Achievement(id: "\(tag)-\(n)", title: n, summary: "", tiers: [.init(tier: .gold, at: 1)], progress: { $0.totalCatches })
         }
         let old = ach("old")
         let added = ["a", "b", "c", "d"].map(ach)

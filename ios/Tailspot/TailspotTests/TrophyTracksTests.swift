@@ -329,8 +329,7 @@ struct TrophyTracksTests {
     }
 
     private func badge(_ id: String) -> Achievement {
-        Achievement(id: id, title: id, summary: "", iconName: "catcher",
-                    tiers: [.init(tier: .gold, at: 1)], progress: { $0.totalCatches })
+        Achievement(id: id, title: id, summary: "", tiers: [.init(tier: .gold, at: 1)], progress: { $0.totalCatches })
     }
 
     @Test func reseedGrantingMoreThanThreeQueuesARecapAndNoCards() {
