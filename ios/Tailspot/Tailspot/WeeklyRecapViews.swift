@@ -234,7 +234,7 @@ struct WeeklyRecapStandout {
             guard let t = s?.trimmingCharacters(in: .whitespacesAndNewlines), !t.isEmpty else { return nil }
             return t
         }
-        title = trimmed(c.callsign) ?? trimmed(c.registration) ?? c.icao24.uppercased()
+        title = Callsign.clean(c.callsign) ?? trimmed(c.registration) ?? c.icao24.uppercased()
         model = AircraftNaming.canonical(
             typecode: c.typecode, manufacturer: c.manufacturer, model: c.model
         ).displayName
