@@ -91,7 +91,7 @@ struct TailCard: View {
     var body: some View {
         let c = row.mostRecent
         let reg = c.registration?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
-        let callsign = c.callsign?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        let callsign = Callsign.clean(c.callsign)
         // Lead with the flight callsign (e.g. SWA4244) — the identifier Noah
         // wants — not the opaque N-registration. Fall back to the registration,
         // then the hex id, only when there's no callsign.

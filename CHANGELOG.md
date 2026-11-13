@@ -5,6 +5,13 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-11-12 — Placeholder callsigns show the tail number (branch `claude/catch-000000-issue-5eeec5`)
+
+- Noah's Challenger 300 catch (N549FX, 2026-11-08) read "00000000 · PRIVATE". The plane's transponder broadcast all zeros as its flight ID, and adsb.lol passes that through.
+- New `Callsign.clean` treats a blank callsign, or one with no letters and no non-zero digits, as no callsign. It runs on feed decode (new catches never store one) and at the display and route-lookup sites that read stored catches, so old rows render right without a data change.
+- Cards now name a plane by its callsign, else its tail number (the Hangar row's order). That applies to every callsign-less catch, not just placeholders.
+- Route backfill skips placeholder callsigns instead of looking up `/v1/routes/00000000`.
+
 ## 2026-11-11 — Bonus round shows up more often (branch `feat/guess-round-cadence-2in3`)
 
 - PostHog: since the 2026-08-25 bump, about 13% of catches got the route bonus round, sliding to about 10–11% in early November. Players answer about 88% of the rounds they see.

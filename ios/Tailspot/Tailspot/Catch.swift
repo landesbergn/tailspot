@@ -339,9 +339,7 @@ final class Catch {
     /// with blank treated as absent. Callsign is the flight identity we can
     /// rely on at catch time — route data arrives late or not at all.
     nonisolated static func flightKey(_ callsign: String?) -> String? {
-        guard let raw = callsign?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !raw.isEmpty else { return nil }
-        return raw.uppercased()
+        Callsign.clean(callsign)?.uppercased()
     }
 
     /// Returns true when this sighting is a DUPLICATE of one already in the

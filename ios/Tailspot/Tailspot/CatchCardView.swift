@@ -491,7 +491,7 @@ extension CardPlane {
             model: c.model
         )
         self.init(
-            callsign: c.callsign,
+            callsign: Callsign.cardIdentifier(callsign: c.callsign, registration: c.registration),
             model: canonical.displayName ?? c.model,
             carrier: c.operatorName,
             rarity: c.resolvedRarity,

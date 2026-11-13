@@ -85,7 +85,9 @@ nonisolated struct BackendAircraft: Decodable {
     func asAircraft() -> Aircraft {
         Aircraft(
             icao24: icao24,
-            callsign: callsign,
+            // Placeholder flight IDs ("00000000") become nil here, so a
+            // catch never stores one. See Callsign.swift.
+            callsign: Callsign.clean(callsign),
             originCountry: originCountry ?? "—",
             longitude: longitude,
             latitude: latitude,
