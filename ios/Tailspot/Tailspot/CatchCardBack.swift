@@ -307,6 +307,12 @@ nonisolated enum CardBackFormat {
         }
     }
 
+    /// The card's Wikipedia teaser: the whole intro paragraph (the card
+    /// truncates it to the space it has), else the two-sentence extract.
+    static func teaserText(_ summary: WikipediaSummary) -> String {
+        summary.intro.isEmpty ? summary.extract : summary.intro
+    }
+
     /// Whether the Wikipedia block renders at all: a summary, or one loading.
     static func showsWikipedia(_ model: CardBackModel) -> Bool {
         model.summary != nil || model.summaryLoading
@@ -389,8 +395,6 @@ struct CatchCardBack: View {
             // face is short, the Wikipedia extract (lowest priority) gives
             // up lines instead.
             .padding(.bottom, 18 * scale)
-
-            Spacer(minLength: 0)
         }
         .frame(width: width)
         // Fill whatever height FlipCard gives (the front's), so the frame's
@@ -670,12 +674,16 @@ struct CatchCardBack: View {
                 // Unedited Wikipedia text. Lowest layout priority: when
                 // the back is shorter than its content, this is what
                 // truncates first.
-                Text(summary.extract)
+                //
+                // The whole intro paragraph, not the two-sentence extract,
+                // and no fixed line cap (Noah, 2026-11-12): a hard 4-line
+                // limit left a blank band under the credit on tall fronts,
+                // and a one-sentence extract left even more. The text now
+                // runs down to the face's bottom inset and truncates there.
+                Text(CardBackFormat.teaserText(summary))
                     .font(.system(size: 12.5 * scale))
                     .foregroundStyle(RP.ink.opacity(0.88))
                     .lineSpacing(1.5 * scale)
-                    // Four lines fits the front's height; MORE opens the rest.
-                    .lineLimit(4)
                     .truncationMode(.tail)
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -698,7 +706,7 @@ struct CatchCardBack: View {
             .onCardTap { showingSummary = true }
             .layoutPriority(-1)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(summary.extract)
+            .accessibilityLabel(CardBackFormat.teaserText(summary))
             .accessibilityHint("Opens the Wikipedia summary")
             .accessibilityAddTraits(.isButton)
             .accessibilityAction { showingSummary = true }

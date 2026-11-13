@@ -192,6 +192,14 @@ struct CardBackFormatTests {
         }
     }
 
+    @Test func teaserUsesTheWholeIntroElseTheExtract() {
+        #expect(CardBackFormat.teaserText(BackFixtures.b738Summary)
+                == BackFixtures.b738Summary.intro)
+        let noIntro = WikipediaSummary(extract: "Two sentences. Only.",
+                                       pageURL: BackFixtures.b738Summary.pageURL)
+        #expect(CardBackFormat.teaserText(noIntro) == "Two sentences. Only.")
+    }
+
     @Test func wikipediaBlockShowsOnlyWithSummaryOrLoading() {
         var m = BackFixtures.minimal
         #expect(!CardBackFormat.showsWikipedia(m))
@@ -281,6 +289,24 @@ struct CardBackSnapshotTests {
     @Test func backCommonsGA() async throws {
         let png = try await render(back(BackFixtures.c172, photo: Self.testPhoto),
                                    name: "closeup_back_commons_ga.png")
+        #expect(!png.isEmpty)
+    }
+
+    /// At a FIXED face height (as FlipCard lays it out), a long intro runs
+    /// down to the bottom inset instead of stopping at four lines; a short
+    /// face truncates it instead.
+    @Test(arguments: [560.0, 680])
+    func backFillsAFixedFace(_ height: Double) async throws {
+        var m = BackFixtures.b738
+        m.summary = WikipediaSummary(
+            extract: BackFixtures.b738Summary.extract,
+            intro: String(repeating: BackFixtures.b738Summary.intro + " ", count: 4),
+            pageURL: BackFixtures.b738Summary.pageURL)
+        let view = CatchCardBack(model: m, width: Self.cardWidth,
+                                 onOpenURL: { _ in }, snapshotImage: Self.testPhoto)
+            .frame(height: height)
+            .padding(.top, 60)
+        let png = try await render(view, name: "closeup_back_fixed_\(Int(height)).png")
         #expect(!png.isEmpty)
     }
 
