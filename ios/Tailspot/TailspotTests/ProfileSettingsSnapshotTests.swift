@@ -198,22 +198,14 @@ extension StandardDefaultsSnapshotSuites {
             #expect(true)
         }
 
-        /// The streak row's covered-day states (StreakCover.swift): freezes
-        /// held, a repair on offer, and a forgiven today. The ledger and the
-        /// forgiven list live in standard defaults, so both are saved and
-        /// restored around the renders.
-        @Test func renderStreakCoverStates() async throws {
+        /// The streak row on an operator-forgiven day (StreakCover.swift):
+        /// "No catch needed today" in place of the at-risk warning. The
+        /// forgiven list goes in its own suite, never standard defaults:
+        /// other suites' memo keys hash the standard copy.
+        @Test func renderStreakForgivenToday() async throws {
             let defaults = UserDefaults.standard
             let keys = [SpotterHandle.storageKey, "tailspot.standing.points",
                         "tailspot.standing.rank"]
-            // The streak state goes in its own suite, never standard
-            // defaults: other suites' memo keys hash the standard copy.
-            let cover = UserDefaults(suiteName: "ProfileStreakCover.\(UUID().uuidString)")!
-            func profile(_ c: ModelContainer) -> some View {
-                var screen = ProfileScreen()
-                screen._coverDefaults = cover
-                return screen.modelContainer(c)
-            }
             let saved = keys.map { defaults.object(forKey: $0) }
             defaults.set("noah", forKey: SpotterHandle.storageKey)
             defaults.set(1370, forKey: "tailspot.standing.points")
@@ -221,51 +213,30 @@ extension StandardDefaultsSnapshotSuites {
             defer {
                 for (key, value) in zip(keys, saved) { defaults.set(value, forKey: key) }
             }
-
-            let config = ModelConfiguration(isStoredInMemoryOnly: true)
-            let cal = Calendar.current
-            let noonToday = cal.date(bySettingHour: 12, minute: 0, second: 0, of: Date())!
-            func container(daysAgo: [Int]) throws -> ModelContainer {
-                let c = try ModelContainer(for: Catch.self, configurations: config)
-                TestContainerRetention.retain(c)
-                for back in daysAgo {
-                    c.mainContext.insert(Catch(
-                        icao24: UUID().uuidString.prefix(6).lowercased(),
-                        callsign: "ANA858", model: "787-9", manufacturer: "Boeing",
-                        operatorName: nil,
-                        caughtAt: cal.date(byAdding: .day, value: -back, to: noonToday)!,
-                        observerLat: 37.87, observerLon: -122.27,
-                        slantDistanceMeters: 9_800, typecode: "B789"
-                    ))
-                }
-                return c
-            }
-
-            // Two freezes held on a safe 15-day streak.
-            StreakCoverStore.save(StreakLedger(freezesHeld: 2), defaults: cover)
-            StreakCoverStore.saveForgiven([], defaults: cover)
-            await snapshot(profile(try container(daysAgo: Array(0...14))),
-                           as: "profile_streak_freezes_held")
-
-            // One freeze held while at risk: the longest row the card fits.
-            StreakCoverStore.save(StreakLedger(freezesHeld: 1), defaults: cover)
-            await snapshot(profile(try container(daysAgo: Array(1...9))),
-                           as: "profile_streak_freeze_at_risk")
-
-            // Missed yesterday with no freeze: the repair is on offer.
-            StreakCoverStore.save(StreakLedger(), defaults: cover)
-            let missed = try container(daysAgo: Array(2...13))
-            let status = StreakCoverCenter.status(
-                catches: try missed.mainContext.fetch(FetchDescriptor<Catch>()), defaults: cover)
-            #expect(status.repair?.streakRestored == 12)
-            await snapshot(profile(missed), as: "profile_streak_repair_offer")
-
-            // Today is a forgiven day on a live streak.
+            let cover = UserDefaults(suiteName: "ProfileStreakCover.\(UUID().uuidString)")!
             StreakCoverStore.saveForgiven(
                 [ForgivenDay(day: Streaks.dayKey(for: Date()), reason: "FAA ground stop")],
                 defaults: cover)
-            await snapshot(profile(try container(daysAgo: Array(1...8))),
-                           as: "profile_streak_forgiven_today")
+
+            let config = ModelConfiguration(isStoredInMemoryOnly: true)
+            let container = try ModelContainer(for: Catch.self, configurations: config)
+            TestContainerRetention.retain(container)
+            let cal = Calendar.current
+            let noonToday = cal.date(bySettingHour: 12, minute: 0, second: 0, of: Date())!
+            // Eight days ending yesterday: live, and at risk on a normal day.
+            for back in 1...8 {
+                container.mainContext.insert(Catch(
+                    icao24: UUID().uuidString.prefix(6).lowercased(),
+                    callsign: "ANA858", model: "787-9", manufacturer: "Boeing",
+                    operatorName: nil,
+                    caughtAt: cal.date(byAdding: .day, value: -back, to: noonToday)!,
+                    observerLat: 37.87, observerLon: -122.27,
+                    slantDistanceMeters: 9_800, typecode: "B789"
+                ))
+            }
+            var screen = ProfileScreen()
+            screen._coverDefaults = cover
+            await snapshot(screen.modelContainer(container), as: "profile_streak_forgiven_today")
         }
 
         /// REMINDERS in each OS permission state, through the

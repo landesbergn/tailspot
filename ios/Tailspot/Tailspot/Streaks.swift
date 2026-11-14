@@ -150,8 +150,8 @@ nonisolated enum Streaks {
     /// would be nonsense if the streak it protects were already displayed
     /// as dead.)
     ///
-    /// `covered` days (a freeze, a repair, an operator forgiveness — see
-    /// StreakCover.swift) BRIDGE the run without adding to it: a 12-day
+    /// `covered` days (operator-forgiven days, see StreakCover.swift)
+    /// BRIDGE the run without adding to it: a 12-day
     /// streak with one covered day is still 12, and 13 after the next
     /// catch. Every counted day is a real catch.
     static func currentStreak(
