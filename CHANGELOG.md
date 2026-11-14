@@ -18,7 +18,7 @@ Git history + PLAN.md §9 remain the authoritative record.
 - **Narrowed 2026-11-14 (Noah).** Earned freezes and a manual repair were built in the same round and then cut from this change: they soften every streak, can't be field-tested without missing days, and nothing yet says broken streaks are what loses people. They are parked, complete with tests, on branch `claude/streak-freezes-repair` and plug into the same covered set.
 - The broadcast goes to everyone with notifications allowed, not only people with streak reminders on. Respecting that toggle is a separate change.
 - **Deploy order:** apply migration `0012_streak-forgiveness.sql` to prod, then deploy the server, then ship the app. An un-migrated database fails device registration once the new server is live.
-- Tests: `StreakCoverTests` (15) plus the existing streak suites; backend `streakForgiveness.route`, `forgiveStreakDay`, `pushToken.route` (45).
+- Tests: `StreakCoverTests` (15) plus the existing streak suites (full `TailspotTests` 2,041 passing); backend `streakForgiveness.route`, `forgiveStreakDay`, `pushToken.route` (45).
 
 ## 2026-11-13 — Trophies rebuilt as levels, trophies and chases (1.2.6 train opens) (branch `claude/trophies-rebuild-738248`)
 
