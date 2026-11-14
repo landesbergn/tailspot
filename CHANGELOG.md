@@ -5,6 +5,21 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-11-13 — Streak freezes, repair and forgiven days (branch `claude/streak-forgiveness-extensions-15f61d`)
+
+- Noah's ask: let people keep a streak through an occasional miss, and let him forgive a day for everyone (an FAA ground stop, say) with a push to announce it.
+- One mechanism, **covered days** (`StreakCover.swift`): a covered day holds a streak together but never adds to its count, so every counted day is still a real catch. `Streaks.currentStreak` / `longestStreak` take the covered set; `Streaks.coveredDays()` is the one funnel the Profile, the reveal chip, the reminder planner, the weekly recap and the secret streak trophy all read.
+- **Freezes (earned, automatic).** Every 7th streak day earns one, at most 2 held. A missed day spends one the next time the app opens (or at catch time, if a catch gets there first) and a toast says so. A gap the freezes held can't fully bridge spends nothing. A live streak at update time starts with what it has already earned.
+- **Repair (manual).** Offered in the Profile streak card only when no freeze covered the miss: one missed day, yesterday or the day before, once every 30 days. One tap, no catch required.
+- Freezes and repairs only protect a streak of 2 or more days.
+- **Forgiven days (operator).** New `streak_forgiveness` table, public `GET /v1/streak-forgiveness` (60 s cache, 120/min per IP), and `npm run streak:forgive -- --day … --reason … [--push-title … --push-body … --min-build N] [--dry-run] [--remove]`. The app fetches the list on every foreground and applies it locally, so people with notifications off are covered too. The push is only the announcement and goes to devices whose recorded build is at least `--min-build`, because older builds ignore forgiveness.
+- The server now stores the build a push token came from (`devices.app_build`); it used to be logged and dropped.
+- The 5pm reminder skips forgiven days. It can still fire on a day forgiven after the app was last opened, because the app can't be woken to cancel it.
+- Profile: a snowflake and count on the streak row while freezes are held, "No catch needed today" on a forgiven day, and the repair row. Wrench: a ❄ button cycles freezes held 0 → 1 → 2, and Reset forgets the ledger.
+- Local-only like the Hangar: the ledger lives in UserDefaults, so deleting the app loses held freezes and past covered days. No SwiftData change.
+- **Deploy order:** apply migration `0012_streak-forgiveness.sql` to prod, then deploy the server, then ship the app. An un-migrated database fails device registration once the new server is live.
+- Tests: `StreakCoverTests` (25) plus the existing streak suites; backend `streakForgiveness.route`, `forgiveStreakDay`, `pushToken.route`.
+
 ## 2026-11-13 — CLAUDE.md cleanup (branch `claude/claude-md-cleanup-6fcac8`)
 
 - Both CLAUDE.md files trimmed to Anthropic's current guidance (under 200 lines, nothing Claude can read from the code, plain wording): root 203 → ~130 lines, `ios/CLAUDE.md` 225 → ~140.

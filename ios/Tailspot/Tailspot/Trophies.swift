@@ -787,7 +787,9 @@ nonisolated enum Trophies {
         // Streak: longest run of consecutive calendar days with a catch —
         // the streak engine's own computation, so the secret 7-day trophy and
         // the Profile card count the same run.
-        let longestStreak = Streaks.longestStreak(days: days)
+        // Covered days (StreakCover.swift) bridge here exactly as they do on
+        // the Profile, so "best 9" there is never two short runs here.
+        let longestStreak = Streaks.longestStreak(days: days, covered: Streaks.coveredDays())
         // Doubleheader: two time-adjacent catches share an operator.
         let consecutiveOp = hasConsecutiveSameOperator(opTimeline)
 

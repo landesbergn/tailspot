@@ -3040,18 +3040,26 @@ struct ContentView: View {
                 // two screens came to report different streaks minutes apart
                 // (2026-08-21) — the debug override is applied inside the
                 // day-set funnel, and this path was reaching past it.
-                let current = Streaks.summary(
-                    catches: priorRows, assumingCatchOn: todayKey, asOf: now
-                ).current
                 // Telemetry reads the REAL rows, always: a forced streak is
                 // for looking at, and `streak_extended` is a fact about the
                 // user that lands in PostHog forever.
                 let realPriorDays = Streaks.realDaySet(catches: priorRows)
+                // A missed day a freeze covers must be settled before the
+                // streak is read, or the reveal shows a saved streak as
+                // broken (the foreground pass usually got here first).
+                StreakCoverCenter.settleBeforeCatch(priorDays: realPriorDays, todayKey: todayKey)
+                let current = Streaks.summary(
+                    catches: priorRows, assumingCatchOn: todayKey, asOf: now
+                ).current
                 if !realPriorDays.contains(todayKey) {
                     let realCurrent = Streaks.currentStreak(
-                        days: realPriorDays.union([todayKey]), todayKey: todayKey
+                        days: realPriorDays.union([todayKey]), todayKey: todayKey,
+                        covered: StreakCoverStore.coveredDays()
                     )
                     StreakTelemetry.fireExtended(streakDays: realCurrent)
+                    // Every 7th streak day earns a freeze.
+                    StreakCoverCenter.awardIfEarned(
+                        streakAfterCatch: realCurrent, todayKey: todayKey)
                 }
                 if current >= StreakReminders.minimumStreak {
                     streakDaysForReveal = current
@@ -3350,10 +3358,21 @@ struct ContentView: View {
                             days: max(streakSummaryNow.current, StreakReminders.minimumStreak))
                     }
                 }
+                // Freezes held: 0 → 1 → 2 → 0, so the Profile badge and a
+                // freeze being spent on a missed day can be tried without
+                // a real 7-day streak.
+                Button("❄ \(StreakCoverStore.ledger()?.freezesHeld ?? 0)") {
+                    var ledger = StreakCoverStore.ledger() ?? StreakLedger()
+                    ledger.freezesHeld = (ledger.freezesHeld + 1) % (StreakCover.maxFreezes + 1)
+                    StreakCoverStore.save(ledger)
+                    streakDebugRefresh &+= 1
+                }
                 // Clear the override AND the asked latch, then re-plan from
-                // the real Hangar — back to a truthful device.
+                // the real Hangar — back to a truthful device. Also forgets
+                // freezes, repairs and their covered days.
                 Button("↺ Reset") {
                     StreakDebug.clear()
+                    UserDefaults.standard.removeObject(forKey: StreakCoverStore.ledgerKey)
                     for key in [StreakReminders.permissionAskedKey,
                                 StreakReminders.permissionDeclinedKey,
                                 StreakReminders.permissionDeclinedDayKey,

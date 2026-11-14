@@ -209,7 +209,18 @@ struct TailspotApp: App {
                     // One-time: earlier "Not now" decliners become eligible
                     // for the single re-offer (a no-op after the first run).
                     await StreakReminderCenter.shared.migrateDeclinersIfNeeded()
-                    await StreakReminderCenter.shared.sync(context: ctx)
+                    // Covered days first (forgiven-day fetch, freezes spent
+                    // on missed days), so the re-plan below sees them. In
+                    // its own Task with the re-plan: the fetch is a network
+                    // call and must not hold up the challenge refresh.
+                    Task {
+                        let rows = (try? ctx.fetch(FetchDescriptor<Catch>())) ?? []
+                        let days = Streaks.realDaySet(catches: rows)
+                        if let line = await StreakCoverCenter.foreground(catchDays: days) {
+                            StreakReminderCenter.shared.toastRelay?.streakLine = line
+                        }
+                        await StreakReminderCenter.shared.sync(context: ctx)
+                    }
                     // Challenges: config first (kill switch, min build),
                     // then my open + finished challenges, which also
                     // re-plans the local challenge reminders. Both are
