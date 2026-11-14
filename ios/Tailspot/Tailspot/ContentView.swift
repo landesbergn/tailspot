@@ -744,7 +744,12 @@ struct ContentView: View {
                             }
                             // The card's new-user peek (CardFlipTease) runs
                             // again on the next cards.
-                            Button("↻ Reset card peek") { CardFlipTeaseStore.debugReset() }
+                            HStack(spacing: 8) {
+                                Button("↻ Reset card peek") { CardFlipTeaseStore.debugReset() }
+                                // The post-reveal "Almost there" card, without
+                                // needing a catch that lands two short.
+                                Button("◔ Almost-there card") { unlockCenter.debugShowSampleNearMiss() }
+                            }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .font(Brand.Font.mono(size: 11, weight: .bold))
@@ -1008,7 +1013,6 @@ struct ContentView: View {
                 entryNumber: reveal.entryNumber,
                 onDismiss: {
                     pendingReveal = nil
-                    unlockCenter.consumeAdvance()
                     captureInFlight = false
                     guessShownAt = nil
                     releaseGuessHold(for: reveal)
@@ -1016,7 +1020,6 @@ struct ContentView: View {
                 },
                 onViewInHangar: {
                     pendingReveal = nil
-                    unlockCenter.consumeAdvance()
                     captureInFlight = false
                     guessShownAt = nil
                     releaseGuessHold(for: reveal)
@@ -1062,7 +1065,6 @@ struct ContentView: View {
                 },
                 streakDays: reveal.streakDays,
                 isSimulated: reveal.isSimulated,
-                trophyAdvance: revealAdvance(for: reveal),
                 loader: reveal.loader
             )
             .presentationBackground(.clear)
@@ -1078,18 +1080,15 @@ struct ContentView: View {
                 lastEntryNumber: multi.lastEntryNumber,
                 onDismiss: {
                     pendingMultiReveal = nil
-                    unlockCenter.consumeAdvance()
                     captureInFlight = false
                     presentPostRevealMomentIfNeeded()
                 },
                 onViewInHangar: {
                     pendingMultiReveal = nil
-                    unlockCenter.consumeAdvance()
                     captureInFlight = false
                     primarySheet = .hangar
                     presentPostRevealMomentIfNeeded()
-                },
-                trophyAdvance: unlockCenter.lastAdvance
+                }
             )
             .presentationBackground(.clear)
         }
@@ -2465,10 +2464,6 @@ struct ContentView: View {
         guard !icaos.isEmpty else { return }
         guard !captureInFlight else { return }
         captureInFlight = true
-        // A new press starts with no advance: a stale one from an earlier
-        // catch (or a count change with no reveal) must never show on this
-        // reveal. The fresh one is set when the row is counted, later.
-        unlockCenter.consumeAdvance()
 
         // Snapshot observer pose + visible-aircraft map up front. The
         // map is keyed by icao24 so the per-row loop is O(N) (not N×M
@@ -3412,13 +3407,6 @@ struct ContentView: View {
     /// so the catch / reveal / economy can be eyeballed on-device without a
     /// real plane (the synthetic ADS-B source was removed). Non-persisting —
     /// shows the reveal card without writing to the Hangar.
-    /// The trophy strip's data for a single reveal: only a real catch has
-    /// one (a ✦ Catch simulation never does; a duplicate is ignored by the
-    /// reveal itself). Kept as a func so `body` pays nothing for it.
-    private func revealAdvance(for reveal: PendingReveal) -> TrophyAdvance? {
-        reveal.isSimulated ? nil : unlockCenter.lastAdvance
-    }
-
     private func simulateCatch() {
         struct Sim {
             let icao, callsign, model, mfr, op, typecode: String

@@ -7,8 +7,8 @@
 //  untouched); a TRACK just groups the achievements that share one progress
 //  metric as numbered levels (Heavies I, II, III…). Everything else in the
 //  roster is a FEAT: a one-off (the secret ones included, which stay
-//  secret). CHASES are the up-to-three nearest goals, and an ADVANCE is the
-//  "one step closer" strip shown after a catch.
+//  secret). CHASES are the up-to-three nearest goals, and a NEAR MISS is the
+//  "two to go" card shown after a catch leaves a level within reach.
 //
 //  Everything here is pure (no SwiftUI, no state) and `nonisolated` — under
 //  Xcode 26's MainActor-by-default isolation the extension-free value types
@@ -396,48 +396,99 @@ nonisolated enum TrophyChases {
     }
 }
 
-// MARK: - Advance after a catch
+// MARK: - Almost there
 
-/// "One step closer": the track a catch moved, for the reveal strip.
-nonisolated struct TrophyAdvance: Sendable {
+/// "Two to go": a track a catch just moved to within reach of its next
+/// level. Shown as a card AFTER the reveal (never on it), once per level.
+nonisolated struct TrophyNearMiss: Equatable, Sendable {
     let track: TrophyTrack
     /// 1-based level being chased (current level + 1).
     let level: Int
     let progress: Int
     let goal: Int
     let achievement: Achievement
+    /// Next-level ids of the OTHER tracks this catch also left within reach.
+    /// They are marked shown with this card, so the next catch doesn't
+    /// bring up a second one for a neighbouring track.
+    var alsoClose: [String] = []
 
     var remaining: Int { max(0, goal - progress) }
-    var fraction: Double { goal > 0 ? min(1, max(0, Double(progress) / Double(goal))) : 1 }
 
-    /// Tracks that move on nearly every catch; they only surface when nothing
-    /// else advanced, or they would drown the rest.
+    /// "Airlines III": the track and the level being chased.
+    var title: String { "\(track.name) \(TrophyTracks.roman(level))" }
+    /// "2 new airlines to go".
+    var remainingText: String { track.remainingCopy(remaining) }
+    /// "Collect 30 airlines".
+    var goalText: String { track.goalCopy(goal) }
+
+    /// The ring: the track's segments, those below the chased level lit.
+    var badgeSpec: TrophyBadgeSpec {
+        TrophyBadgeSpec(symbol: track.symbol, segments: max(1, track.levelIDs.count),
+                        filled: max(0, level - 1), earned: level > 1, masked: false)
+    }
+
+    static func == (a: TrophyNearMiss, b: TrophyNearMiss) -> Bool {
+        a.achievement.id == b.achievement.id && a.progress == b.progress
+    }
+
+    /// At most this many short of the level counts as "almost there".
+    static let maxRemaining = 2
+    /// Levels with a smaller goal never get the card: on a goal of 3, the
+    /// very first step would already be "2 to go".
+    static let minGoal = 5
+    /// Tracks that move on nearly every catch; they only surface when no
+    /// other track qualifies.
     static let noisyTrackIDs: Set<String> = ["logbook", "points"]
 
-    static func best(
+    /// The track this catch (the step from `before` to `after`) moved to
+    /// within `maxRemaining` of its next level, or nil. `excluding` holds
+    /// the achievement ids whose card has already been shown.
+    static func find(
         before: TrophyProgressInputs,
         after: TrophyProgressInputs,
-        roster: [Achievement] = Trophies.roster
-    ) -> TrophyAdvance? {
+        roster: [Achievement] = Trophies.roster,
+        excluding shown: Set<String> = []
+    ) -> TrophyNearMiss? {
         let beforeStates = Dictionary(
             TrophyTrackState.all(inputs: before, roster: roster).map { ($0.track.id, $0) },
             uniquingKeysWith: { a, _ in a })
-        var moved: [TrophyTrackState] = []
+        var close: [TrophyTrackState] = []
         for s in TrophyTrackState.all(inputs: after, roster: roster) where !s.isMaxed {
-            guard let b = beforeStates[s.track.id] else { continue }
-            if s.progress > b.progress || s.level > b.level { moved.append(s) }
+            guard let b = beforeStates[s.track.id], let goal = s.nextGoal, let next = s.nextAchievement else { continue }
+            // Moved by this catch, without levelling up (a level-up gets the
+            // unlock card instead).
+            guard s.level == b.level, s.progress > b.progress else { continue }
+            guard goal >= minGoal, (1...maxRemaining).contains(s.remaining) else { continue }
+            guard !shown.contains(next.id) else { continue }
+            close.append(s)
         }
-        let quiet = moved.filter { !noisyTrackIDs.contains($0.track.id) }
-        let pool = quiet.isEmpty ? moved : quiet
+        let quiet = close.filter { !noisyTrackIDs.contains($0.track.id) }
         var winner: TrophyTrackState?
-        for s in pool {
+        for s in quiet.isEmpty ? close : quiet {
             guard let w = winner else { winner = s; continue }
-            if s.fraction > w.fraction || (s.fraction == w.fraction && s.track.variety && !w.track.variety) {
+            if s.remaining < w.remaining || (s.remaining == w.remaining && s.track.variety && !w.track.variety) {
                 winner = s
             }
         }
         guard let w = winner, let next = w.nextAchievement, let goal = w.nextGoal else { return nil }
-        return TrophyAdvance(track: w.track, level: w.level + 1, progress: w.progress,
-                             goal: goal, achievement: next)
+        return TrophyNearMiss(track: w.track, level: w.level + 1, progress: w.progress,
+                              goal: goal, achievement: next,
+                              alsoClose: close.compactMap { $0.nextAchievement?.id }.filter { $0 != next.id })
+    }
+}
+
+/// Which "almost there" cards have been shown, so each level gets one.
+nonisolated struct TrophyNearStore {
+    private let defaults: UserDefaults
+    private static let key = "trophy.nearShown.v1"
+
+    init(defaults: UserDefaults = .standard) { self.defaults = defaults }
+
+    var shown: Set<String> { Set(defaults.stringArray(forKey: Self.key) ?? []) }
+
+    func markShown(_ achievementIDs: [String]) {
+        let ids = shown.union(achievementIDs)
+        guard ids != shown else { return }
+        defaults.set(ids.sorted(), forKey: Self.key)
     }
 }

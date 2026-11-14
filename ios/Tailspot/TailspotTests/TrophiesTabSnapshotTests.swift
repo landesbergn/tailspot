@@ -177,6 +177,22 @@ struct TrophiesTabSnapshotTests {
         try await capture(TrophyUnlockView(center: feat), as: "unlock_secret_feat", settle: 1.5)
     }
 
+    /// The "almost there" card that follows a reveal when the catch left a
+    /// level one or two short.
+    @Test func renderNearMissCards() async throws {
+        func card(_ trackID: String, level: Int, progress: Int) -> TrophyUnlockView {
+            let track = TrophyTracks.all.first { $0.id == trackID }!
+            let ach = real(track.levelIDs[level - 1])
+            let defaults = UserDefaults(suiteName: "snap.near.\(UUID().uuidString)")!
+            let center = TrophyUnlockCenter(nearStore: TrophyNearStore(defaults: defaults))
+            center.debugSetNearMiss(TrophyNearMiss(track: track, level: level, progress: progress,
+                                                   goal: ach.threshold, achievement: ach))
+            return TrophyUnlockView(center: center)
+        }
+        try await capture(card("airlines", level: 2, progress: 28), as: "near_miss_airlines", settle: 1.5)
+        try await capture(card("heavies", level: 1, progress: 9), as: "near_miss_heavies_one_left", settle: 1.5)
+    }
+
     @Test func renderRecap() async throws {
         let ids = ["firstcatch", "spotter", "heavy", "heavy2", "airlines", "heavymetal"]
         let recap = TrophyRecap(achievements: ids.map(real))

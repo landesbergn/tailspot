@@ -87,15 +87,15 @@ nonisolated enum TrophyAnalytics {
     static let detailOpened = "trophy_detail_opened"
     static let shareOpened = "trophy_share_opened"
     static let shareCompleted = "trophy_share_completed"
-    /// The reveal strip (which track the catch moved) was displayed.
-    static let progressShown = "trophy_progress_shown"
+    /// The "almost there" card (a level one or two catches away) was shown.
+    static let nearShown = "trophy_near_shown"
 
-    static func progressShownProperties(_ advance: TrophyAdvance) -> [String: AnalyticsValue] {
+    static func nearShownProperties(_ near: TrophyNearMiss) -> [String: AnalyticsValue] {
         [
-            "track": .string(advance.track.id),
-            "level": .int(advance.level),
-            "progress": .int(advance.progress),
-            "goal": .int(advance.goal),
+            "track": .string(near.track.id),
+            "level": .int(near.level),
+            "progress": .int(near.progress),
+            "goal": .int(near.goal),
         ]
     }
 

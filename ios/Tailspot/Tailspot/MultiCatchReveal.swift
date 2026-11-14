@@ -49,9 +49,6 @@ struct MultiCatchReveal: View {
     let lastEntryNumber: Int
     let onDismiss: () -> Void
     let onViewInHangar: () -> Void
-    /// The trophy track this press moved (see `CatchRevealView.trophyAdvance`).
-    /// One strip for the whole press: it rides the LAST fresh plane's page.
-    var trophyAdvance: TrophyAdvance? = nil
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -198,15 +195,8 @@ struct MultiCatchReveal: View {
             // the last plane it is the real View in Hangar.
             onViewInHangar: sequence.isLast ? onViewInHangar : { goToSummary() },
             isDuplicate: entry.isDuplicate,
-            trophyAdvance: i == Self.lastFreshIndex(entries) ? trophyAdvance : nil,
             sequence: sequence
         )
-    }
-
-    /// The page that carries the press's one trophy strip: the last plane
-    /// that is a fresh catch (duplicates trail the fresh ones and earn nothing).
-    static func lastFreshIndex(_ entries: [Entry]) -> Int? {
-        entries.lastIndex { !$0.isDuplicate }
     }
 
     /// Keyed to the page that asked, so a second tap on the outgoing page

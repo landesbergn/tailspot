@@ -4,8 +4,8 @@
 //
 //  The trophies-rebuild model layer: tracks group existing achievements as
 //  levels (ids/thresholds/ledger untouched), feats are everything else,
-//  chases pick the nearest goals, and an advance names the track a catch
-//  moved. Plus the roster-bump anti-flood rule and `lastAdvance` on the
+//  chases pick the nearest goals, and a near miss names the track a catch
+//  left one or two short. Plus the roster-bump anti-flood rule and the near-miss card on the
 //  unlock center.
 //
 
@@ -94,14 +94,14 @@ struct TrophyTracksTests {
     private func inputs(
         totalCatches: Int = 0, uniqueAirframes: Int = 0, wide: Int = 0, narrow: Int = 0,
         operators: Int = 0, days: Int = 0, points: Int = 0, tags: Set<String> = [],
-        rareTier: Int = 0, correctGuesses: Int = 0
+        rareTier: Int = 0, correctGuesses: Int = 0, sets: Int = 0
     ) -> TrophyProgressInputs {
         TrophyProgressInputs(
             totalCatches: totalCatches, uniqueAirframes: uniqueAirframes,
             wideBodyCatches: wide, regionalCatches: 0, heritageCatches: 0,
             rareTierCatches: rareTier, epicTierCatches: 0, legendaryTierCatches: 0,
             rarePlusUnique: 0, longestSlantKm: 0, bestMultiCatchCount: 0, nightCatches: 0,
-            narrowBodyCatches: narrow, uniqueOperators: operators, distinctDays: days,
+            narrowBodyCatches: narrow, uniqueOperators: operators, completedSets: sets, distinctDays: days,
             caughtTags: tags, totalPoints: points, correctGuesses: correctGuesses)
     }
 
@@ -307,37 +307,65 @@ struct TrophyTracksTests {
         #expect(chases.filter { $0.kind == .feat }.count == 3 - unmaxed.count)
     }
 
-    // MARK: Advance
+    // MARK: Near miss
 
-    @Test func advanceIsNilWhenNothingChanged() {
-        #expect(TrophyAdvance.best(before: rich, after: rich, roster: roster) == nil)
+    @Test func nearMissIsNilWhenNothingChanged() {
+        #expect(TrophyNearMiss.find(before: rich, after: rich, roster: roster) == nil)
     }
 
-    @Test func advanceExcludesLogbookAndPointsWhenAnotherTrackMoved() {
-        let before = inputs(totalCatches: 3, uniqueAirframes: 3, points: 100)
-        let after = inputs(totalCatches: 4, uniqueAirframes: 4, points: 200)
-        let adv = TrophyAdvance.best(before: before, after: after, roster: roster)
-        #expect(adv?.track.id == "airframes")
-        #expect(adv?.level == 1 && adv?.progress == 4 && adv?.goal == 25)
+    @Test func nearMissFiresWithinTwoOfTheNextLevel() {
+        // Airlines II is 30: 27 -> 28 leaves two to go.
+        let near = TrophyNearMiss.find(before: inputs(totalCatches: 60, operators: 27),
+                                       after: inputs(totalCatches: 61, operators: 28), roster: roster)
+        #expect(near?.track.id == "airlines")
+        #expect(near?.achievement.id == "airlines2")
+        #expect(near?.remaining == 2)
+        #expect(near?.title == "Airlines II")
+        #expect(near?.remainingText == "2 new airlines to go")
+        #expect(near?.goalText == "Collect 30 airlines")
+        #expect(near?.badgeSpec.filled == 1)
     }
 
-    @Test func advanceFallsBackToLogbookWhenOnlyItMoved() {
-        let adv = TrophyAdvance.best(before: inputs(totalCatches: 3), after: inputs(totalCatches: 4), roster: roster)
-        #expect(adv?.track.id == "logbook")
-        #expect(adv?.level == 2 && adv?.goal == 5)
+    @Test func nearMissNeedsTheTrackToHaveMovedOnThisCatch() {
+        // Already at 28 before the catch: another catch that adds no airline
+        // must not bring the card up.
+        #expect(TrophyNearMiss.find(before: inputs(totalCatches: 60, operators: 28),
+                                    after: inputs(totalCatches: 61, operators: 28), roster: roster)?.track.id != "airlines")
     }
 
-    @Test func advancePrefersVarietyOnFractionTies() {
-        // airframes 5/25 and narrow 5/25 tie at 0.2; the variety track wins.
-        let before = inputs(uniqueAirframes: 4, narrow: 4)
-        let after = inputs(uniqueAirframes: 5, narrow: 5)
-        #expect(TrophyAdvance.best(before: before, after: after, roster: roster)?.track.id == "airframes")
+    @Test func nearMissIsNotShownThreeOrMoreAway() {
+        #expect(TrophyNearMiss.find(before: inputs(totalCatches: 60, operators: 26),
+                                    after: inputs(totalCatches: 61, operators: 27), roster: roster) == nil)
     }
 
-    @Test func advanceSkipsTracksThatAreMaxed() {
-        let before = inputs(totalCatches: 600)
-        let after = inputs(totalCatches: 601)
-        #expect(TrophyAdvance.best(before: before, after: after, roster: roster) == nil)
+    @Test func nearMissSkipsLevelsAlreadyShownAndLevelUps() {
+        let before = inputs(totalCatches: 60, operators: 28), after = inputs(totalCatches: 61, operators: 29)
+        #expect(TrophyNearMiss.find(before: before, after: after, roster: roster)?.remaining == 1)
+        #expect(TrophyNearMiss.find(before: before, after: after, roster: roster, excluding: ["airlines2"]) == nil)
+        // Crossing the level is the unlock card's job, not this one's.
+        #expect(TrophyNearMiss.find(before: inputs(totalCatches: 60, operators: 29),
+                                    after: inputs(totalCatches: 61, operators: 30), roster: roster) == nil)
+    }
+
+    @Test func nearMissSkipsSmallGoals() {
+        // Logbook II is 5 catches (the smallest allowed goal): 3 is two away.
+        #expect(TrophyNearMiss.find(before: inputs(totalCatches: 2), after: inputs(totalCatches: 3), roster: roster)?.track.id == "logbook")
+        // Sets I is 3 sets: one set is "2 to go" on the very first step.
+        #expect(TrophyNearMiss.find(before: inputs(totalCatches: 60), after: inputs(totalCatches: 61, sets: 1), roster: roster) == nil)
+    }
+
+    @Test func nearMissPrefersAQuietTrackOverLogbook() {
+        // Logbook III is 25 (23 -> 24 is one away); airlines 27 -> 28 is two.
+        let near = TrophyNearMiss.find(before: inputs(totalCatches: 23, operators: 27),
+                                       after: inputs(totalCatches: 24, operators: 28), roster: roster)
+        #expect(near?.track.id == "airlines")
+    }
+
+    @Test func nearStoreRemembersShownLevels() {
+        let store = TrophyNearStore(defaults: suite())
+        #expect(store.shown.isEmpty)
+        store.markShown(["airlines2"]); store.markShown(["airlines2", "heavy2"])
+        #expect(store.shown == ["airlines2", "heavy2"])
     }
 
     // MARK: Unlock center
@@ -385,27 +413,53 @@ struct TrophyTracksTests {
         #expect(new.pendingEvents.map(\.achievementID) == ["a", "b", "c"])
     }
 
-    @Test func lastAdvanceIsSetOnlyWhenTheCatchCountGrew() {
+    @Test func nearMissCardIsQueuedOnceWhenACatchLeavesALevelTwoAway() {
         let s = suite()
-        let center = TrophyUnlockCenter(ledger: freshLedger(), events: TrophyEventStore(defaults: s),
-                                        standing: LeaderboardStandingCache(defaults: s))
-        center.enqueueNewUnlocks(from: catches(1))
-        #expect(center.lastAdvance == nil, "the first evaluation never produces one")
+        let ledger = freshLedger()
+        func center() -> TrophyUnlockCenter {
+            TrophyUnlockCenter(ledger: ledger, events: TrophyEventStore(defaults: s),
+                               standing: LeaderboardStandingCache(defaults: s),
+                               nearStore: TrophyNearStore(defaults: s))
+        }
+        // Logbook III is 25 catches. Seed at 22 (the launch diff), then catch.
+        let c = center()
+        c.enqueueNewUnlocks(from: catches(22))
+        c.dismissRecap()
+        #expect(c.pendingNearMiss == nil, "the first evaluation never produces one")
 
-        center.enqueueNewUnlocks(from: catches(2))
-        #expect(center.lastAdvance != nil)
-        #expect(center.lastAdvance?.track.id != "logbook")
+        c.enqueueNewUnlocks(from: catches(23))
+        let near = try? #require(c.pendingNearMiss)
+        #expect(near?.remaining == 2)
+        #expect(c.hasPending)
 
-        // A re-diff at the same count leaves it alone; consuming clears it.
-        center.enqueueNewUnlocks(from: catches(2))
-        #expect(center.lastAdvance != nil)
-        center.consumeAdvance()
-        #expect(center.lastAdvance == nil)
-        center.enqueueNewUnlocks(from: catches(2))
-        #expect(center.lastAdvance == nil, "an unchanged count must not produce one")
+        // A re-diff at the same count leaves the card alone.
+        c.enqueueNewUnlocks(from: catches(23))
+        #expect(c.pendingNearMiss != nil)
 
-        center.enqueueNewUnlocks(from: catches(3))
-        #expect(center.lastAdvance != nil)
+        if let near { c.markNearMissShown(near) }
+        c.dismissNearMiss()
+        #expect(!c.hasPending)
+
+        // One more catch (one to go): the level has had its card.
+        c.enqueueNewUnlocks(from: catches(24))
+        #expect(c.pendingNearMiss == nil)
+        // And a fresh center (a relaunch) remembers too.
+        let relaunched = center()
+        relaunched.enqueueNewUnlocks(from: catches(23))
+        relaunched.enqueueNewUnlocks(from: catches(24))
+        #expect(relaunched.pendingNearMiss == nil)
+    }
+
+    @Test func aCatchThatUnlocksSomethingGetsNoNearMissCard() {
+        let s = suite()
+        let c = TrophyUnlockCenter(ledger: freshLedger(), events: TrophyEventStore(defaults: s),
+                                   standing: LeaderboardStandingCache(defaults: s),
+                                   nearStore: TrophyNearStore(defaults: s))
+        c.enqueueNewUnlocks(from: catches(24))
+        c.dismissRecap()
+        c.enqueueNewUnlocks(from: catches(25))   // Logbook III unlocks
+        #expect(!c.pendingEvents.isEmpty)
+        #expect(c.pendingNearMiss == nil)
     }
 
     @Test func unlockPropertiesCarryTrackAndLevelForLevelsOnly() {
@@ -421,39 +475,17 @@ struct TrophyTracksTests {
         #expect(f["track"] == nil && f["level"] == nil)
     }
 
-    // MARK: Reveal strip
+    // MARK: Near-miss analytics
 
-    @Test func progressShownPropertiesCarryTrackLevelProgressGoal() {
-        let adv = TrophyAdvance.best(before: inputs(totalCatches: 3, operators: 27),
-                                     after: inputs(totalCatches: 4, operators: 28), roster: roster)!
-        let p = TrophyAnalytics.progressShownProperties(adv)
-        #expect(TrophyAnalytics.progressShown == "trophy_progress_shown")
+    @Test func nearShownPropertiesCarryTrackLevelProgressGoal() {
+        let near = TrophyNearMiss.find(before: inputs(totalCatches: 60, operators: 27),
+                                       after: inputs(totalCatches: 61, operators: 28), roster: roster)!
+        let p = TrophyAnalytics.nearShownProperties(near)
+        #expect(TrophyAnalytics.nearShown == "trophy_near_shown")
         #expect(p["track"]?.jsonValue as? String == "airlines")
-        #expect(p["level"]?.jsonValue as? Int == adv.level)
+        #expect(p["level"]?.jsonValue as? Int == 2)
         #expect(p["progress"]?.jsonValue as? Int == 28)
-        #expect(p["goal"]?.jsonValue as? Int == adv.goal)
+        #expect(p["goal"]?.jsonValue as? Int == 30)
         #expect(p.count == 4)
-    }
-
-    @Test func advanceStripCopy() {
-        let adv = TrophyAdvance.best(before: inputs(totalCatches: 3, operators: 27),
-                                     after: inputs(totalCatches: 4, operators: 28), roster: roster)!
-        #expect(adv.title == "Airlines \(TrophyTracks.roman(adv.level))")
-        #expect(adv.countText == "28 / \(adv.goal)")
-        #expect(adv.accessibilityText == "Airlines level \(adv.level), 28 of \(adv.goal)")
-        // The ring lights the levels below the one being chased.
-        #expect(adv.badgeSpec.filled == adv.level - 1)
-        #expect(adv.badgeSpec.segments == adv.track.levelIDs.count)
-    }
-
-    @Test func multiRevealPutsTheStripOnTheLastFreshPlane() {
-        func entry(_ dup: Bool) -> MultiCatchReveal.Entry {
-            .init(plane: CardPlane(callsign: "X", model: "Boeing 737", carrier: "Y",
-                                   rarity: .common, type: .narrow,
-                                   altText: nil, speedText: nil, distText: "1 km"),
-                  isDuplicate: dup)
-        }
-        #expect(MultiCatchReveal.lastFreshIndex([entry(false), entry(false), entry(true)]) == 1)
-        #expect(MultiCatchReveal.lastFreshIndex([entry(true), entry(true)]) == nil)
     }
 }

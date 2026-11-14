@@ -5,7 +5,9 @@
 //  The full-screen "moment" — an opaque branded takeover over the live AR
 //  that celebrates a newly-unlocked achievement. Drains
 //  `TrophyUnlockCenter`'s queue one event at a time (tap to advance), and
-//  renders the one-time recap first when present.
+//  renders the one-time recap first when present. Last in line is the
+//  quieter "almost there" card, for a catch that left a track one or two
+//  short of its next level.
 //
 //  Mounted once at a root level (ContentView) — see KTD-5. Achievements are
 //  binary now: every unlock is just "UNLOCKED" (or "SECRET UNLOCKED" for a
@@ -42,6 +44,8 @@ struct TrophyUnlockView: View {
                 TrophyRecapView(recap: recap) { center.dismissRecap() }
             } else if let event = center.head {
                 eventCard(event)
+            } else if let near = center.pendingNearMiss {
+                nearMissCard(near)
             } else {
                 Color.clear   // queue drained — the cover dismisses (U6)
             }
@@ -51,6 +55,7 @@ struct TrophyUnlockView: View {
         // *behind* the recap isn't committed/animated until the recap is
         // dismissed — then it re-fires for its proper entrance.
         .task(id: eventTaskKey) { await presentHead() }
+        .task(id: nearTaskKey) { presentNearMiss() }
         .task(id: center.pendingRecap) {
             guard center.pendingRecap != nil else { return }
             hapticTick &+= 1
@@ -130,6 +135,53 @@ struct TrophyUnlockView: View {
         .accessibilityAction(named: "Dismiss") { center.advance() }
     }
 
+    // MARK: - Almost-there card
+
+    /// A level one or two catches away. Quieter than an unlock: the ring as
+    /// it stands (no halo, no rays), what is left, and the goal. Nothing has
+    /// been earned yet, so it does not celebrate.
+    @ViewBuilder
+    private func nearMissCard(_ near: TrophyNearMiss) -> some View {
+        VStack(spacing: 18) {
+            Text("ALMOST THERE")
+                .font(Brand.Font.mono(size: 13, weight: .heavy))
+                .tracking(4)
+                .foregroundStyle(Brand.Color.textSecondary)
+
+            TrophyBadge(near.badgeSpec, size: 112)
+                .padding(.vertical, 10)
+                .scaleEffect(appeared ? 1 : (reduceMotion ? 1 : 0.85))
+                .opacity(appeared ? 1 : 0)
+
+            Text(near.title)
+                .brandDisplayFont()
+                .foregroundStyle(Brand.Color.textPrimary)
+                .multilineTextAlignment(.center)
+                .minimumScaleFactor(0.7)
+
+            VStack(spacing: 6) {
+                Text(near.remainingText.prefix(1).uppercased() + near.remainingText.dropFirst())
+                    .font(.headline)
+                    .foregroundStyle(Brand.Color.cyan)
+                Text(near.goalText)
+                    .font(Brand.Font.caption)
+                    .foregroundStyle(Brand.Color.textSecondary)
+            }
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, 32)
+
+            footer(remaining: 0)
+        }
+        .padding(.vertical, 40)
+        .frame(maxWidth: .infinity)
+        .contentShape(Rectangle())
+        .onTapGesture { center.dismissNearMiss() }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isModal)
+        .accessibilityLabel("Almost there. \(near.track.name) level \(near.level). \(near.remainingText). \(near.goalText).")
+        .accessibilityAction(named: "Dismiss") { center.dismissNearMiss() }
+    }
+
     @ViewBuilder
     private func footer(remaining: Int) -> some View {
         VStack(spacing: 10) {
@@ -169,6 +221,19 @@ struct TrophyUnlockView: View {
     /// id when the recap clears, re-firing `presentHead`.
     private var eventTaskKey: String? {
         center.pendingRecap == nil ? center.head?.id : nil
+    }
+
+    /// Task id for the near-miss card: nil while a recap or unlock card is
+    /// still ahead of it.
+    private var nearTaskKey: String? {
+        center.pendingRecap == nil && center.head == nil ? center.pendingNearMiss?.achievement.id : nil
+    }
+
+    private func presentNearMiss() {
+        guard nearTaskKey != nil, let near = center.pendingNearMiss else { return }
+        center.markNearMissShown(near)                // commit-on-shown
+        animateIn()
+        AccessibilityNotification.Announcement("Almost there. \(near.title), \(near.remainingText)").post()
     }
 
     private func presentHead() async {

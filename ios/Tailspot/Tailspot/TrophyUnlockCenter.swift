@@ -148,13 +148,15 @@ final class TrophyUnlockCenter: ObservableObject {
     @Published private(set) var pendingEvents: [TrophyUnlockEvent] = []
     /// A pending one-time recap, or nil. Presented before the queue.
     @Published private(set) var pendingRecap: TrophyRecap?
-    /// The track a just-finished catch moved closer, for the reveal strip.
-    /// Set only when the catch COUNT grew since the previous evaluation (so
-    /// sheet closes, relaunches and restores never produce one); the first
-    /// evaluation after launch never does. Cleared by `consumeAdvance()`.
-    @Published private(set) var lastAdvance: TrophyAdvance?
+    /// The "almost there" card: a track the just-finished catch moved to
+    /// within two of its next level. Set only when the catch COUNT grew since
+    /// the previous evaluation (so sheet closes, relaunches and restores
+    /// never produce one; the first evaluation after launch never does), only
+    /// when that catch unlocked nothing, and once per level. Presented after
+    /// the recap and the unlock cards; cleared by `dismissNearMiss()`.
+    @Published private(set) var pendingNearMiss: TrophyNearMiss?
     /// Inputs of the previous `enqueueNewUnlocks` evaluation, the "before" of
-    /// the next advance. Reuses the memoized inputs: no extra full pass.
+    /// the next near miss. Reuses the memoized inputs: no extra full pass.
     private var previousInputs: TrophyProgressInputs?
 
     private let ledger: UserDefaultsTrophyLedger
@@ -165,6 +167,8 @@ final class TrophyUnlockCenter: ObservableObject {
     /// Server-fact trophy inputs (weekly wins / ever-topped-all-time, cached
     /// from leaderboard fetches) — injectable for the same suite isolation.
     private let standing: LeaderboardStandingCache
+    /// Which "almost there" cards have been shown (one per level).
+    private let nearStore: TrophyNearStore
     /// The roster generation this build ships (injectable for tests). See
     /// `Trophies.rosterVersion` for the stamp/reseed contract.
     private let rosterVersion: Int
@@ -205,9 +209,11 @@ final class TrophyUnlockCenter: ObservableObject {
         roster: [Achievement] = Trophies.roster,
         events: TrophyEventStore = TrophyEventStore(),
         standing: LeaderboardStandingCache = LeaderboardStandingCache(),
+        nearStore: TrophyNearStore = TrophyNearStore(),
         rosterVersion: Int = Trophies.rosterVersion,
         inputsMemo: TrophyInputsMemo = TrophyInputsMemo()
     ) {
+        self.nearStore = nearStore
         self.inputsMemo = inputsMemo
         self.ledger = ledger
         self.roster = roster
@@ -217,13 +223,23 @@ final class TrophyUnlockCenter: ObservableObject {
     }
 
     var head: TrophyUnlockEvent? { pendingEvents.first }
-    var hasPending: Bool { pendingRecap != nil || !pendingEvents.isEmpty }
+    var hasPending: Bool { pendingRecap != nil || !pendingEvents.isEmpty || pendingNearMiss != nil }
 
-    /// Clear `lastAdvance` once the reveal has taken it.
-    func consumeAdvance() {
-        // Assigning nil over nil would still publish and re-run
-        // ContentView.body on every shutter press.
-        if lastAdvance != nil { lastAdvance = nil }
+    /// Commit-on-shown, like `markShown`: the level never gets a second card.
+    func markNearMissShown(_ near: TrophyNearMiss) {
+        #if DEBUG
+        if nearMissIsSample { return }
+        #endif
+        guard !nearStore.shown.contains(near.achievement.id) else { return }
+        nearStore.markShown([near.achievement.id] + near.alsoClose)
+        Analytics.capture(TrophyAnalytics.nearShown, TrophyAnalytics.nearShownProperties(near))
+    }
+
+    func dismissNearMiss() {
+        if pendingNearMiss != nil { pendingNearMiss = nil }
+        #if DEBUG
+        nearMissIsSample = false
+        #endif
     }
 
     /// Diff the Hangar against the ledger and queue newly-crossed trophies.
@@ -276,12 +292,10 @@ final class TrophyUnlockCenter: ObservableObject {
     func enqueueNewUnlocks(from catches: [Catch]) {
         let token = TrophyInputsToken.of(catches, events: events, standing: standing)
         let inputs = inputsMemo.cached(for: token) ?? computeInputs(catches, token: token)
-        // Advance: only when the catch COUNT grew versus the previous
+        // Near miss: only when the catch COUNT grew versus the previous
         // evaluation (the count task after a catch). Re-diffs at the same
-        // count (post-geocode, sheet close) leave `lastAdvance` alone.
-        if let before = previousInputs, inputs.totalCatches > before.totalCatches {
-            lastAdvance = TrophyAdvance.best(before: before, after: inputs, roster: roster)
-        }
+        // count (post-geocode, sheet close) leave a pending card alone.
+        let grewFrom = previousInputs.flatMap { inputs.totalCatches > $0.totalCatches ? $0 : nil }
         previousInputs = inputs
         if datesToken != token {
             recordDatesWithinBudget(catches: catches, inputs: inputs, token: token)
@@ -325,6 +339,14 @@ final class TrophyUnlockCenter: ObservableObject {
         for event in fresh where !pendingEvents.contains(event) {
             pendingEvents.append(event)
         }
+        // A catch that unlocked something already has its moment.
+        if let before = grewFrom, pendingEvents.isEmpty, pendingRecap == nil {
+            #if DEBUG
+            nearMissIsSample = false
+            #endif
+            pendingNearMiss = TrophyNearMiss.find(before: before, after: inputs, roster: roster,
+                                                  excluding: nearStore.shown)
+        }
     }
 
     /// Most grants a roster-bump reseed presents as individual cards; more
@@ -341,9 +363,9 @@ final class TrophyUnlockCenter: ObservableObject {
     func reseedAfterRestore(from catches: [Catch]) {
         let token = TrophyInputsToken.of(catches, events: events, standing: standing)
         let inputs = computeInputs(catches, token: token)
-        // A restore is not a catch: re-baseline the advance, show none.
+        // A restore is not a catch: re-baseline, show no near-miss card.
         previousInputs = inputs
-        lastAdvance = nil
+        pendingNearMiss = nil
         recordDatesWithinBudget(catches: catches, inputs: inputs, token: token)
         TrophyUnlock.seed(inputs: inputs, roster: roster, into: ledger)
         // A restore only ever runs on an empty Hangar, so anything pending
@@ -433,6 +455,26 @@ final class TrophyUnlockCenter: ObservableObject {
         }
         pendingEvents.removeAll()
     }
+
+    #if DEBUG
+    /// True while the pending card is a debug sample: showing it must not
+    /// burn the real level's one card or send analytics.
+    private var nearMissIsSample = false
+
+    /// Put a near-miss card up directly (wrench panel, previews, renders).
+    func debugSetNearMiss(_ near: TrophyNearMiss?) {
+        nearMissIsSample = near != nil
+        pendingNearMiss = near
+    }
+
+    /// Airlines II at 28 of 30, for the wrench panel.
+    func debugShowSampleNearMiss() {
+        guard let track = TrophyTracks.all.first(where: { $0.id == "airlines" }),
+              let ach = roster.first(where: { $0.id == "airlines2" }) else { return }
+        debugSetNearMiss(TrophyNearMiss(track: track, level: 2, progress: 28,
+                                        goal: ach.threshold, achievement: ach))
+    }
+    #endif
 
     /// Dismiss the one-time recap. One-time-ness lives in the seeded flag +
     /// roster-version stamp (written at seed time, before presentation) — a crash mid-recap
