@@ -172,6 +172,11 @@ struct HangarView: View {
                         .tag(HangarSegment.trophies)
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
+                // The page view stops at the bottom safe area by default,
+                // which cut each segment's list off flat above the home
+                // indicator. Run the pages to the screen edge; each page's
+                // scroll view still insets its content for the indicator.
+                .ignoresSafeArea(.container, edges: .bottom)
             }
             .background(Brand.Color.bgPrimary)
             .task(id: recapTaskID) {

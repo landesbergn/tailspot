@@ -241,10 +241,10 @@ nonisolated enum TrophyCopy {
         "\(TrophyTracks.grouped(min(progress, goal))) / \(TrophyTracks.grouped(goal))"
     }
 
-    /// "27 / 30 to level III", or "All levels complete".
+    /// "27 / 30 to level 3", or "All levels complete".
     static func trackCaption(_ state: TrophyTrackState) -> String {
         guard let goal = state.nextGoal else { return "All levels complete" }
-        return "\(fraction(state.progress, goal)) to level \(TrophyTracks.roman(state.level + 1))"
+        return "\(fraction(state.progress, goal)) to level \(state.level + 1)"
     }
 }
 
@@ -298,8 +298,9 @@ struct TrophyChaseCard: View {
             Text(title)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(Brand.Color.textPrimary)
-                .lineLimit(wide ? 2 : 1)
-                .minimumScaleFactor(0.8)
+                // Two lines, reserved in the three-up row so the cards stay
+                // aligned: "Heritage Level 2" doesn't fit one line there.
+                .lineLimit(2, reservesSpace: !wide)
             if reservesBlurb {
                 blurbText.lineLimit(2, reservesSpace: true)
             } else {
@@ -363,14 +364,12 @@ struct TrophyTrackRow: View {
     }
 
     private var pips: some View {
-        HStack(spacing: 5) {
-            ForEach(1...max(1, state.levelCount), id: \.self) { i in
-                Text(TrophyTracks.roman(i))
-                    .font(Brand.Font.mono(size: 10, weight: .bold, relativeTo: .caption2))
-                    .foregroundStyle(i <= state.level ? Brand.Color.cyan : Brand.Color.textTertiary.opacity(0.7))
-            }
-        }
-        .fixedSize()
+        // "Level 3 of 4" in words; the ring beside the name already shows
+        // the same thing as lit segments.
+        Text(state.level == 0 ? "\(state.levelCount) levels" : "Level \(state.level) of \(state.levelCount)")
+            .font(Brand.Font.mono(size: 11, weight: .bold, relativeTo: .caption2))
+            .foregroundStyle(state.level > 0 ? Brand.Color.cyan : Brand.Color.textTertiary)
+            .fixedSize()
     }
 }
 

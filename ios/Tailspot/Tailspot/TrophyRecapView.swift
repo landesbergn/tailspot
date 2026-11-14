@@ -47,7 +47,7 @@ struct TrophyRecapView: View {
         .onAppear {
             began = Date()
             AccessibilityNotification.Announcement(
-                "\(recap.isUpdate ? "New in your trophy case" : "Trophy case"): \(recap.earned) \(recap.earned == 1 ? "trophy" : "trophies") already earned."
+                Self.headline(count: recap.earned, isUpdate: recap.isUpdate)
             ).post()
         }
         .task {
@@ -63,16 +63,18 @@ struct TrophyRecapView: View {
     private func content(t: Double) -> some View {
         VStack(spacing: 0) {
             header(t: t)
-                .padding(.top, 30)
+                .padding(.top, 44)
                 .padding(.bottom, 18)
 
             // The case itself — every earned trophy, roster order, secrets
             // included (earning reveals them). A small case (≤ 2 rows) sits
-            // centered in the open space; a full one scrolls, with the fold
+            // directly under the headline; a full one scrolls, with the fold
             // cutting through a row as the scroll affordance.
             if recap.achievements.count <= 6 {
-                Spacer(minLength: 0)
+                // Under the headline, not floating mid-screen: the count
+                // and the badges read as one statement.
                 grid(t: t)
+                    .padding(.top, 18)
                 Spacer(minLength: 0)
             } else {
                 ScrollView {
@@ -104,37 +106,32 @@ struct TrophyRecapView: View {
         .background(RP.bg.ignoresSafeArea())
     }
 
+    /// "5 new trophies" / "12 trophies earned": the whole message in one line.
+    static func headline(count: Int, isUpdate: Bool) -> String {
+        if isUpdate { return "\(count) New \(count == 1 ? "Trophy" : "Trophies")" }
+        return "\(count) \(count == 1 ? "Trophy" : "Trophies") Earned"
+    }
+
     private func header(t: Double) -> some View {
-        // The earned count rolls up over the first half of the reveal,
+        // The count rolls up over the first half of the reveal,
         // reveal-ledger style.
         let count = Int((Double(recap.earned) * easeOutQuad(ss(0.10, 0.55, t))).rounded())
-        return VStack(spacing: 8) {
-            Text(recap.isUpdate ? "NEW IN YOUR TROPHY CASE" : "YOUR TROPHY CASE")
-                .font(.system(size: 12, weight: .bold, design: .monospaced))
-                .tracking(3)
-                .foregroundColor(RP.gold)
-                .opacity(ss(0.0, 0.12, t))
-            Text("\(count)")
-                .font(.system(size: 56, weight: .heavy, design: .monospaced))
+        return VStack(spacing: 18) {
+            Text(Self.headline(count: t >= 1 ? recap.earned : count, isUpdate: recap.isUpdate))
+                .brandDisplayFont()
                 .foregroundColor(RP.ink)
                 .monospacedDigit()
-                .opacity(ss(0.05, 0.2, t))
-            Text(recap.isUpdate
-                 ? (recap.earned == 1 ? "NEW TROPHY ALREADY EARNED" : "NEW TROPHIES ALREADY EARNED")
-                 : (recap.earned == 1 ? "TROPHY ALREADY EARNED" : "TROPHIES ALREADY EARNED"))
-                .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                .tracking(2)
-                .foregroundColor(RP.muted)
-                .opacity(ss(0.1, 0.25, t))
+                .multilineTextAlignment(.center)
+                .minimumScaleFactor(0.7)
+                .opacity(ss(0.0, 0.2, t))
             Rectangle()
                 .fill(RP.rule)
                 .frame(height: 1)
                 .padding(.horizontal, 44)
-                .padding(.top, 10)
                 .scaleEffect(x: ss(0.12, 0.4, t), anchor: .center)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(recap.isUpdate ? "New in your trophy case" : "Trophy case"): \(recap.earned) \(recap.earned == 1 ? "trophy" : "trophies") already earned")
+        .accessibilityLabel(Self.headline(count: recap.earned, isUpdate: recap.isUpdate))
     }
 
     private func grid(t: Double) -> some View {
@@ -177,11 +174,6 @@ struct TrophyRecapView: View {
 
     private func footer(t: Double) -> some View {
         VStack(spacing: 16) {
-            Text("The trophy roster just grew — these are already yours.\nMore are hidden until you find them.")
-                .font(Brand.Font.caption)
-                .foregroundColor(RP.muted)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 36)
             Button(action: onDismiss) {
                 Text("TO THE SKIES ›")
                     .font(.system(size: 13, weight: .bold, design: .monospaced))

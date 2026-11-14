@@ -5,7 +5,7 @@
 //  The presentation layer of the trophies rebuild. The roster stays a flat
 //  list of binary achievements (ids, thresholds and the unlock ledger are
 //  untouched); a TRACK just groups the achievements that share one progress
-//  metric as numbered levels (Heavies I, II, III…). Everything else in the
+//  metric as numbered levels (Heavies Level 1, 2, 3…). Everything else in the
 //  roster is a FEAT: a one-off (the secret ones included, which stay
 //  secret). CHASES are the up-to-three nearest goals, and a NEAR MISS is the
 //  "two to go" card shown after a catch leaves a level within reach.
@@ -216,23 +216,17 @@ nonisolated enum TrophyTracks {
 
     // MARK: Naming
 
-    /// "I"…"V" for 1...5; anything else falls back to the digits.
-    static func roman(_ n: Int) -> String {
-        switch n {
-        case 1: return "I"
-        case 2: return "II"
-        case 3: return "III"
-        case 4: return "IV"
-        case 5: return "V"
-        default: return String(n)
-        }
+    /// "Heavies Level 2": plain digits (roman numerals were hard to read at
+    /// label sizes; Noah, 2026-11-13).
+    static func levelTitle(_ trackName: String, level: Int) -> String {
+        "\(trackName) Level \(level)"
     }
 
-    /// "Heavies II" for a track level; the achievement's own title for a feat.
+    /// "Heavies Level 2" for a track level; the achievement's own title for a feat.
     static func displayTitle(for achievement: Achievement) -> String {
         guard let track = trackByAchievementID[achievement.id],
               let level = level(ofAchievementID: achievement.id) else { return achievement.title }
-        return "\(track.name) \(roman(level))"
+        return levelTitle(track.name, level: level)
     }
 
     /// The track's `goalCopy(threshold)` for a level; the unit-aware summary
@@ -414,8 +408,8 @@ nonisolated struct TrophyNearMiss: Equatable, Sendable {
 
     var remaining: Int { max(0, goal - progress) }
 
-    /// "Airlines III": the track and the level being chased.
-    var title: String { "\(track.name) \(TrophyTracks.roman(level))" }
+    /// "Airlines Level 3": the track and the level being chased.
+    var title: String { TrophyTracks.levelTitle(track.name, level: level) }
     /// "2 new airlines to go".
     var remainingText: String { track.remainingCopy(remaining) }
     /// "Collect 30 airlines".

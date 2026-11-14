@@ -153,7 +153,7 @@ struct TrophiesTabSnapshotTests {
         let cards: [(String, TrophyShareCard)] = [
             ("share_card_track", TrophyShareCard(
                 badge: TrophyBadgeSpec(earnedAchievement: real("heavy2")),
-                title: "Heavies II", summary: TrophyTracks.displaySummary(for: real("heavy2"), units: Self.units),
+                title: "Heavies Level 2", summary: TrophyTracks.displaySummary(for: real("heavy2"), units: Self.units),
                 earnedAt: Date(timeIntervalSince1970: 1_764_000_000), handle: "mach_6415")),
             ("share_card_feat_no_handle", TrophyShareCard(
                 badge: TrophyBadgeSpec(earnedAchievement: real("heavymetal")),

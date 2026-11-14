@@ -84,6 +84,10 @@ struct TrophyDetailSheet: View {
                 .padding(.bottom, 32)
                 .frame(maxWidth: .infinity)
             }
+            // A short sheet (a feat) doesn't scroll: without this the content
+            // rubber-bands away from the top and leaves a gap. Now a pull
+            // down drags the sheet itself.
+            .scrollBounceBehavior(.basedOnSize)
             ChromeButton(.close, action: onClose)
                 .padding(.top, 8)
                 .padding(.trailing, 16)
@@ -108,7 +112,10 @@ struct TrophyDetailSheet: View {
                 if let earnedDate {
                     Text("Earned \(earnedDate.formatted(.dateTime.month(.abbreviated).day().year()))")
                 } else {
-                    Text("Date unavailable")
+                    // No date on record: trophies that come from the
+                    // leaderboard or an in-app event, not from a catch,
+                    // have no catch to date them by.
+                    Text("Earned")
                 }
             }
             .font(Brand.Font.mono(size: 12, weight: .semibold, relativeTo: .caption))
@@ -125,7 +132,7 @@ struct TrophyDetailSheet: View {
             ForEach(Array(levels.enumerated()), id: \.element.id) { idx, level in
                 let done = level.isEarned(inputs: inputs)
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Text(TrophyTracks.roman(idx + 1))
+                    Text("\(idx + 1)")
                         .font(Brand.Font.mono(size: 12, weight: .bold, relativeTo: .caption))
                         .foregroundStyle(done ? Brand.Color.cyan : Brand.Color.textTertiary)
                         .frame(minWidth: 28, alignment: .leading)
@@ -162,7 +169,7 @@ struct TrophyDetailSheet: View {
                 .foregroundStyle(Brand.Color.textTertiary)
                 .monospacedDigit()
                 .accessibilityElement(children: .combine)
-                .accessibilityLabel("\(TrophyCopy.fraction(state.progress, goal)) to level \(TrophyTracks.roman(state.level + 1))")
+                .accessibilityLabel("\(TrophyCopy.fraction(state.progress, goal)) to level \(state.level + 1)")
             } else {
                 Text("All levels complete")
                     .font(Brand.Font.mono(size: 11, weight: .semibold, relativeTo: .caption))

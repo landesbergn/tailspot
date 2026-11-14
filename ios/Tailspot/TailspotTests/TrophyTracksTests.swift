@@ -171,13 +171,13 @@ struct TrophyTracksTests {
 
     // MARK: Naming
 
-    @Test func romanNumerals() {
-        #expect((1...5).map(TrophyTracks.roman) == ["I", "II", "III", "IV", "V"])
+    @Test func levelTitlesUsePlainDigits() {
+        #expect(TrophyTracks.levelTitle("Airlines", level: 4) == "Airlines Level 4")
     }
 
     @Test func displayTitleAndSummary() {
-        #expect(TrophyTracks.displayTitle(for: ach("heavy2")) == "Heavies II")
-        #expect(TrophyTracks.displayTitle(for: ach("firstcatch")) == "Logbook I")
+        #expect(TrophyTracks.displayTitle(for: ach("heavy2")) == "Heavies Level 2")
+        #expect(TrophyTracks.displayTitle(for: ach("firstcatch")) == "Logbook Level 1")
         #expect(TrophyTracks.displayTitle(for: ach("redeye")) == "Red Eye")
         let units = DisplayUnits(altitude: .feet, speed: .knots, distance: .kilometers)
         #expect(TrophyTracks.displaySummary(for: ach("heavy"), units: units) == "Catch 10 wide-bodies")
@@ -320,7 +320,7 @@ struct TrophyTracksTests {
         #expect(near?.track.id == "airlines")
         #expect(near?.achievement.id == "airlines2")
         #expect(near?.remaining == 2)
-        #expect(near?.title == "Airlines II")
+        #expect(near?.title == "Airlines Level 2")
         #expect(near?.remainingText == "2 new airlines to go")
         #expect(near?.goalText == "Collect 30 airlines")
         #expect(near?.badgeSpec.filled == 1)
