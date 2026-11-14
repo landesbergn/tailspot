@@ -744,7 +744,12 @@ struct ContentView: View {
                             }
                             // The card's new-user peek (CardFlipTease) runs
                             // again on the next cards.
-                            Button("↻ Reset card peek") { CardFlipTeaseStore.debugReset() }
+                            HStack(spacing: 8) {
+                                Button("↻ Reset card peek") { CardFlipTeaseStore.debugReset() }
+                                // The post-reveal "Almost there" card, without
+                                // needing a catch that lands two short.
+                                Button("◔ Almost-there card") { unlockCenter.debugShowSampleNearMiss() }
+                            }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .font(Brand.Font.mono(size: 11, weight: .bold))

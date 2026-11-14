@@ -21,13 +21,18 @@ import Combine
 /// The one-time "trophy case" recap shown on the very first seed (every
 /// earned trophy, e.g. an older install meeting the unlock machinery), so
 /// that user gets one celebratory moment instead of a per-trophy flood. A
-/// roster-bump reseed does NOT use it: its few new grants get ordinary
-/// unlock cards (see `enqueueNewUnlocks`). Carries the trophies
+/// roster-bump reseed uses it only when it grants MORE than three trophies
+/// (see `enqueueNewUnlocks`); three or fewer get ordinary unlock cards.
+/// Carries the trophies
 /// themselves so the recap sheet can render them, not just a count.
 nonisolated struct TrophyRecap: Equatable, Sendable {
     /// The recapped achievements, in roster order (earned secrets included
     /// — earning reveals them, house rule).
     let achievements: [Achievement]
+    /// True when this recap covers only what a roster update newly granted
+    /// (not the whole case), so the sheet says "new" instead of implying
+    /// this is everything the player holds.
+    var isUpdate = false
     var earned: Int { achievements.count }
 }
 
@@ -143,6 +148,16 @@ final class TrophyUnlockCenter: ObservableObject {
     @Published private(set) var pendingEvents: [TrophyUnlockEvent] = []
     /// A pending one-time recap, or nil. Presented before the queue.
     @Published private(set) var pendingRecap: TrophyRecap?
+    /// The "almost there" card: a track the just-finished catch moved to
+    /// within two of its next level. Set only when the catch COUNT grew since
+    /// the previous evaluation (so sheet closes, relaunches and restores
+    /// never produce one; the first evaluation after launch never does), only
+    /// when that catch unlocked nothing, and once per level. Presented after
+    /// the recap and the unlock cards; cleared by `dismissNearMiss()`.
+    @Published private(set) var pendingNearMiss: TrophyNearMiss?
+    /// Inputs of the previous `enqueueNewUnlocks` evaluation, the "before" of
+    /// the next near miss. Reuses the memoized inputs: no extra full pass.
+    private var previousInputs: TrophyProgressInputs?
 
     private let ledger: UserDefaultsTrophyLedger
     private let roster: [Achievement]
@@ -152,6 +167,8 @@ final class TrophyUnlockCenter: ObservableObject {
     /// Server-fact trophy inputs (weekly wins / ever-topped-all-time, cached
     /// from leaderboard fetches) — injectable for the same suite isolation.
     private let standing: LeaderboardStandingCache
+    /// Which "almost there" cards have been shown (one per level).
+    private let nearStore: TrophyNearStore
     /// The roster generation this build ships (injectable for tests). See
     /// `Trophies.rosterVersion` for the stamp/reseed contract.
     private let rosterVersion: Int
@@ -192,9 +209,11 @@ final class TrophyUnlockCenter: ObservableObject {
         roster: [Achievement] = Trophies.roster,
         events: TrophyEventStore = TrophyEventStore(),
         standing: LeaderboardStandingCache = LeaderboardStandingCache(),
+        nearStore: TrophyNearStore = TrophyNearStore(),
         rosterVersion: Int = Trophies.rosterVersion,
         inputsMemo: TrophyInputsMemo = TrophyInputsMemo()
     ) {
+        self.nearStore = nearStore
         self.inputsMemo = inputsMemo
         self.ledger = ledger
         self.roster = roster
@@ -204,7 +223,24 @@ final class TrophyUnlockCenter: ObservableObject {
     }
 
     var head: TrophyUnlockEvent? { pendingEvents.first }
-    var hasPending: Bool { pendingRecap != nil || !pendingEvents.isEmpty }
+    var hasPending: Bool { pendingRecap != nil || !pendingEvents.isEmpty || pendingNearMiss != nil }
+
+    /// Commit-on-shown, like `markShown`: the level never gets a second card.
+    func markNearMissShown(_ near: TrophyNearMiss) {
+        #if DEBUG
+        if nearMissIsSample { return }
+        #endif
+        guard !nearStore.shown.contains(near.achievement.id) else { return }
+        nearStore.markShown([near.achievement.id] + near.alsoClose)
+        Analytics.capture(TrophyAnalytics.nearShown, TrophyAnalytics.nearShownProperties(near))
+    }
+
+    func dismissNearMiss() {
+        if pendingNearMiss != nil { pendingNearMiss = nil }
+        #if DEBUG
+        nearMissIsSample = false
+        #endif
+    }
 
     /// Diff the Hangar against the ledger and queue newly-crossed trophies.
     ///
@@ -217,16 +253,20 @@ final class TrophyUnlockCenter: ObservableObject {
     ///    the user already qualifies for (e.g. Four Figures on an existing
     ///    2,000-point Hangar) are acknowledged in the ledger and each one is
     ///    queued as an ordinary "NEW TROPHY" card, the same card a live
-    ///    unlock gets (with "SKIP ALL" when several are pending). Only what
+    ///    unlock gets (with "SKIP ALL" when several are pending) — or, when
+    ///    the reseed newly acknowledges MORE THAN THREE (a roster that adds
+    ///    many levels at once), as the one-time recap instead of a card
+    ///    flood. Only what
     ///    the reseed newly acknowledged (earned now, not in the previous
     ///    ledger) is queued — a user with nothing new sees nothing — and
     ///    each fires `trophy_unlocked` with `via: "reseed"` here (the card's
     ///    `markShown` then stays silent because the tier is already
     ///    acknowledged), so the bump's effect is visible in analytics.
-    /// Both stamp the current roster version. Only the first-ever seed queues
-    /// the one-time "trophy case" recap (it can cover a whole Hangar, where
-    /// per-trophy cards would flood), and only when something is earned — a
-    /// fresh install never sees it.
+    /// Both stamp the current roster version. The one-time "trophy case"
+    /// recap is queued by the first-ever seed (it can cover a whole Hangar,
+    /// where per-trophy cards would flood) and by a reseed that grants more
+    /// than three, and only when something is earned — a fresh install never
+    /// sees it.
     /// Callers should fire this once at app launch so the seed lands before
     /// the user's first crossing.
     ///
@@ -252,6 +292,11 @@ final class TrophyUnlockCenter: ObservableObject {
     func enqueueNewUnlocks(from catches: [Catch]) {
         let token = TrophyInputsToken.of(catches, events: events, standing: standing)
         let inputs = inputsMemo.cached(for: token) ?? computeInputs(catches, token: token)
+        // Near miss: only when the catch COUNT grew versus the previous
+        // evaluation (the count task after a catch). Re-diffs at the same
+        // count (post-geocode, sheet close) leave a pending card alone.
+        let grewFrom = previousInputs.flatMap { inputs.totalCatches > $0.totalCatches ? $0 : nil }
+        previousInputs = inputs
         if datesToken != token {
             recordDatesWithinBudget(catches: catches, inputs: inputs, token: token)
         } else if !memoDatesDone, pendingDateBackfill == nil {
@@ -272,21 +317,41 @@ final class TrophyUnlockCenter: ObservableObject {
             let newlyAcknowledged = TrophyUnlock.pending(inputs: inputs, roster: roster, ledger: ledger)
             TrophyUnlock.seed(inputs: inputs, roster: roster, into: ledger)
             ledger.markRosterVersion(rosterVersion)
-            // Present each grant as a normal "NEW TROPHY" card. The seed above
-            // already acknowledged them, so `markShown` treats the card as a
-            // re-presentation and fires nothing — the reseed event below is
-            // the one `trophy_unlocked` per grant.
-            for event in newlyAcknowledged where !pendingEvents.contains(event) {
-                Analytics.capture("trophy_unlocked", Self.unlockProperties(event, via: "reseed"))
-                pendingEvents.append(event)
+            // Up to three grants: present each as a normal "NEW TROPHY" card.
+            // The seed above already acknowledged them, so `markShown` treats
+            // the card as a re-presentation and fires nothing — the reseed
+            // event below is the one `trophy_unlocked` per grant. More than
+            // three: one recap sheet instead of a card flood (the analytics
+            // event still fires once per grant).
+            let asRecap = newlyAcknowledged.count > Self.reseedCardLimit
+            for event in newlyAcknowledged {
+                if asRecap {
+                    Analytics.capture("trophy_unlocked", Self.unlockProperties(event, via: "reseed"))
+                } else if !pendingEvents.contains(event) {
+                    Analytics.capture("trophy_unlocked", Self.unlockProperties(event, via: "reseed"))
+                    pendingEvents.append(event)
+                }
             }
+            if asRecap { queueRecap(newlyAcknowledged.map(\.achievement), isUpdate: true) }
             return
         }
         let fresh = TrophyUnlock.pending(inputs: inputs, roster: roster, ledger: ledger)
         for event in fresh where !pendingEvents.contains(event) {
             pendingEvents.append(event)
         }
+        // A catch that unlocked something already has its moment.
+        if let before = grewFrom, pendingEvents.isEmpty, pendingRecap == nil {
+            #if DEBUG
+            nearMissIsSample = false
+            #endif
+            pendingNearMiss = TrophyNearMiss.find(before: before, after: inputs, roster: roster,
+                                                  excluding: nearStore.shown)
+        }
     }
+
+    /// Most grants a roster-bump reseed presents as individual cards; more
+    /// than this become the one-time recap.
+    static let reseedCardLimit = 3
 
     /// After a bulk Hangar restore, silently re-align the ledger with the
     /// restored collection: acknowledge every currently-earned tier (the same
@@ -298,6 +363,9 @@ final class TrophyUnlockCenter: ObservableObject {
     func reseedAfterRestore(from catches: [Catch]) {
         let token = TrophyInputsToken.of(catches, events: events, standing: standing)
         let inputs = computeInputs(catches, token: token)
+        // A restore is not a catch: re-baseline, show no near-miss card.
+        previousInputs = inputs
+        pendingNearMiss = nil
         recordDatesWithinBudget(catches: catches, inputs: inputs, token: token)
         TrophyUnlock.seed(inputs: inputs, roster: roster, into: ledger)
         // A restore only ever runs on an empty Hangar, so anything pending
@@ -366,6 +434,11 @@ final class TrophyUnlockCenter: ObservableObject {
             "kind": .string(event.kind == .badgeEarned ? "badge" : "tier_up"),
             "secret": .bool(event.achievement.secret),
         ]
+        if let track = TrophyTracks.track(forAchievementID: event.achievementID),
+           let level = TrophyTracks.level(ofAchievementID: event.achievementID) {
+            props["track"] = .string(track.id)
+            props["level"] = .int(level)
+        }
         if let via { props["via"] = .string(via) }
         return props
     }
@@ -383,6 +456,26 @@ final class TrophyUnlockCenter: ObservableObject {
         pendingEvents.removeAll()
     }
 
+    #if DEBUG
+    /// True while the pending card is a debug sample: showing it must not
+    /// burn the real level's one card or send analytics.
+    private var nearMissIsSample = false
+
+    /// Put a near-miss card up directly (wrench panel, previews, renders).
+    func debugSetNearMiss(_ near: TrophyNearMiss?) {
+        nearMissIsSample = near != nil
+        pendingNearMiss = near
+    }
+
+    /// Airlines II at 28 of 30, for the wrench panel.
+    func debugShowSampleNearMiss() {
+        guard let track = TrophyTracks.all.first(where: { $0.id == "airlines" }),
+              let ach = roster.first(where: { $0.id == "airlines2" }) else { return }
+        debugSetNearMiss(TrophyNearMiss(track: track, level: 2, progress: 28,
+                                        goal: ach.threshold, achievement: ach))
+    }
+    #endif
+
     /// Dismiss the one-time recap. One-time-ness lives in the seeded flag +
     /// roster-version stamp (written at seed time, before presentation) — a crash mid-recap
     /// loses the moment rather than ever re-flooding, the same trade the
@@ -397,11 +490,11 @@ final class TrophyUnlockCenter: ObservableObject {
         pendingRecap = nil
     }
 
-    private func queueRecap(_ achievements: [Achievement]) {
+    private func queueRecap(_ achievements: [Achievement], isUpdate: Bool = false) {
         // Nothing to show (fresh install, or an install that never caught)
         // → no recap; the version stamp is already written, so no re-check.
         guard !achievements.isEmpty else { return }
-        pendingRecap = TrophyRecap(achievements: achievements)
+        pendingRecap = TrophyRecap(achievements: achievements, isUpdate: isUpdate)
     }
 
     #if DEBUG

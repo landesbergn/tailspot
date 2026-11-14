@@ -385,7 +385,10 @@ struct LargeHangarBudgetTests {
         let evaluations = TrophyAchievementDates.prefixEvaluations - evaluationsBefore
         print("[LargeHangarBudget] roster-bump upgrade launch @10k: \(Int(seconds * 1000)) ms")
         #expect(ledger.rosterVersion == Trophies.rosterVersion)
-        #expect(Set(center.pendingEvents.map(\.achievementID)) == granted, "the reseed queues one card per granted trophy")
+        // Four grants is past the card limit, so the reseed queues the one-time
+        // recap instead of four cards (the roster-5 anti-flood rule).
+        #expect(center.pendingEvents.isEmpty, "a reseed granting more than three queues no cards")
+        #expect(Set(center.pendingRecap?.achievements.map(\.id) ?? []) == granted, "the reseed recaps the granted trophies")
         #expect(center.fullInputsPasses == 1)
         #expect(evaluations <= 1, "the upgrade launch ran \(evaluations) date passes synchronously; the rest belong in finishAchievementDates")
         #expect(seconds < Budget.upgradeLaunch10k,
