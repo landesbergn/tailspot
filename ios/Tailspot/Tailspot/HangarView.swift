@@ -177,6 +177,9 @@ struct HangarView: View {
                 // indicator. Run the pages to the screen edge; each page's
                 // scroll view still insets its content for the indicator.
                 .ignoresSafeArea(.container, edges: .bottom)
+                // With the safe area ignored, give every page's scroll
+                // content room to clear the home indicator at the end.
+                .contentMargins(.bottom, 24, for: .scrollContent)
             }
             .background(Brand.Color.bgPrimary)
             .task(id: recapTaskID) {

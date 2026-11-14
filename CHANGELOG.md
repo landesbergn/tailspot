@@ -5,7 +5,7 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
-## 2026-11-13 — Trophies rebuilt as tracks, feats and chases (branch `claude/trophies-rebuild-738248`)
+## 2026-11-13 — Trophies rebuilt as levels, trophies and chases (1.2.6 train opens) (branch `claude/trophies-rebuild-738248`)
 
 - Why: PostHog showed trophies were earned by accident and by volume, not chased. Four of the ten most-earned were secrets, trophy count tracked catch count, the heaviest players had run out, nothing was shareable, and the tab had no analytics.
 - Existing achievements keep their ids, thresholds and ledger. `TrophyTracks.swift` groups them into 15 tracks with numbered levels, treats the rest as feats (secrets stay hidden), and picks up to three live chases.

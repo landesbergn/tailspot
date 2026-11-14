@@ -339,13 +339,21 @@ final class TrophyUnlockCenter: ObservableObject {
         for event in fresh where !pendingEvents.contains(event) {
             pendingEvents.append(event)
         }
-        // A catch that unlocked something already has its moment.
-        if let before = grewFrom, pendingEvents.isEmpty, pendingRecap == nil {
+        if !pendingEvents.isEmpty || pendingRecap != nil {
+            // A catch that unlocked something already has its moment. This
+            // also drops a card queued a moment ago when a later re-diff of
+            // the same catch (post-geocode) turns up an unlock.
+            dismissNearMiss()
+        } else if let before = grewFrom,
+                  let found = TrophyNearMiss.find(before: before, after: inputs, roster: roster,
+                                                  excluding: nearStore.shown) {
+            // Only ever REPLACE a pending card with a found one: a second
+            // count change before the card is shown (a multi-catch whose rows
+            // land one at a time) must not wipe the first one's card.
             #if DEBUG
             nearMissIsSample = false
             #endif
-            pendingNearMiss = TrophyNearMiss.find(before: before, after: inputs, roster: roster,
-                                                  excluding: nearStore.shown)
+            pendingNearMiss = found
         }
     }
 

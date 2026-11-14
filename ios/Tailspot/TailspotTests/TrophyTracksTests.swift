@@ -505,6 +505,38 @@ struct TrophyTracksTests {
         #expect(relaunched.pendingNearMiss == nil)
     }
 
+    @Test func aSecondCountChangeDoesNotWipeAPendingNearMissCard() {
+        let s = suite()
+        let c = TrophyUnlockCenter(ledger: freshLedger(), events: TrophyEventStore(defaults: s),
+                                   standing: LeaderboardStandingCache(defaults: s),
+                                   nearStore: TrophyNearStore(defaults: s))
+        // Logbook Level 4 is 100 catches: 97 -> 98 is two away, and the
+        // B738 fixture's other tracks are far from any level here.
+        c.enqueueNewUnlocks(from: catches(97))
+        c.dismissRecap()
+        c.enqueueNewUnlocks(from: catches(98))
+        let first = c.pendingNearMiss
+        #expect(first != nil)
+        // The second row of the same press lands before the card is shown.
+        // 99 finds a card too (one away), so it may replace, never clear.
+        c.enqueueNewUnlocks(from: catches(99))
+        #expect(c.pendingNearMiss != nil)
+    }
+
+    @Test func aLaterUnlockDropsAPendingNearMissCard() {
+        let s = suite()
+        let c = TrophyUnlockCenter(ledger: freshLedger(), events: TrophyEventStore(defaults: s),
+                                   standing: LeaderboardStandingCache(defaults: s),
+                                   nearStore: TrophyNearStore(defaults: s))
+        c.enqueueNewUnlocks(from: catches(97))
+        c.dismissRecap()
+        c.enqueueNewUnlocks(from: catches(98))
+        #expect(c.pendingNearMiss != nil)
+        c.enqueueNewUnlocks(from: catches(100))   // Logbook Level 4 unlocks
+        #expect(!c.pendingEvents.isEmpty)
+        #expect(c.pendingNearMiss == nil)
+    }
+
     @Test func aCatchThatUnlocksSomethingGetsNoNearMissCard() {
         let s = suite()
         let c = TrophyUnlockCenter(ledger: freshLedger(), events: TrophyEventStore(defaults: s),
