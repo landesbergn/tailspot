@@ -82,8 +82,6 @@ nonisolated struct Achievement: Identifiable, Equatable, Sendable {
     /// summary re-phrased in the user's display units. nil = `summary` is
     /// unit-free. Views read `displaySummary` (UnitPreferences.swift).
     let unitSummary: (@Sendable (DisplayUnits) -> String)?
-    /// Maps to a SwiftUI icon shape in `TrophyIcon`.
-    let iconName: String
     /// Tiers in ascending order of `at`.
     let tiers: [AchievementTier]
 
@@ -91,12 +89,6 @@ nonisolated struct Achievement: Identifiable, Equatable, Sendable {
     /// details) until earned, then reveal with a moment. Non-secret
     /// achievements show their real identity. Defaults to false (visible).
     let secret: Bool
-
-    /// For milestone chains (Catcher → Centurion → Sky Veteran): the id of the
-    /// achievement that must be earned before this one appears in the list, so
-    /// later milestones stay hidden until the prior is complete. nil = no
-    /// prerequisite (always visible). Ignored for secret achievements.
-    let prerequisite: String?
 
     /// The progress metric this achievement tracks. Resolved against
     /// a `TrophyProgressInputs` value (totals derived from the Hangar
@@ -114,20 +106,16 @@ nonisolated struct Achievement: Identifiable, Equatable, Sendable {
         title: String,
         summary: String,
         unitSummary: (@Sendable (DisplayUnits) -> String)? = nil,
-        iconName: String,
         tiers: [AchievementTier],
         secret: Bool = false,
-        prerequisite: String? = nil,
         progress: @escaping @Sendable (TrophyProgressInputs) -> Int
     ) {
         self.id = id
         self.title = title
         self.summary = summary
         self.unitSummary = unitSummary
-        self.iconName = iconName
         self.tiers = tiers
         self.secret = secret
-        self.prerequisite = prerequisite
         self.progress = progress
     }
 
@@ -333,9 +321,10 @@ nonisolated enum Trophies {
     /// value, the roster grew since that device last seeded — the unlock
     /// center then RESEEDS (silently acknowledging any newly-added trophies
     /// the user already qualifies for) and queues one ordinary "NEW TROPHY"
-    /// card per newly-acknowledged trophy, the same card a live unlock gets.
-    /// (The one-time "trophy case" recap sheet is only for the first-ever
-    /// seed of an unseeded ledger, which can cover a whole Hangar.)
+    /// card per newly-acknowledged trophy (the same card a live unlock gets),
+    /// or the one-time recap when that is more than three.
+    /// (The recap sheet is also used for the first-ever seed of an unseeded
+    /// ledger, which can cover a whole Hangar.)
     ///
     /// History: 0 = never stamped (any ledger written before this existed),
     /// 1 = reserved for the original 2026-06-20 binary roster, 2 = the
@@ -346,57 +335,90 @@ nonisolated enum Trophies {
     /// that shipped them), 4 = the 2026-10-21 wiring fix that made
     /// Constellation, Heritage, Living History and Full Deck earnable
     /// (multi-catch shipped and vintage catches now count as heritage).
-    /// Since roster 4 a roster-bump reseed queues an unlock card for ONLY
-    /// the trophies it newly acknowledges, so the ~20 users who now qualify
-    /// for one of the four see a "NEW TROPHY" card per trophy (and
-    /// `trophy_unlocked` with `via: "reseed"`); everyone else sees nothing.
+    /// 5 = the trophies rebuild (tracks/levels): 13 new levels appended to
+    /// existing tracks (300 airframes, 60/100 airlines, 150 wide-bodies, …).
+    /// Since roster 4 a roster-bump reseed acknowledges ONLY the trophies the
+    /// user newly qualifies for and fires `trophy_unlocked` with
+    /// `via: "reseed"` once per grant. Up to three grants queue an ordinary
+    /// "NEW TROPHY" card each; MORE than three queue the one-time recap
+    /// instead (a roster that adds many levels must not flood a big Hangar
+    /// with cards). Everyone with nothing new sees nothing.
     /// Bump this whenever a roster change should grant already-qualified
     /// users their new trophies on next launch.
-    static let rosterVersion = 4
+    /// 6: endless generated levels for the volume tracks.
+    static let rosterVersion = 6
 
-    /// Full achievement roster. Every achievement is BINARY — earned or not,
+    /// The whole roster: the hand-authored achievements, then the generated
+    /// levels of the endless tracks (`TrophyTracks.endlessTops`). A
+    /// generated level reuses its track's top hand-set achievement's metric.
+    static let roster: [Achievement] = handRoster + generatedLevels
+
+    static let generatedLevels: [Achievement] = {
+        let byID = Dictionary(handRoster.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        var out: [Achievement] = []
+        for track in TrophyTracks.all where track.endless {
+            let hand = track.handLevelCount
+            guard hand > 0, let top = byID[track.levelIDs[hand - 1]] else { continue }
+            for (i, id) in track.levelIDs.enumerated().dropFirst(hand) {
+                guard let at = TrophyTracks.generatedThresholds[id] else { continue }
+                out.append(Achievement(
+                    id: id, title: TrophyTracks.levelTitle(track.name, level: i + 1),
+                    summary: track.goalCopy(at), tiers: [.init(tier: .gold, at: at)],
+                    progress: top.progress))
+            }
+        }
+        return out
+    }()
+
+    /// The hand-authored roster. Every achievement is BINARY — earned or not,
     /// no tier ramp (the single `.gold` tier only drives the uniform hex
     /// color). Count families are split into separate milestone achievements
     /// (Noah, 2026-06-20). `secret: true` ones are absent from the list until
     /// earned; the rest are always visible so the user can chase them.
-    static let roster: [Achievement] = [
+    static let handRoster: [Achievement] = [
         // ── Catch count ──
         Achievement(id: "firstcatch", title: "First Catch", summary: "Catch your first plane",
-                    iconName: "catcher", tiers: [.init(tier: .gold, at: 1)],
+                    tiers: [.init(tier: .gold, at: 1)],
                     progress: { $0.totalCatches }),
         Achievement(id: "spotter", title: "Plane Spotter", summary: "Reach 5 catches",
-                    iconName: "catcher", tiers: [.init(tier: .gold, at: 5)],
-                    prerequisite: "firstcatch", progress: { $0.totalCatches }),
+                    tiers: [.init(tier: .gold, at: 5)],
+                    progress: { $0.totalCatches }),
         Achievement(id: "catcher", title: "Catcher", summary: "Reach 25 catches",
-                    iconName: "catcher", tiers: [.init(tier: .gold, at: 25)],
-                    prerequisite: "spotter", progress: { $0.totalCatches }),
+                    tiers: [.init(tier: .gold, at: 25)],
+                    progress: { $0.totalCatches }),
         Achievement(id: "centurion", title: "Centurion", summary: "Reach 100 catches",
-                    iconName: "centurion", tiers: [.init(tier: .gold, at: 100)],
-                    prerequisite: "catcher", progress: { $0.totalCatches }),
+                    tiers: [.init(tier: .gold, at: 100)],
+                    progress: { $0.totalCatches }),
         Achievement(id: "veteran", title: "Sky Veteran", summary: "Reach 500 catches",
-                    iconName: "catcher", tiers: [.init(tier: .gold, at: 500)],
-                    prerequisite: "centurion", progress: { $0.totalCatches }),
+                    tiers: [.init(tier: .gold, at: 500)],
+                    progress: { $0.totalCatches }),
 
         // ── Lifetime points (2026-07-10 expansion) ──
         // Progress reads the offline approximation (Σ base points — see
         // `TrophyProgressInputs.totalPoints`), so these earn without a network
         // round-trip and can only undercount the server's authoritative total.
         Achievement(id: "fourfigures", title: "Four Figures", summary: "Bank 1,000 lifetime points",
-                    iconName: "coin", tiers: [.init(tier: .gold, at: 1000)],
+                    tiers: [.init(tier: .gold, at: 1000)],
                     progress: { $0.totalPoints }),
         Achievement(id: "highroller", title: "High Roller", summary: "Bank 5,000 lifetime points",
-                    iconName: "coin", tiers: [.init(tier: .gold, at: 5000)],
-                    prerequisite: "fourfigures", progress: { $0.totalPoints }),
+                    tiers: [.init(tier: .gold, at: 5000)],
+                    progress: { $0.totalPoints }),
+        Achievement(id: "points3", title: "Fortune", summary: "Bank 25,000 lifetime points",
+                    tiers: [.init(tier: .gold, at: 25000)],
+                    progress: { $0.totalPoints }),
 
         // ── Bonus round (route guessing — 2026-07-10 expansion) ──
         // Counts CORRECT answered rounds off the frozen local verdicts
         // (`Catch.guessCorrect`); guessing is route-only, so no kind filter.
         Achievement(id: "calledit", title: "Called It", summary: "Nail your first route call",
-                    iconName: "crystal", tiers: [.init(tier: .gold, at: 1)],
+                    tiers: [.init(tier: .gold, at: 1)],
                     progress: { min(1, $0.correctGuesses) }),
         Achievement(id: "clairvoyant", title: "Clairvoyant", summary: "Nail 10 route calls",
-                    iconName: "crystal", tiers: [.init(tier: .gold, at: 10)],
-                    prerequisite: "calledit", progress: { $0.correctGuesses }),
+                    tiers: [.init(tier: .gold, at: 10)],
+                    progress: { $0.correctGuesses }),
+        Achievement(id: "calls3", title: "Oracle", summary: "Nail 50 route calls",
+                    tiers: [.init(tier: .gold, at: 50)],
+                    progress: { $0.correctGuesses }),
 
         // ── Leaderboard wins (dynamic-leaderboards PR3, 2026-07-11) ──
         // SERVER-truth trophies: progress reads the cached facts from the
@@ -407,170 +429,203 @@ nonisolated enum Trophies {
         // install with no server contact shows both locked. Dynasty (3 wins,
         // secret) lives in the secrets block below.
         Achievement(id: "topflight", title: "Top Flight", summary: "Win a weekly leaderboard",
-                    iconName: "laurel", tiers: [.init(tier: .gold, at: 1)],
+                    tiers: [.init(tier: .gold, at: 1)],
                     progress: { min(1, $0.weeklyWins) }),
         Achievement(id: "charttopper", title: "Chart Topper", summary: "Hold #1 on the all-time board",
-                    iconName: "summit", tiers: [.init(tier: .gold, at: 1)],
+                    tiers: [.init(tier: .gold, at: 1)],
                     progress: { $0.everToppedAllTime ? 1 : 0 }),
 
         // ── Wide-body ──
         Achievement(id: "heavy", title: "Wide Awake", summary: "Catch 10 wide-bodies",
-                    iconName: "widebody", tiers: [.init(tier: .gold, at: 10)],
+                    tiers: [.init(tier: .gold, at: 10)],
                     progress: { $0.wideBodyCatches }),
         Achievement(id: "heavy2", title: "Heavy Hitter", summary: "Catch 50 wide-bodies",
-                    iconName: "widebody", tiers: [.init(tier: .gold, at: 50)],
-                    prerequisite: "heavy", progress: { $0.wideBodyCatches }),
+                    tiers: [.init(tier: .gold, at: 50)],
+                    progress: { $0.wideBodyCatches }),
+        Achievement(id: "heavy3", title: "Jumbo Jet Set", summary: "Catch 150 wide-bodies",
+                    tiers: [.init(tier: .gold, at: 150)],
+                    progress: { $0.wideBodyCatches }),
 
         // ── Narrow-body ──
         Achievement(id: "narrow", title: "Single Aisle", summary: "Catch 25 narrow-bodies",
-                    iconName: "narrowbody", tiers: [.init(tier: .gold, at: 25)],
+                    tiers: [.init(tier: .gold, at: 25)],
                     progress: { $0.narrowBodyCatches }),
         Achievement(id: "narrow2", title: "Workhorse", summary: "Catch 120 narrow-bodies",
-                    iconName: "narrowbody", tiers: [.init(tier: .gold, at: 120)],
-                    prerequisite: "narrow", progress: { $0.narrowBodyCatches }),
+                    tiers: [.init(tier: .gold, at: 120)],
+                    progress: { $0.narrowBodyCatches }),
+        Achievement(id: "narrow3", title: "Fleet Regular", summary: "Catch 400 narrow-bodies",
+                    tiers: [.init(tier: .gold, at: 400)],
+                    progress: { $0.narrowBodyCatches }),
 
         // ── Regional ──
         Achievement(id: "regional", title: "Regional Pilot", summary: "Catch 15 regional jets",
-                    iconName: "regional", tiers: [.init(tier: .gold, at: 15)],
+                    tiers: [.init(tier: .gold, at: 15)],
                     progress: { $0.regionalCatches }),
         Achievement(id: "regional2", title: "Puddle Jumper", summary: "Catch 60 regional jets",
-                    iconName: "regional", tiers: [.init(tier: .gold, at: 60)],
-                    prerequisite: "regional", progress: { $0.regionalCatches }),
+                    tiers: [.init(tier: .gold, at: 60)],
+                    progress: { $0.regionalCatches }),
+        Achievement(id: "regional3", title: "Commuter Legend", summary: "Catch 150 regional jets",
+                    tiers: [.init(tier: .gold, at: 150)],
+                    progress: { $0.regionalCatches }),
 
         // ── Unique airframes ──
         Achievement(id: "world", title: "Collector", summary: "Catalogue 25 unique airframes",
-                    iconName: "world", tiers: [.init(tier: .gold, at: 25)],
+                    tiers: [.init(tier: .gold, at: 25)],
                     progress: { $0.uniqueAirframes }),
         Achievement(id: "world2", title: "World Tour", summary: "Catalogue 100 unique airframes",
-                    iconName: "world", tiers: [.init(tier: .gold, at: 100)],
-                    prerequisite: "world", progress: { $0.uniqueAirframes }),
+                    tiers: [.init(tier: .gold, at: 100)],
+                    progress: { $0.uniqueAirframes }),
+        Achievement(id: "world3", title: "Globe Trotter", summary: "Catalogue 300 unique airframes",
+                    tiers: [.init(tier: .gold, at: 300)],
+                    progress: { $0.uniqueAirframes }),
 
         // ── Airlines ──
         Achievement(id: "airlines", title: "Frequent Flyer", summary: "Collect 10 airlines",
-                    iconName: "ticket", tiers: [.init(tier: .gold, at: 10)],
+                    tiers: [.init(tier: .gold, at: 10)],
                     progress: { $0.uniqueOperators }),
         Achievement(id: "airlines2", title: "Airline Buff", summary: "Collect 30 airlines",
-                    iconName: "ticket", tiers: [.init(tier: .gold, at: 30)],
-                    prerequisite: "airlines", progress: { $0.uniqueOperators }),
+                    tiers: [.init(tier: .gold, at: 30)],
+                    progress: { $0.uniqueOperators }),
+        Achievement(id: "airlines3", title: "Route Network", summary: "Collect 60 airlines",
+                    tiers: [.init(tier: .gold, at: 60)],
+                    progress: { $0.uniqueOperators }),
+        Achievement(id: "airlines4", title: "Airline Atlas", summary: "Collect 100 airlines",
+                    tiers: [.init(tier: .gold, at: 100)],
+                    progress: { $0.uniqueOperators }),
 
         // ── Places ──
         Achievement(id: "places", title: "Globetrotter", summary: "Spot from 10 locations",
-                    iconName: "coast", tiers: [.init(tier: .gold, at: 10)],
+                    tiers: [.init(tier: .gold, at: 10)],
                     progress: { $0.uniquePlaces }),
         Achievement(id: "places2", title: "Wanderer", summary: "Spot from 25 locations",
-                    iconName: "coast", tiers: [.init(tier: .gold, at: 25)],
-                    prerequisite: "places", progress: { $0.uniquePlaces }),
+                    tiers: [.init(tier: .gold, at: 25)],
+                    progress: { $0.uniquePlaces }),
+        Achievement(id: "places3", title: "Nomad", summary: "Spot from 50 locations",
+                    tiers: [.init(tier: .gold, at: 50)],
+                    progress: { $0.uniquePlaces }),
 
         // ── Sets ──
         Achievement(id: "setcollector", title: "Set Collector", summary: "Complete 3 sets",
-                    iconName: "setmaster", tiers: [.init(tier: .gold, at: 3)],
+                    tiers: [.init(tier: .gold, at: 3)],
                     progress: { $0.completedSets }),
         Achievement(id: "setmaster", title: "Set Master", summary: "Complete 8 sets",
-                    iconName: "setmaster", tiers: [.init(tier: .gold, at: 8)],
-                    prerequisite: "setcollector", progress: { $0.completedSets }),
+                    tiers: [.init(tier: .gold, at: 8)],
+                    progress: { $0.completedSets }),
+        Achievement(id: "sets3", title: "Set Legend", summary: "Complete 15 sets",
+                    tiers: [.init(tier: .gold, at: 15)],
+                    progress: { $0.completedSets }),
 
         // ── Rare-or-better airframes ──
         Achievement(id: "rarehunter", title: "Rare Hunter", summary: "Find 5 rare-or-better airframes",
-                    iconName: "gems", tiers: [.init(tier: .gold, at: 5)],
+                    tiers: [.init(tier: .gold, at: 5)],
                     progress: { $0.rarePlusUnique }),
         Achievement(id: "rarehunter2", title: "Treasure Hunter", summary: "Find 25 rare-or-better airframes",
-                    iconName: "gems", tiers: [.init(tier: .gold, at: 25)],
-                    prerequisite: "rarehunter", progress: { $0.rarePlusUnique }),
+                    tiers: [.init(tier: .gold, at: 25)],
+                    progress: { $0.rarePlusUnique }),
+        Achievement(id: "rarehunter3", title: "Master Hunter", summary: "Find 75 rare-or-better airframes",
+                    tiers: [.init(tier: .gold, at: 75)],
+                    progress: { $0.rarePlusUnique }),
 
         // ── Days out ──
         Achievement(id: "regular", title: "Regular", summary: "Catch on 10 different days",
-                    iconName: "calendar", tiers: [.init(tier: .gold, at: 10)],
+                    tiers: [.init(tier: .gold, at: 10)],
                     progress: { $0.distinctDays }),
         Achievement(id: "devotee", title: "Devotee", summary: "Catch on 40 different days",
-                    iconName: "calendar", tiers: [.init(tier: .gold, at: 40)],
-                    prerequisite: "regular", progress: { $0.distinctDays }),
+                    tiers: [.init(tier: .gold, at: 40)],
+                    progress: { $0.distinctDays }),
+        Achievement(id: "days3", title: "Fixture", summary: "Catch on 100 different days",
+                    tiers: [.init(tier: .gold, at: 100)],
+                    progress: { $0.distinctDays }),
 
         // ── Night ──
         Achievement(id: "night", title: "Night Owl", summary: "Catch 5 after sundown",
-                    iconName: "night", tiers: [.init(tier: .gold, at: 5)],
+                    tiers: [.init(tier: .gold, at: 5)],
                     progress: { $0.nightCatches }),
         Achievement(id: "night2", title: "Nocturnal", summary: "Catch 25 after sundown",
-                    iconName: "night", tiers: [.init(tier: .gold, at: 25)],
-                    prerequisite: "night", progress: { $0.nightCatches }),
+                    tiers: [.init(tier: .gold, at: 25)],
+                    progress: { $0.nightCatches }),
+        Achievement(id: "night3", title: "Night Shift", summary: "Catch 100 after sundown",
+                    tiers: [.init(tier: .gold, at: 100)],
+                    progress: { $0.nightCatches }),
 
         // ── Heritage ──
         Achievement(id: "heritage", title: "Heritage", summary: "Catch a heritage aircraft",
-                    iconName: "heritage", tiers: [.init(tier: .gold, at: 1)],
+                    tiers: [.init(tier: .gold, at: 1)],
                     progress: { $0.heritageCatches }),
         Achievement(id: "heritage2", title: "Living History", summary: "Catch 5 heritage aircraft",
-                    iconName: "heritage", tiers: [.init(tier: .gold, at: 5)],
-                    prerequisite: "heritage", progress: { $0.heritageCatches }),
+                    tiers: [.init(tier: .gold, at: 5)],
+                    progress: { $0.heritageCatches }),
 
         // ── Rarity one-shots ──
         Achievement(id: "firstrare", title: "First Rare", summary: "Catch a rare-tier plane",
-                    iconName: "diamond", tiers: [.init(tier: .gold, at: 1)],
+                    tiers: [.init(tier: .gold, at: 1)],
                     progress: { min(1, $0.rareTierCatches) }),
         Achievement(id: "epic", title: "Epic Encounter", summary: "Catch an epic-tier plane",
-                    iconName: "sparkle", tiers: [.init(tier: .gold, at: 1)],
+                    tiers: [.init(tier: .gold, at: 1)],
                     progress: { min(1, $0.epicTierCatches) }),
         Achievement(id: "legendary", title: "Legendary", summary: "Catch a legendary plane",
-                    iconName: "crown", tiers: [.init(tier: .gold, at: 1)],
+                    tiers: [.init(tier: .gold, at: 1)],
                     progress: { min(1, $0.legendaryTierCatches) }),
 
         // ── Catch-a-kind (visible goals) ──
         Achievement(id: "heavymetal", title: "Heavy Metal", summary: "Catch a 747 or A380",
-                    iconName: "jumbo", tiers: [.init(tier: .gold, at: 1)],
+                    tiers: [.init(tier: .gold, at: 1)],
                     progress: { $0.caughtTags.contains("heavymetal") ? 1 : 0 }),
         Achievement(id: "freighter", title: "Heavy Hauler", summary: "Catch a freighter",
-                    iconName: "cargo", tiers: [.init(tier: .gold, at: 1)],
+                    tiers: [.init(tier: .gold, at: 1)],
                     progress: { $0.caughtTags.contains("freighter") ? 1 : 0 }),
         Achievement(id: "bizjet", title: "Business Class", summary: "Catch a business jet",
-                    iconName: "bizjet", tiers: [.init(tier: .gold, at: 1)],
+                    tiers: [.init(tier: .gold, at: 1)],
                     progress: { $0.caughtTags.contains("bizjet") ? 1 : 0 }),
         Achievement(id: "turboprop", title: "Spinning Props", summary: "Catch a turboprop",
-                    iconName: "prop", tiers: [.init(tier: .gold, at: 1)],
+                    tiers: [.init(tier: .gold, at: 1)],
                     progress: { $0.caughtTags.contains("turboprop") ? 1 : 0 }),
 
         // ── Collection / habit (visible) ──
         Achievement(id: "varietypack", title: "Variety Pack", summary: "Catch 5 different aircraft types",
-                    iconName: "grid", tiers: [.init(tier: .gold, at: 5)],
+                    tiers: [.init(tier: .gold, at: 5)],
                     progress: { $0.distinctTypes }),
         Achievement(id: "fulldeck", title: "Full Deck", summary: "Catch all 7 aircraft types",
-                    iconName: "grid", tiers: [.init(tier: .gold, at: 7)],
-                    prerequisite: "varietypack", progress: { $0.fullDeckTypes }),
-        Achievement(id: "homebody", title: "Homebody", summary: "10 catches from one spot",
-                    iconName: "home", tiers: [.init(tier: .gold, at: 10)],
+                    tiers: [.init(tier: .gold, at: 7)],
+                    progress: { $0.fullDeckTypes }),
+        Achievement(id: "homebody", title: "Homebody", summary: "Make 10 catches from one spot",
+                    tiers: [.init(tier: .gold, at: 10)],
                     progress: { $0.maxCatchesAtOnePlace }),
 
         // ── Secret — absent from the list until earned, then they appear. ──
-        Achievement(id: "mrworldwide", title: "Mr. Worldwide", summary: "Caught planes in 2+ countries",
-                    iconName: "worldwide", tiers: [.init(tier: .gold, at: 1)], secret: true,
+        Achievement(id: "mrworldwide", title: "Mr. Worldwide", summary: "Catch planes in two countries",
+                    tiers: [.init(tier: .gold, at: 1)], secret: true,
                     progress: { $0.distinctCountries >= 2 ? 1 : 0 }),
-        Achievement(id: "hattrick", title: "Hat Trick", summary: "Three catches within ten minutes",
-                    iconName: "hattrick", tiers: [.init(tier: .gold, at: 1)], secret: true,
+        Achievement(id: "hattrick", title: "Hat Trick", summary: "Catch three planes within ten minutes",
+                    tiers: [.init(tier: .gold, at: 1)], secret: true,
                     progress: { $0.bestBurstWithinTenMin >= 3 ? 1 : 0 }),
-        Achievement(id: "redeye", title: "Red Eye", summary: "A catch between 2 and 5 AM",
-                    iconName: "eye", tiers: [.init(tier: .gold, at: 1)], secret: true,
+        Achievement(id: "redeye", title: "Red Eye", summary: "Catch one between 2 and 5 AM",
+                    tiers: [.init(tier: .gold, at: 1)], secret: true,
                     progress: { min(1, $0.redEyeCatches) }),
-        Achievement(id: "repeat", title: "Repeat Customer", summary: "Caught the same airframe on two days",
-                    iconName: "repeat", tiers: [.init(tier: .gold, at: 1)], secret: true,
+        Achievement(id: "repeat", title: "Repeat Customer", summary: "Catch the same airframe on two different days",
+                    tiers: [.init(tier: .gold, at: 1)], secret: true,
                     progress: { $0.hasRepeatAirframeAcrossDays ? 1 : 0 }),
-        Achievement(id: "streak", title: "Streak", summary: "Caught planes seven days in a row",
-                    iconName: "streak", tiers: [.init(tier: .gold, at: 1)], secret: true,
+        Achievement(id: "streak", title: "Streak", summary: "Catch on seven days in a row",
+                    tiers: [.init(tier: .gold, at: 1)], secret: true,
                     progress: { $0.longestDayStreak >= 7 ? 1 : 0 }),
         // 25 km = 15.5 mi (15.53; the copy rounds, the threshold doesn't).
         Achievement(id: "longshot", title: "Long Lens", summary: "Five catches past 25 km",
                     unitSummary: { u in
                         u.distance == .kilometers ? "Five catches past 25 km" : "Five catches past 15.5 mi"
                     },
-                    iconName: "longlens", tiers: [.init(tier: .gold, at: 5)], secret: true,
+                    tiers: [.init(tier: .gold, at: 5)], secret: true,
                     progress: { $0.farCatchCount }),
         Achievement(id: "multi", title: "Constellation", summary: "Catch 2+ planes in one frame",
-                    iconName: "constellation", tiers: [.init(tier: .gold, at: 1)], secret: true,
+                    tiers: [.init(tier: .gold, at: 1)], secret: true,
                     progress: { $0.bestMultiCatchCount >= 2 ? 1 : 0 }),
         Achievement(id: "quintet", title: "Quintet", summary: "Catch 5 planes in one frame",
-                    iconName: "quintet", tiers: [.init(tier: .gold, at: 1)], secret: true,
+                    tiers: [.init(tier: .gold, at: 1)], secret: true,
                     progress: { $0.bestMultiCatchCount >= 5 ? 1 : 0 }),
         Achievement(id: "military", title: "Brass Hat", summary: "Catch a military aircraft",
-                    iconName: "star", tiers: [.init(tier: .gold, at: 1)], secret: true,
+                    tiers: [.init(tier: .gold, at: 1)], secret: true,
                     progress: { $0.caughtTags.contains("military") ? 1 : 0 }),
         Achievement(id: "helicopter", title: "Whirlybird", summary: "Catch a helicopter",
-                    iconName: "heli", tiers: [.init(tier: .gold, at: 1)], secret: true,
+                    tiers: [.init(tier: .gold, at: 1)], secret: true,
                     progress: { $0.caughtTags.contains("helicopter") ? 1 : 0 }),
         // "Sky High" (renamed from "Mile High", 2026-08-16). The id stays
         // "milehigh": TrophyLedger/recap history is keyed by id, and a new id
@@ -584,7 +639,7 @@ nonisolated enum Trophies {
                     unitSummary: { u in
                         u.altitude == .feet ? "Catch one above 40,000 ft" : "Catch one above 12,192 m"
                     },
-                    iconName: "altitude", tiers: [.init(tier: .gold, at: 1)], secret: true,
+                    tiers: [.init(tier: .gold, at: 1)], secret: true,
                     progress: { $0.highestAltitudeM >= 12_192 ? 1 : 0 }),
         // 268 m/s = 521 kt = 600 mph = 965 km/h. The cards used to say kt while
         // this copy said mph; with a speed unit the copy follows the cards.
@@ -596,13 +651,13 @@ nonisolated enum Trophies {
                         case .kph: "Catch one doing 965+ km/h"
                         }
                     },
-                    iconName: "speed", tiers: [.init(tier: .gold, at: 1)], secret: true,
+                    tiers: [.init(tier: .gold, at: 1)], secret: true,
                     progress: { $0.fastestVelocityMps >= 268 ? 1 : 0 }),
         Achievement(id: "marathon", title: "Marathon", summary: "Catch 10 planes in one day",
-                    iconName: "stack", tiers: [.init(tier: .gold, at: 10)], secret: true,
+                    tiers: [.init(tier: .gold, at: 10)], secret: true,
                     progress: { $0.bestCatchesInOneDay }),
         Achievement(id: "aroundclock", title: "Around the Clock", summary: "Catch in all four parts of the day",
-                    iconName: "clock", tiers: [.init(tier: .gold, at: 4)], secret: true,
+                    tiers: [.init(tier: .gold, at: 4)], secret: true,
                     progress: { $0.dayPartsCovered }),
         // Same exact-conversion fix as Sky High: 3,000 ft = 914 m (the rounded
         // 1_000 m was ~280 ft more generous than the copy).
@@ -610,22 +665,22 @@ nonisolated enum Trophies {
                     unitSummary: { u in
                         u.altitude == .feet ? "Catch one below 3,000 ft" : "Catch one below 914 m"
                     },
-                    iconName: "approach", tiers: [.init(tier: .gold, at: 1)], secret: true,
+                    tiers: [.init(tier: .gold, at: 1)], secret: true,
                     progress: { $0.lowestAltitudeM <= 914 ? 1 : 0 }),
         Achievement(id: "weekend", title: "Weekend Warrior", summary: "Catch on a Saturday and a Sunday",
-                    iconName: "weekend", tiers: [.init(tier: .gold, at: 2)], secret: true,
+                    tiers: [.init(tier: .gold, at: 2)], secret: true,
                     progress: { $0.weekendDaysHit }),
-        Achievement(id: "dawn", title: "Dawn Patrol", summary: "A catch between 4 and 7 AM",
-                    iconName: "sunrise", tiers: [.init(tier: .gold, at: 1)], secret: true,
+        Achievement(id: "dawn", title: "Dawn Patrol", summary: "Catch one between 4 and 7 AM",
+                    tiers: [.init(tier: .gold, at: 1)], secret: true,
                     progress: { $0.hadDawnCatch ? 1 : 0 }),
-        Achievement(id: "doubleheader", title: "Doubleheader", summary: "Two of the same airline in a row",
-                    iconName: "twin", tiers: [.init(tier: .gold, at: 1)], secret: true,
+        Achievement(id: "doubleheader", title: "Doubleheader", summary: "Catch the same airline twice in a row",
+                    tiers: [.init(tier: .gold, at: 1)], secret: true,
                     progress: { $0.hadConsecutiveSameOperator ? 1 : 0 }),
         // Hot Streak (2026-07-10 expansion): three correct route calls IN A
         // ROW — consecutive over answered rounds in caughtAt order (a wrong
         // answer resets; a catch with no round, or a SKIP, doesn't break it).
         Achievement(id: "hotstreak", title: "Hot Streak", summary: "Three correct route calls in a row",
-                    iconName: "bolt", tiers: [.init(tier: .gold, at: 1)], secret: true,
+                    tiers: [.init(tier: .gold, at: 1)], secret: true,
                     progress: { $0.bestGuessStreak >= 3 ? 1 : 0 }),
         // Dynasty (dynamic-leaderboards PR3): three weekly crowns, off the
         // same server-fact input as Top Flight. Secret — masked `???` until
@@ -634,13 +689,13 @@ nonisolated enum Trophies {
         // secret achievements (they're always listed, masked), and the 3-win
         // threshold subsumes the 1-win gate anyway.
         Achievement(id: "dynasty", title: "Dynasty", summary: "Win 3 weekly leaderboards",
-                    iconName: "crowns", tiers: [.init(tier: .gold, at: 3)], secret: true,
+                    tiers: [.init(tier: .gold, at: 3)], secret: true,
                     progress: { $0.weeklyWins }),
         // The grounded easter egg (wishlist #9): tapping a parked plane
         // creates no Catch row (correctly), so this derives from the
         // event-based `triedGroundedCatch` input, not the Hangar.
-        Achievement(id: "groundstop", title: "Ground Stop", summary: "Tried to catch a parked plane",
-                    iconName: "approach", tiers: [.init(tier: .gold, at: 1)], secret: true,
+        Achievement(id: "groundstop", title: "Ground Stop", summary: "Try to catch a parked plane",
+                    tiers: [.init(tier: .gold, at: 1)], secret: true,
                     progress: { $0.triedGroundedCatch ? 1 : 0 }),
     ]
 

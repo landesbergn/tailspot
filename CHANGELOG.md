@@ -20,6 +20,17 @@ Git history + PLAN.md §9 remain the authoritative record.
 - **Deploy order:** apply migration `0012_streak-forgiveness.sql` to prod, then deploy the server, then ship the app. An un-migrated database fails device registration once the new server is live.
 - Tests: `StreakCoverTests` (15) plus the existing streak suites; backend `streakForgiveness.route`, `forgiveStreakDay`, `pushToken.route` (45).
 
+## 2026-11-13 — Trophies rebuilt as levels, trophies and chases (1.2.6 train opens) (branch `claude/trophies-rebuild-738248`)
+
+- Why: PostHog showed trophies were earned by accident and by volume, not chased. Four of the ten most-earned were secrets, trophy count tracked catch count, the heaviest players had run out, nothing was shareable, and the tab had no analytics.
+- Existing achievements keep their ids, thresholds and ledger. `TrophyTracks.swift` groups them into 15 tracks with numbered levels, treats the rest as feats (secrets stay hidden), and picks up to three live chases.
+- The ten pure-volume tracks (Logbook, Airframes, Heavies, Single aisle, Regionals, Rare finds, Days out, Night, Route calls, Points) are endless: past their hand-set levels they continue on a generated 1 / 2.5 / 5 series (Logbook 1,000, 2,500, 5,000…), twelve levels each, ids like `logbook.lv6`. Their ring is one arc toward the next level. Airlines, Places, Sets, Types and Heritage stay capped. Roster version 6.
+- Levels read "Level 3 of 4" in plain digits; sections are On approach, Levels and Trophies; the post-reveal card is headed "On final".
+- 13 new top levels (roster version 5), such as Airlines 60 and 100, Heavies 150, Rare finds 75. A reseed that grants more than three shows one recap, not a card each.
+- The Trophies segment is rewritten: chases, a row per track, a feats grid, one glyph-ring badge everywhere, a badge detail sheet with the level ladder and a share card. The hex icons are deleted.
+- The catch reveal is unchanged. When a catch leaves a track level one or two short (and unlocks nothing), an "On final" card (almost there) follows the reveal, once per level. A progress row on the reveal was built first and dropped: it made tall cards scroll (Noah, 2026-11-13).
+- New events: `trophies_tab_viewed`, `trophy_detail_opened`, `trophy_share_opened`, `trophy_share_completed`, `trophy_near_shown`. `trophy_unlocked` gains `track` and `level`.
+- Built by three Sonnet subagents (model, tab, reveal) with a review after each. Not yet checked on a device.
 ## 2026-11-13 — CLAUDE.md cleanup (branch `claude/claude-md-cleanup-6fcac8`)
 
 - Both CLAUDE.md files trimmed to Anthropic's current guidance (under 200 lines, nothing Claude can read from the code, plain wording): root 203 → ~130 lines, `ios/CLAUDE.md` 225 → ~140.
