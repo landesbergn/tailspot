@@ -130,7 +130,7 @@ struct TrophiesTabContentView: View {
     @ViewBuilder
     private var chasing: some View {
         if !content.chases.isEmpty {
-            TrophyEyebrow(title: "CHASING NOW", trailing: "\(content.chases.count) LIVE")
+            TrophyEyebrow(title: "ON APPROACH", trailing: "\(content.chases.count) LIVE")
             if typeSize.isAccessibilitySize {
                 VStack(spacing: 8) {
                     ForEach(content.chases) { chaseCard($0, wide: true) }
@@ -155,8 +155,8 @@ struct TrophiesTabContentView: View {
     @ViewBuilder
     private var tracks: some View {
         TrophyEyebrow(
-            title: "TRACKS",
-            trailing: "\(content.levelsEarned) \(content.levelsEarned == 1 ? "LEVEL" : "LEVELS")"
+            title: "LEVELS",
+            trailing: "\(content.levelsEarned) EARNED"
         ).padding(.top, 10)
         VStack(spacing: 8) {
             ForEach(content.tracks, id: \.track.id) { state in
@@ -176,7 +176,7 @@ struct TrophiesTabContentView: View {
 
     @ViewBuilder
     private var feats: some View {
-        TrophyEyebrow(title: "FEATS", trailing: "\(content.featsEarned) OF \(content.feats.count)")
+        TrophyEyebrow(title: "TROPHIES", trailing: "\(content.featsEarned) OF \(content.feats.count)")
             .padding(.top, 10)
         let columns = Array(repeating: GridItem(.flexible(), spacing: 8, alignment: .top),
                             count: typeSize.isAccessibilitySize ? 2 : 3)
@@ -259,7 +259,7 @@ struct TrophyChaseCard: View {
     private var blurb: String {
         isFeat ? TrophyTracks.displaySummary(for: chase.achievement, units: units) : chase.blurb
     }
-    private var footer: String { isFeat ? "FEAT" : TrophyCopy.fraction(chase.progress, chase.goal) }
+    private var footer: String { isFeat ? "TROPHY" : TrophyCopy.fraction(chase.progress, chase.goal) }
 
     var body: some View {
         Group {
@@ -282,7 +282,7 @@ struct TrophyChaseCard: View {
             .strokeBorder(Brand.Color.cyan.opacity(0.25), lineWidth: 1))
         .contentShape(.rect(cornerRadius: Brand.Radius.card))
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Chasing \(title). \(blurb)\(isFeat ? "" : ", \(chase.progress) of \(chase.goal)")")
+        .accessibilityLabel("On approach: \(title). \(blurb)\(isFeat ? "" : ", \(chase.progress) of \(chase.goal)")")
         .accessibilityAddTraits(.isButton)
     }
 
@@ -390,7 +390,7 @@ struct TrophyFeatCell: View {
         .frame(maxWidth: .infinity)
         .contentShape(.rect)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(item.masked ? "Hidden feat, locked"
+        .accessibilityLabel(item.masked ? "Hidden trophy, locked"
                             : "\(item.achievement.title), \(item.earned ? "earned" : "locked")")
         .accessibilityAddTraits(.isButton)
     }

@@ -143,7 +143,9 @@ struct TrophyUnlockView: View {
     @ViewBuilder
     private func nearMissCard(_ near: TrophyNearMiss) -> some View {
         VStack(spacing: 18) {
-            Text("ALMOST THERE")
+            // Pilot shorthand for the last stretch before landing. VoiceOver
+            // keeps the plain "Almost there".
+            Text("ON FINAL")
                 .font(Brand.Font.mono(size: 13, weight: .heavy))
                 .tracking(4)
                 .foregroundStyle(Brand.Color.textSecondary)

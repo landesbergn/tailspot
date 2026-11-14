@@ -6,7 +6,7 @@
 //  Big badge, display title ("Heavies II"), unit-aware summary, the earned
 //  date from the achievement-date ledger, and — for a track — the level
 //  ladder with a check + date per earned level and the progress to the
-//  next. A masked secret shows only "???" / "Hidden feat". Share appears
+//  next. A masked secret shows only "???" / "Hidden trophy". Share appears
 //  only once the trophy is earned. No catch photo: the trophy is the
 //  subject.
 //
@@ -44,7 +44,7 @@ struct TrophyDetailSheet: View {
     }
     private var title: String { masked ? "???" : TrophyTracks.displayTitle(for: achievement) }
     private var summary: String {
-        masked ? "Hidden feat" : TrophyTracks.displaySummary(for: achievement, units: units)
+        masked ? "Hidden trophy" : TrophyTracks.displaySummary(for: achievement, units: units)
     }
     private var earnedDate: Date? { dates[achievement.id] }
 

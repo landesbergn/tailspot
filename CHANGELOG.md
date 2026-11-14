@@ -11,7 +11,7 @@ Git history + PLAN.md §9 remain the authoritative record.
 - Existing achievements keep their ids, thresholds and ledger. `TrophyTracks.swift` groups them into 15 tracks with numbered levels, treats the rest as feats (secrets stay hidden), and picks up to three live chases.
 - 13 new top levels (roster version 5), such as Airlines 60 and 100, Heavies 150, Rare finds 75. A reseed that grants more than three shows one recap, not a card each.
 - The Trophies segment is rewritten: chases, a row per track, a feats grid, one glyph-ring badge everywhere, a badge detail sheet with the level ladder and a share card. The hex icons are deleted.
-- The catch reveal is unchanged. When a catch leaves a track level one or two short (and unlocks nothing), an "Almost there" card follows the reveal, once per level. A progress row on the reveal was built first and dropped: it made tall cards scroll (Noah, 2026-11-13).
+- The catch reveal is unchanged. When a catch leaves a track level one or two short (and unlocks nothing), an "On final" card (almost there) follows the reveal, once per level. A progress row on the reveal was built first and dropped: it made tall cards scroll (Noah, 2026-11-13).
 - New events: `trophies_tab_viewed`, `trophy_detail_opened`, `trophy_share_opened`, `trophy_share_completed`, `trophy_near_shown`. `trophy_unlocked` gains `track` and `level`.
 - Built by three Sonnet subagents (model, tab, reveal) with a review after each. Not yet checked on a device.
 ## 2026-11-13 — CLAUDE.md cleanup (branch `claude/claude-md-cleanup-6fcac8`)
