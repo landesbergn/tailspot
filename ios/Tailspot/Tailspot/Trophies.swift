@@ -345,14 +345,37 @@ nonisolated enum Trophies {
     /// with cards). Everyone with nothing new sees nothing.
     /// Bump this whenever a roster change should grant already-qualified
     /// users their new trophies on next launch.
-    static let rosterVersion = 5
+    /// 6: endless generated levels for the volume tracks.
+    static let rosterVersion = 6
 
-    /// Full achievement roster. Every achievement is BINARY — earned or not,
+    /// The whole roster: the hand-authored achievements, then the generated
+    /// levels of the endless tracks (`TrophyTracks.endlessTops`). A
+    /// generated level reuses its track's top hand-set achievement's metric.
+    static let roster: [Achievement] = handRoster + generatedLevels
+
+    static let generatedLevels: [Achievement] = {
+        let byID = Dictionary(handRoster.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        var out: [Achievement] = []
+        for track in TrophyTracks.all where track.endless {
+            let hand = track.handLevelCount
+            guard hand > 0, let top = byID[track.levelIDs[hand - 1]] else { continue }
+            for (i, id) in track.levelIDs.enumerated().dropFirst(hand) {
+                guard let at = TrophyTracks.generatedThresholds[id] else { continue }
+                out.append(Achievement(
+                    id: id, title: TrophyTracks.levelTitle(track.name, level: i + 1),
+                    summary: track.goalCopy(at), tiers: [.init(tier: .gold, at: at)],
+                    progress: top.progress))
+            }
+        }
+        return out
+    }()
+
+    /// The hand-authored roster. Every achievement is BINARY — earned or not,
     /// no tier ramp (the single `.gold` tier only drives the uniform hex
     /// color). Count families are split into separate milestone achievements
     /// (Noah, 2026-06-20). `secret: true` ones are absent from the list until
     /// earned; the rest are always visible so the user can chase them.
-    static let roster: [Achievement] = [
+    static let handRoster: [Achievement] = [
         // ── Catch count ──
         Achievement(id: "firstcatch", title: "First Catch", summary: "Catch your first plane",
                     tiers: [.init(tier: .gold, at: 1)],

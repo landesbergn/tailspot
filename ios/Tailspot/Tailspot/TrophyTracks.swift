@@ -34,9 +34,79 @@ nonisolated struct TrophyTrack: Identifiable, Sendable {
     /// True when progress needs catching something DIFFERENT (a new
     /// airframe, airline, type…), as opposed to just catching more.
     let variety: Bool
+    /// True for a pure-volume track that never ends: past its hand-set
+    /// levels it continues on generated ones (see `TrophyTracks.endlessTops`).
+    var endless = false
+
+    /// How many of `levelIDs` are hand-set roster entries (the rest are
+    /// generated).
+    var handLevelCount: Int { levelIDs.count { !TrophyTracks.isGeneratedID($0) } }
 }
 
 nonisolated enum TrophyTracks {
+
+    // MARK: Endless levels
+
+    /// The pure-volume tracks never run out (Noah, 2026-11-13: a heavy
+    /// player had finished most of them). Value = the track's top HAND-SET
+    /// threshold, which the generated series continues from; a test pins it
+    /// against the roster. Tracks with a natural ceiling (types, sets,
+    /// heritage, and airlines/places, which depend on where you live) stay
+    /// capped.
+    static let endlessTops: [String: Int] = [
+        "logbook": 500, "airframes": 300, "heavies": 150, "narrow": 400, "regional": 150,
+        "rare": 75, "days": 100, "night": 100, "calls": 50, "points": 25_000,
+    ]
+
+    /// Generated levels per endless track. Twelve steps of the series below
+    /// is three to four orders of magnitude past the hand-set top: out of
+    /// anyone's reach, so the track is endless in practice while the roster
+    /// (and the unlock ledger keyed on it) stays an ordinary finite list.
+    static let generatedLevelCount = 12
+
+    /// The 1 / 2.5 / 5 series (…, 1,000, 2,500, 5,000, 10,000, …), starting
+    /// at the first value at least 1.5x `top`, so each level is roughly
+    /// double the last and the first generated one is a real step up.
+    static func endlessThresholds(after top: Int, count: Int = generatedLevelCount) -> [Int] {
+        var out: [Int] = []
+        var decade = 1
+        while out.count < count {
+            for tenths in [10, 25, 50] {
+                let v = tenths * decade
+                if v * 2 >= top * 3, out.count < count { out.append(v) }
+            }
+            decade *= 10
+        }
+        return out
+    }
+
+    /// "logbook.lv6": a generated level's achievement id. Stable once
+    /// shipped (the ledger is keyed on it).
+    static func generatedID(trackID: String, level: Int) -> String { "\(trackID).lv\(level)" }
+    static func isGeneratedID(_ id: String) -> Bool { id.contains(".lv") }
+
+    /// Generated achievement id -> threshold, for every endless track.
+    static let generatedThresholds: [String: Int] = {
+        var map: [String: Int] = [:]
+        for t in base {
+            guard let top = endlessTops[t.id] else { continue }
+            for (i, v) in endlessThresholds(after: top).enumerated() {
+                map[generatedID(trackID: t.id, level: t.levelIDs.count + i + 1)] = v
+            }
+        }
+        return map
+    }()
+
+    /// Every track, the endless ones extended with their generated levels.
+    static let all: [TrophyTrack] = base.map { t in
+        guard let top = endlessTops[t.id] else { return t }
+        let extra = (0..<endlessThresholds(after: top).count).map {
+            generatedID(trackID: t.id, level: t.levelIDs.count + $0 + 1)
+        }
+        return TrophyTrack(id: t.id, name: t.name, symbol: t.symbol, levelIDs: t.levelIDs + extra,
+                           goalCopy: t.goalCopy, remainingCopy: t.remainingCopy,
+                           variety: t.variety, endless: true)
+    }
 
     // MARK: Copy helpers
 
@@ -57,7 +127,8 @@ nonisolated enum TrophyTracks {
 
     // MARK: The tracks
 
-    static let all: [TrophyTrack] = [
+    /// The tracks as hand-authored: hand-set levels only.
+    private static let base: [TrophyTrack] = [
         TrophyTrack(
             id: "logbook", name: "Logbook", symbol: "book.closed",
             levelIDs: ["firstcatch", "spotter", "catcher", "centurion", "veteran"],
@@ -415,10 +486,15 @@ nonisolated struct TrophyNearMiss: Equatable, Sendable {
     /// "Collect 30 airlines".
     var goalText: String { track.goalCopy(goal) }
 
-    /// The ring: the track's segments, those below the chased level lit.
+    /// The ring as it stands: a capped track's segments with those below
+    /// the chased level lit, or an endless track's arc toward the level.
     var badgeSpec: TrophyBadgeSpec {
-        TrophyBadgeSpec(symbol: track.symbol, segments: max(1, track.levelIDs.count),
-                        filled: max(0, level - 1), earned: level > 1, masked: false)
+        if track.endless {
+            return TrophyBadgeSpec(symbol: track.symbol, earned: level > 1,
+                                   arc: goal > 0 ? Double(progress) / Double(goal) : 0)
+        }
+        return TrophyBadgeSpec(symbol: track.symbol, segments: max(1, track.levelIDs.count),
+                               filled: max(0, level - 1), earned: level > 1, masked: false)
     }
 
     static func == (a: TrophyNearMiss, b: TrophyNearMiss) -> Bool {

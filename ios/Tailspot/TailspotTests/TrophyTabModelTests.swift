@@ -78,8 +78,13 @@ struct TrophyTabModelTests {
         let c = TrophyTabContent.make(inputs: inputs(total: 5))
         for state in c.tracks {
             let spec = TrophyBadgeSpec(state: state)
-            #expect(spec.segments == state.track.levelIDs.count)
-            #expect((2...5).contains(spec.segments))
+            if state.track.endless {
+                // No fixed count to segment: one arc toward the next level.
+                #expect(spec.segments == 1 && spec.arc == state.fraction)
+            } else {
+                #expect(spec.segments == state.track.levelIDs.count)
+                #expect((2...5).contains(spec.segments) && spec.arc == nil)
+            }
             #expect(spec.filled == state.level)
             #expect(spec.earned == (state.level > 0))
         }
@@ -94,9 +99,13 @@ struct TrophyTabModelTests {
     }
 
     @Test func justEarnedLevelLightsItsOwnSegments() throws {
+        let airlines2 = try #require(Trophies.roster.first { $0.id == "airlines2" })
+        let spec = TrophyBadgeSpec(earnedAchievement: airlines2)
+        #expect(spec.filled == 2 && spec.segments == 4 && spec.earned)
+        // On an endless track an earned level is the full ring.
         let heavy2 = try #require(Trophies.roster.first { $0.id == "heavy2" })
-        let spec = TrophyBadgeSpec(earnedAchievement: heavy2)
-        #expect(spec.filled == 2 && spec.segments == 3 && spec.earned)
+        let full = TrophyBadgeSpec(earnedAchievement: heavy2)
+        #expect(full.filled == 1 && full.segments == 1 && full.earned && full.arc == nil)
     }
 
     // MARK: Analytics

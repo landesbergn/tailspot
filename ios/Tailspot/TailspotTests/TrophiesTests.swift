@@ -737,12 +737,13 @@ struct TrophyRosterExpansionTests {
 
     // MARK: Roster generation
 
-    @Test func rosterVersionIsStampedAtFive() {
-        // The 2026-11 trophies rebuild (13 new track levels). Bumping this
+    @Test func rosterVersionIsStampedAtSix() {
+        // The 2026-11 trophies rebuild (13 new track levels, then the endless
+        // generated levels). Bumping this
         // constant is what triggers the reseed (cards, or the recap past three
         // grants) on devices stamped behind it — pin it so an accidental edit
         // is loud.
-        #expect(Trophies.rosterVersion == 5)
+        #expect(Trophies.rosterVersion == 6)
     }
 
     @Test func newIdsPresentExactlyOnce() {

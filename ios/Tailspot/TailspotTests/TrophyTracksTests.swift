@@ -157,7 +157,7 @@ struct TrophyTracksTests {
         }
         let ids = roster.map(\.id)
         #expect(Set(ids).count == ids.count)
-        #expect(roster.count == Self.preexisting.count + 13)
+        #expect(Trophies.handRoster.count == Self.preexisting.count + 13)
     }
 
     @Test func newLevelsHaveTheBriefedThresholds() {
@@ -167,6 +167,57 @@ struct TrophyTracksTests {
             "night3": 100, "calls3": 50, "points3": 25_000,
         ]
         for (id, at) in expected { #expect(ach(id).threshold == at, "\(id)") }
+    }
+
+    // MARK: Endless levels
+
+    @Test func endlessTopsMatchTheHandSetTopLevels() {
+        let hand = Dictionary(Trophies.handRoster.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        for (trackID, top) in TrophyTracks.endlessTops {
+            let track = TrophyTracks.all.first { $0.id == trackID }!
+            #expect(track.endless)
+            let topID = track.levelIDs[track.handLevelCount - 1]
+            #expect(hand[topID]?.threshold == top, "\(trackID): endlessTops must equal the top hand-set threshold")
+        }
+        #expect(TrophyTracks.all.filter(\.endless).count == TrophyTracks.endlessTops.count)
+        for capped in ["airlines", "places", "sets", "types", "heritage"] {
+            #expect(TrophyTracks.all.first { $0.id == capped }?.endless == false)
+        }
+    }
+
+    @Test func endlessSeriesStepsOneTwoPointFiveFive() {
+        #expect(TrophyTracks.endlessThresholds(after: 500, count: 5) == [1_000, 2_500, 5_000, 10_000, 25_000])
+        #expect(TrophyTracks.endlessThresholds(after: 150, count: 3) == [250, 500, 1_000])
+        #expect(TrophyTracks.endlessThresholds(after: 400, count: 2) == [1_000, 2_500])
+        #expect(TrophyTracks.endlessThresholds(after: 25_000, count: 2) == [50_000, 100_000])
+        #expect(TrophyTracks.endlessThresholds(after: 500).count == TrophyTracks.generatedLevelCount)
+    }
+
+    @Test func generatedLevelsAreInTheRosterWithStableIDs() {
+        let lv6 = ach("logbook.lv6")
+        #expect(lv6.threshold == 1_000)
+        #expect(TrophyTracks.displayTitle(for: lv6) == "Logbook Level 6")
+        #expect(TrophyTracks.level(ofAchievementID: "logbook.lv6") == 6)
+        #expect(!lv6.isEarned(inputs: inputs(totalCatches: 999)))
+        #expect(lv6.isEarned(inputs: inputs(totalCatches: 1_000)))
+        #expect(roster.count == Trophies.handRoster.count + TrophyTracks.endlessTops.count * TrophyTracks.generatedLevelCount)
+        // No generated id collides with a hand-set one.
+        #expect(Set(roster.map(\.id)).count == roster.count)
+    }
+
+    @Test func anEndlessTrackNeverReadsAsComplete() {
+        let state = TrophyTrackState.make(track: TrophyTracks.all.first { $0.id == "logbook" }!,
+                                          inputs: inputs(totalCatches: 607), roster: roster)!
+        #expect(state.level == 5 && !state.isMaxed)
+        #expect(state.nextGoal == 1_000)
+        #expect(TrophyCopy.levelLabel(state) == "Level 5")
+        #expect(TrophyCopy.trackCaption(state) == "607 / 1,000 to level 6")
+        // The ring is an arc toward the next level, not a fixed set of segments.
+        #expect(TrophyBadgeSpec(state: state).arc == 0.607)
+        let capped = TrophyTrackState.make(track: TrophyTracks.all.first { $0.id == "airlines" }!,
+                                           inputs: inputs(operators: 99), roster: roster)!
+        #expect(TrophyCopy.levelLabel(capped) == "Level 3 of 4")
+        #expect(TrophyBadgeSpec(state: capped).arc == nil)
     }
 
     // MARK: Naming
@@ -208,7 +259,8 @@ struct TrophyTracksTests {
     @Test func stateForEmptyMidAndMaxed() {
         let logbook = TrophyTracks.all[0]
         let empty = TrophyTrackState.make(track: logbook, inputs: .zero, roster: roster)!
-        #expect(empty.level == 0 && empty.levelCount == 5 && empty.progress == 0)
+        #expect(empty.level == 0 && empty.progress == 0)
+        #expect(empty.levelCount == 5 + TrophyTracks.generatedLevelCount)
         #expect(empty.nextGoal == 1 && empty.nextAchievement?.id == "firstcatch")
         #expect(empty.fraction == 0 && !empty.isMaxed)
 
@@ -217,8 +269,14 @@ struct TrophyTracksTests {
         #expect(mid.nextAchievement?.id == "centurion")
         #expect(abs(mid.fraction - 0.3) < 1e-9)
 
-        let maxed = TrophyTrackState.make(track: logbook, inputs: inputs(totalCatches: 600), roster: roster)!
-        #expect(maxed.level == 5 && maxed.isMaxed && maxed.nextGoal == nil && maxed.nextAchievement == nil)
+        // Logbook is endless: past the hand-set levels there is always a next.
+        let past = TrophyTrackState.make(track: logbook, inputs: inputs(totalCatches: 600), roster: roster)!
+        #expect(past.level == 5 && !past.isMaxed && past.nextGoal == 1_000)
+
+        // A capped track does finish.
+        let airlines = TrophyTracks.all.first { $0.id == "airlines" }!
+        let maxed = TrophyTrackState.make(track: airlines, inputs: inputs(operators: 100), roster: roster)!
+        #expect(maxed.level == 4 && maxed.isMaxed && maxed.nextGoal == nil && maxed.nextAchievement == nil)
         #expect(maxed.fraction == 1)
     }
 
@@ -250,8 +308,8 @@ struct TrophyTracksTests {
             }
             #expect(Set(chases.map(\.id)).count == chases.count)
         }
-        let maxedLogbook = TrophyChases.pick(inputs: inputs(totalCatches: 600), roster: roster)
-        #expect(!maxedLogbook.contains { $0.track?.id == "logbook" })
+        let maxedAirlines = TrophyChases.pick(inputs: inputs(operators: 100), roster: roster)
+        #expect(!maxedAirlines.contains { $0.track?.id == "airlines" })
     }
 
     @Test func chasesAreDeterministic() {
@@ -292,9 +350,6 @@ struct TrophyTracksTests {
 
     @Test func aNearlyMaxedPlayerStillGetsThreeDistinctChases() {
         let input = nearlyMaxed
-        let unmaxed = TrophyTrackState.all(inputs: input, roster: roster).filter { !$0.isMaxed }
-        #expect(unmaxed.count < 3, "fixture should leave fewer than three open tracks")
-
         let chases = TrophyChases.pick(inputs: input, roster: roster)
         #expect(chases.count == 3)
         #expect(Set(chases.map(\.id)).count == chases.count, "no duplicates")
@@ -302,9 +357,9 @@ struct TrophyTracksTests {
             #expect(!c.achievement.secret, "\(c.id) is secret")
             #expect(!c.achievement.isEarned(inputs: input), "\(c.id) is already earned")
         }
-        // The open tracks come first, feats fill the rest.
-        #expect(chases.filter { $0.kind == .trackLevel }.count == unmaxed.count)
-        #expect(chases.filter { $0.kind == .feat }.count == 3 - unmaxed.count)
+        // Endless tracks always leave something open, so a heavy player's
+        // chases are all track levels.
+        #expect(chases.allSatisfy { $0.kind == .trackLevel })
     }
 
     // MARK: Near miss

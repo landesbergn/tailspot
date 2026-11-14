@@ -8,6 +8,8 @@
 //
 //    • A track level has N rim segments (the track's real level count,
 //      2-5); `filled` of them are cyan, the rest dim.
+//    • An endless track has no fixed count to segment, so its ring is one
+//      arc: how far along the player is to the next level.
 //    • A feat is one continuous ring: cyan when earned, dim when locked.
 //    • Locked / unearned badges draw a dim symbol on the deepest surface;
 //      a locked secret shows a question mark instead of its symbol.
@@ -30,14 +32,26 @@ nonisolated struct TrophyBadgeSpec: Equatable, Sendable {
     let earned: Bool
     /// Secret + locked: draw the question mark, not the symbol.
     let masked: Bool
+    /// An endless track's ring: one arc, this fraction (0...1) of the way
+    /// to the next level, in place of the segments. nil = segments.
+    var arc: Double? = nil
 
-    /// A track as it stands: `level` of `levelCount` segments filled.
+    /// A track as it stands: `level` of `levelCount` segments filled, or
+    /// for an endless track (no fixed count to draw) the arc to the next
+    /// level.
     init(state: TrophyTrackState) {
         symbol = state.track.symbol
-        segments = max(1, state.levelCount)
+        segments = state.track.endless ? 1 : max(1, state.levelCount)
         filled = state.level
         earned = state.level > 0
         masked = false
+        arc = state.track.endless ? state.fraction : nil
+    }
+
+    /// An endless track's arc toward its next level.
+    init(symbol: String, earned: Bool, arc: Double) {
+        self.init(symbol: symbol, segments: 1, filled: 0, earned: earned, masked: false)
+        self.arc = min(1, max(0, arc))
     }
 
     /// A feat, earned or not. A secret that is still locked is masked.
@@ -54,8 +68,13 @@ nonisolated struct TrophyBadgeSpec: Equatable, Sendable {
     init(earnedAchievement a: Achievement) {
         if let track = TrophyTracks.track(forAchievementID: a.id),
            let level = TrophyTracks.level(ofAchievementID: a.id) {
-            self.init(symbol: track.symbol, segments: max(1, track.levelIDs.count),
-                      filled: level, earned: true, masked: false)
+            if track.endless {
+                // A level just earned on an endless track: the full ring.
+                self.init(symbol: track.symbol, segments: 1, filled: 1, earned: true, masked: false)
+            } else {
+                self.init(symbol: track.symbol, segments: max(1, track.levelIDs.count),
+                          filled: level, earned: true, masked: false)
+            }
         } else {
             self.init(feat: a, earned: true)
         }
@@ -69,8 +88,10 @@ nonisolated struct TrophyBadgeSpec: Equatable, Sendable {
            let state = TrophyTrackState.make(track: track, inputs: inputs, roster: roster) {
             var spec = TrophyBadgeSpec(state: state)
             if a.isEarned(inputs: inputs), let level = TrophyTracks.level(ofAchievementID: a.id) {
-                spec = TrophyBadgeSpec(symbol: spec.symbol, segments: spec.segments,
-                                       filled: max(level, spec.filled), earned: true, masked: false)
+                spec = track.endless
+                    ? TrophyBadgeSpec(earnedAchievement: a)
+                    : TrophyBadgeSpec(symbol: spec.symbol, segments: spec.segments,
+                                      filled: max(level, spec.filled), earned: true, masked: false)
             }
             self = spec
         } else {
@@ -93,6 +114,7 @@ struct TrophyBadge: View {
     var filled: Int = 0
     var earned: Bool = false
     var masked: Bool = false
+    var arc: Double? = nil
     var size: CGFloat = 56
 
     init(symbol: String, segments: Int = 1, filled: Int = 0,
@@ -108,6 +130,7 @@ struct TrophyBadge: View {
     init(_ spec: TrophyBadgeSpec, size: CGFloat = 56) {
         self.init(symbol: spec.symbol, segments: spec.segments, filled: spec.filled,
                   earned: spec.earned, masked: spec.masked, size: size)
+        arc = spec.arc
     }
 
     var body: some View {
@@ -137,6 +160,18 @@ struct TrophyBadge: View {
         let lit = Brand.Color.cyan
         let dim = Brand.Color.textTertiary.opacity(0.5)
         let style = StrokeStyle(lineWidth: line, lineCap: .round)
+        if let arc {
+            // Endless track: a dim ring with one lit arc from 12 o'clock.
+            ctx.stroke(Path(ellipseIn: ringRect), with: .color(dim), style: style)
+            let sweep = min(1, max(0, arc))
+            if sweep > 0.005 {
+                var path = Path()
+                path.addArc(center: center, radius: radius, startAngle: .radians(-Double.pi / 2),
+                            endAngle: .radians(-Double.pi / 2 + 2 * Double.pi * sweep), clockwise: false)
+                ctx.stroke(path, with: .color(lit), style: style)
+            }
+            return
+        }
         if count == 1 {
             ctx.stroke(Path(ellipseIn: ringRect), with: .color(filled > 0 ? lit : dim), style: style)
             return

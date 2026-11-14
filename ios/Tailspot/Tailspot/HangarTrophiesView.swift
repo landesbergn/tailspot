@@ -241,6 +241,12 @@ nonisolated enum TrophyCopy {
         "\(TrophyTracks.grouped(min(progress, goal))) / \(TrophyTracks.grouped(goal))"
     }
 
+    /// "Level 3 of 4"; an endless track has no "of": "Level 6".
+    static func levelLabel(_ state: TrophyTrackState) -> String {
+        if state.track.endless { return state.level == 0 ? "No level yet" : "Level \(state.level)" }
+        return state.level == 0 ? "\(state.levelCount) levels" : "Level \(state.level) of \(state.levelCount)"
+    }
+
     /// "27 / 30 to level 3", or "All levels complete".
     static func trackCaption(_ state: TrophyTrackState) -> String {
         guard let goal = state.nextGoal else { return "All levels complete" }
@@ -353,7 +359,7 @@ struct TrophyTrackRow: View {
         .background(Brand.Color.bgElevated.opacity(earned ? 1 : 0.5), in: .rect(cornerRadius: Brand.Radius.card))
         .contentShape(.rect(cornerRadius: Brand.Radius.card))
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(state.track.name), \(state.level) of \(state.levelCount) levels. \(TrophyCopy.trackCaption(state))")
+        .accessibilityLabel("\(state.track.name), \(TrophyCopy.levelLabel(state)). \(TrophyCopy.trackCaption(state))")
         .accessibilityAddTraits(.isButton)
     }
 
@@ -366,7 +372,7 @@ struct TrophyTrackRow: View {
     private var pips: some View {
         // "Level 3 of 4" in words; the ring beside the name already shows
         // the same thing as lit segments.
-        Text(state.level == 0 ? "\(state.levelCount) levels" : "Level \(state.level) of \(state.levelCount)")
+        Text(TrophyCopy.levelLabel(state))
             .font(Brand.Font.mono(size: 11, weight: .bold, relativeTo: .caption2))
             .foregroundStyle(state.level > 0 ? Brand.Color.cyan : Brand.Color.textTertiary)
             .fixedSize()

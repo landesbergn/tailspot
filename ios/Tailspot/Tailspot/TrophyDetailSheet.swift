@@ -126,7 +126,12 @@ struct TrophyDetailSheet: View {
 
     private func ladder(_ state: TrophyTrackState) -> some View {
         let byID = Dictionary(roster.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
-        let levels = state.track.levelIDs.compactMap { byID[$0] }
+        // An endless track lists what is earned plus the next level, not
+        // the whole generated series.
+        let ids = state.track.endless
+            ? Array(state.track.levelIDs.prefix(max(state.track.handLevelCount, state.level + 1)))
+            : state.track.levelIDs
+        let levels = ids.compactMap { byID[$0] }
         return VStack(alignment: .leading, spacing: 12) {
             TrophyEyebrow(title: "LEVELS")
             ForEach(Array(levels.enumerated()), id: \.element.id) { idx, level in
