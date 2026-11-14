@@ -13,8 +13,10 @@
 //  - an in-process actor cache (per session, never persisted, capped).
 //
 //  Content rules baked in:
-//  - The extract is shown UNEDITED, just cut to its first two sentences
-//    (`firstSentences(_:count:)`). The UI credits "From Wikipedia ·
+//  - The text is shown UNEDITED: the card back shows the whole intro
+//    paragraph and truncates it to the space it has (2026-11-12); the
+//    two-sentence `extract` (`firstSentences(_:count:)`) is its VoiceOver
+//    label. The UI credits "From Wikipedia ·
 //    CC BY-SA 4.0" and links the article (`pageURL`).
 //  - Disambiguation pages ("Boeing 717 may refer to…") are skipped — their
 //    extract isn't about the plane.
@@ -36,11 +38,11 @@ private nonisolated let wikipediaLog = Logger(
 
 /// The first couple of sentences of a Wikipedia article + where to read more.
 nonisolated struct WikipediaSummary: Equatable, Sendable {
-    /// First 2 sentences of the REST extract, unedited text — the card's
-    /// teaser.
+    /// First 2 sentences of the REST extract, unedited text — the card
+    /// teaser's VoiceOver label (the card itself shows `intro`).
     let extract: String
     /// The whole REST extract (the article's intro paragraph), unedited —
-    /// shown in the sheet the teaser opens.
+    /// the card's teaser (truncated to fit) and the sheet it opens.
     var intro: String = ""
     /// The article page (`content_urls.mobile.page`, https). Opened from the
     /// "Read more on Wikipedia" link.
