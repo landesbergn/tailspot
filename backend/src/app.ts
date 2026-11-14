@@ -48,6 +48,11 @@ import { registerLeaderboardRoute } from "./routes/leaderboard.js";
 import { registerMetadataRoute } from "./routes/metadata.js";
 import { registerRoutesRoute } from "./routes/routes.js";
 import { registerStatsRoute } from "./routes/stats.js";
+import { registerStreakForgivenessRoute } from "./routes/streakForgiveness.js";
+import {
+  DrizzleStreakForgivenessStore,
+  type StreakForgivenessStore,
+} from "./streaks/forgiveness.js";
 
 /**
  * buildApp() is an app factory — it creates and configures a Fastify instance
@@ -140,6 +145,11 @@ export interface BuildAppOptions {
    * evaluation, so a test can await it. Production leaves it undefined.
    */
   onOvertakenEvaluation?: (evaluation: Promise<OvertakenSummary>) => void;
+  /**
+   * Forgiven-streak-days store override for GET /v1/streak-forgiveness (tests
+   * inject a PGlite-backed or stub one). Lazily built over Postgres in prod.
+   */
+  streakForgivenessStore?: StreakForgivenessStore;
   /** Injectable clock (unix ms) for the rate limiters (tests pass a fake). */
   rateLimitNow?: () => number;
   /**
@@ -436,6 +446,11 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // per-device mutations. The honest client calls it once per launch at most
   // (APNs hands back the same token until the app is reinstalled).
   const pushTokenLimiter = new RateLimiter({ capacity: 30, windowMs: 3_600_000 }, rlNow);
+  // GET /v1/streak-forgiveness: unauthenticated, so per IP. The honest client
+  // asks a few times a day and the answer is memoised, so this is only a
+  // ceiling on how fast one address can spin the route — generous for the same
+  // shared-IPv4 reason as the other per-IP limits.
+  const streakForgivenessLimiter = new RateLimiter({ capacity: 120, windowMs: 60_000 }, rlNow); // 120/min per IP
 
   // ── Routes ────────────────────────────────────────────────────────────────
 
@@ -705,7 +720,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     findByTokenHash: (h) => getIdentityStore().findByTokenHash(h),
     claimHandle: (id, h) => getIdentityStore().claimHandle(id, h),
     takenHandles: (hs) => getIdentityStore().takenHandles(hs),
-    setPushToken: (id, t, e, n) => getIdentityStore().setPushToken(id, t, e, n),
+    setPushToken: (id, t, e, n, b) => getIdentityStore().setPushToken(id, t, e, n, b),
     clearPushToken: (id) => getIdentityStore().clearPushToken(id),
   };
   const catchesStore: CatchStore = {
@@ -892,6 +907,24 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   registerStatsRoute(app, {
     catchStore: catchesStore,
     allowedOrigins: options.statsAllowedOrigins ?? statsOriginsFromEnv(),
+    now: rlNow,
+  });
+
+  // GET /v1/streak-forgiveness — the public list of forgiven streak days.
+  // Rate-limited + memoised (same clock, so tests can expire the memo); the
+  // store is resolved lazily like the others so DATABASE_URL is only read on
+  // first use.
+  let streakForgivenessStore = options.streakForgivenessStore;
+  registerStreakForgivenessRoute(app, {
+    store: {
+      listDays: () => {
+        if (!streakForgivenessStore) {
+          streakForgivenessStore = new DrizzleStreakForgivenessStore(getDb());
+        }
+        return streakForgivenessStore.listDays();
+      },
+    },
+    ipLimiter: streakForgivenessLimiter,
     now: rlNow,
   });
 

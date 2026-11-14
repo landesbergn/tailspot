@@ -68,6 +68,13 @@ struct ProfileScreen: View {
     /// and a box that outlived its container could hand back a row from a
     /// torn-down store. The expensive part, the trophy inputs, comes from
     /// the process-wide `TrophyInputsMemo`, which holds only values.
+    /// Bumped after a streak repair: the ledger lives in UserDefaults, not
+    /// SwiftData, so nothing else tells this view to re-read it.
+    @State private var streakCoverTick = 0
+    /// Where the streak ledger and forgiven days are read from. Standard in
+    /// the app; snapshot tests pass a suite so they never write streak
+    /// state into the defaults every other test reads.
+    var _coverDefaults: UserDefaults = .standard
     @State private var derivedCache = DerivedCacheBox<ProfileDerived>()
 
     var body: some View {
@@ -90,11 +97,16 @@ struct ProfileScreen: View {
         // re-render with unchanged data is one hashing pass.
         // The trophy inputs come from the shared memo, usually already filled
         // by the app-root unlock center's launch/catch diff.
+        _ = streakCoverTick
         let trophyToken = TrophyInputsToken.of(catches)
-        let derived = derivedCache.value(for: ProfileDerived.token(trophyToken: trophyToken)) {
+        let coverDefaults = _coverDefaults
+        let derived = derivedCache.value(for: ProfileDerived.token(
+            trophyToken: trophyToken,
+            coverToken: StreakCoverStore.stateToken(defaults: coverDefaults))
+        ) {
             ProfileDerived(catches: catches, inputs: TrophyInputsMemo.shared.inputs(for: trophyToken) {
                 Trophies.inputs(from: catches)
-            })
+            }, coverDefaults: coverDefaults)
         }
         let stats = derived.stats
         let inputs = derived.inputs
@@ -113,7 +125,8 @@ struct ProfileScreen: View {
                 GlassEffectContainer {
                     VStack(spacing: 16) {
                         identityHeader(stats: stats)
-                        statsAndStreak(stats: stats, inputs: inputs, streak: streak)
+                        statsAndStreak(stats: stats, inputs: inputs, streak: streak,
+                                       cover: derived.cover)
                         if let weeklyRecap {
                             weeklyRecapCard(weeklyRecap)
                         }
@@ -569,7 +582,8 @@ struct ProfileScreen: View {
     /// are the same thought ("your numbers"), so they share a container
     /// instead of competing for attention as separate ones.
     private func statsAndStreak(
-        stats: ProfileStats, inputs: TrophyProgressInputs, streak: Streaks.Summary
+        stats: ProfileStats, inputs: TrophyProgressInputs, streak: Streaks.Summary,
+        cover: StreakCoverCenter.Status
     ) -> some View {
         VStack(spacing: 0) {
             statsRow(stats: stats, inputs: inputs)
@@ -578,9 +592,14 @@ struct ProfileScreen: View {
                 .fill(Brand.Color.bgPrimary.opacity(0.5))
                 .frame(height: 1)
                 .padding(.horizontal, Self.cardInset)
-            streakRow(streak)
+            streakRow(streak, cover: cover)
                 .padding(.horizontal, Self.cardInset)
                 .padding(.vertical, 14)
+            if let offer = cover.repair {
+                repairRow(offer)
+                    .padding(.horizontal, Self.cardInset)
+                    .padding(.bottom, 14)
+            }
         }
         .glassEffect(Self.brandGlass, in: .rect(cornerRadius: Brand.Radius.card))
     }
@@ -649,7 +668,7 @@ struct ProfileScreen: View {
     /// the space it took. Folded in, the card stays exactly two lines, and
     /// matching the record turns the suffix into gold praise instead of a
     /// repeated number.
-    private func streakRow(_ s: Streaks.Summary) -> some View {
+    private func streakRow(_ s: Streaks.Summary, cover: StreakCoverCenter.Status) -> some View {
         let alive = s.current > 0
         return HStack(alignment: .center, spacing: 14) {
             Image(systemName: "flame.fill")
@@ -714,14 +733,57 @@ struct ProfileScreen: View {
                 .minimumScaleFactor(0.85)
             }
             Spacer(minLength: 0)
+            // Freezes held: earned every 7 streak days, spent on a missed
+            // day without being asked. Shown only when there is one, so a
+            // new spotter's row stays the two lines it was.
+            if cover.freezesHeld > 0 {
+                HStack(spacing: 4) {
+                    Image(systemName: "snowflake")
+                    Text("\(cover.freezesHeld)")
+                        .monospacedDigit()
+                }
+                .font(.system(.subheadline, weight: .semibold))
+                .foregroundStyle(Brand.Color.textSecondary)
+            }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(streakAccessibilityLabel(s))
+        .accessibilityLabel(streakAccessibilityLabel(s, cover: cover))
+    }
+
+    /// The manual repair, on offer for two days after a miss no freeze
+    /// covered (StreakCover.swift). Its own row under the streak so the
+    /// button is a separate VoiceOver element from the streak readout.
+    private func repairRow(_ offer: StreakCover.RepairOffer) -> some View {
+        HStack(spacing: 10) {
+            Text(StreakCover.repairPrompt(offer, todayKey: Streaks.dayKey(for: Date())))
+                .font(.footnote)
+                .foregroundStyle(Brand.Color.textSecondary)
+            Spacer(minLength: 0)
+            Button {
+                if StreakCoverCenter.repair(catches: catches, defaults: _coverDefaults) {
+                    streakCoverTick += 1
+                    Task { await StreakReminderCenter.shared.sync(catches: catches) }
+                }
+            } label: {
+                Text(StreakCover.repairButtonTitle)
+                    .font(.system(.footnote, weight: .semibold))
+                    .lineLimit(1)
+                    .fixedSize()
+                    .foregroundStyle(Brand.Color.bgPrimary)
+                    .padding(.horizontal, 14)
+                    .frame(minHeight: 36)
+                    .background(Brand.Color.alertCaution, in: .capsule)
+                    .frame(minHeight: 44)
+                    .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+        }
     }
 
     /// The card's one editorial line. Sentence case: it's a sentence.
     private func streakStateLine(_ s: Streaks.Summary) -> String {
         if s.caughtToday { return "Extended today" }
+        if s.todayCovered && s.current > 0 { return "No catch needed today" }
         if s.atRisk { return "Catch today to keep it" }
         return "Catch a plane to start one"
     }
@@ -735,10 +797,16 @@ struct ProfileScreen: View {
         return ("best \(s.longest)", false)
     }
 
-    private func streakAccessibilityLabel(_ s: Streaks.Summary) -> String {
+    private func streakAccessibilityLabel(
+        _ s: Streaks.Summary, cover: StreakCoverCenter.Status
+    ) -> String {
         var parts = ["\(s.current) day streak", streakStateLine(s)]
         if let record = streakRecordSuffix(s) {
             parts.append(record.isRecord ? "your best yet" : "best \(s.longest)")
+        }
+        if cover.freezesHeld > 0 {
+            parts.append(cover.freezesHeld == 1
+                         ? "1 streak freeze held" : "\(cover.freezesHeld) streak freezes held")
         }
         return parts.joined(separator: ". ") + "."
     }
@@ -1000,6 +1068,8 @@ struct ProfileDerived {
     let stats: ProfileStats
     let inputs: TrophyProgressInputs
     let streak: Streaks.Summary
+    /// Freezes held and any repair on offer (StreakCover.swift).
+    let cover: StreakCoverCenter.Status
     /// The collection's proudest airframe: highest rarity, most recent on
     /// ties. Nil for an empty Hangar.
     let bestCatch: Catch?
@@ -1009,11 +1079,18 @@ struct ProfileDerived {
         events: TrophyEventStore = TrophyEventStore(),
         standing: LeaderboardStandingCache = LeaderboardStandingCache(),
         now: Date = Date(),
-        inputs: TrophyProgressInputs? = nil
+        inputs: TrophyProgressInputs? = nil,
+        coverDefaults: UserDefaults = .standard
     ) {
         stats = ProfileStats(catches: catches)
         self.inputs = inputs ?? Trophies.inputs(from: catches, events: events, standing: standing)
-        streak = Streaks.summary(catches: catches, asOf: now)
+        // Standard defaults go through the shared funnel (which also knows
+        // about the wrench override); an injected store is read directly.
+        streak = Streaks.summary(
+            catches: catches, asOf: now,
+            covered: coverDefaults === UserDefaults.standard
+                ? nil : StreakCoverStore.coveredDays(defaults: coverDefaults))
+        cover = StreakCoverCenter.status(catches: catches, now: now, defaults: coverDefaults)
         bestCatch = catches.max(by: {
             ($0.resolvedRarity.ordinal, $0.caughtAt.timeIntervalSince1970)
                 < ($1.resolvedRarity.ordinal, $1.caughtAt.timeIntervalSince1970)
@@ -1051,7 +1128,8 @@ struct ProfileDerived {
     static func token(
         trophyToken: Int,
         now: Date = Date(),
-        streakOverride: Streaks.Summary? = debugStreakOverride
+        streakOverride: Streaks.Summary? = debugStreakOverride,
+        coverToken: Int = StreakCoverStore.stateToken()
     ) -> Int {
         var hasher = Hasher()
         hasher.combine(trophyToken)
@@ -1059,6 +1137,10 @@ struct ProfileDerived {
         hasher.combine(streakOverride?.current)
         hasher.combine(streakOverride?.longest)
         hasher.combine(streakOverride?.caughtToday)
+        // Freezes, repairs and forgiven days change the streak without any
+        // row changing (a freeze earned, a repair tapped, a forgiveness
+        // fetched), so the stored state is part of the key.
+        hasher.combine(coverToken)
         return hasher.finalize()
     }
 

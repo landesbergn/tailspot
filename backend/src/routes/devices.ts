@@ -16,7 +16,9 @@
  *     body { token, environment: "sandbox"|"production", build? } → 204 | 422
  *     Register the caller's APNs token (challenge "someone passed you"
  *     pushes). The same token arriving from a different device clears it from
- *     the old one — a token belongs to one install.
+ *     the old one — a token belongs to one install. `build` (the app's Int
+ *     CFBundleVersion) is stored as `devices.app_build` so a broadcast can be
+ *     limited to clients new enough for it to be true.
  *
  *   DELETE /v1/devices/push-token   (auth required)
  *     → 204. Forget the caller's token; pushes silently stop.
@@ -50,6 +52,18 @@ export interface DevicesRouteOptions {
   pushTokenLimiter: RateLimiter;
   /** Injectable clock for `apns_updated_at` (tests freeze it). */
   now?: () => Date;
+}
+
+/**
+ * The build number worth storing, or null. The route accepts any finite number
+ * (it always has, and tightening that now would 422 a client that was fine
+ * yesterday), but only a non-negative integer that fits a Postgres `integer`
+ * is a real CFBundleVersion — anything else is stored as "unknown", which a
+ * gated broadcast excludes, rather than overflowing the column into a 500.
+ */
+export function storableBuild(build: unknown): number | null {
+  if (typeof build !== "number" || !Number.isInteger(build)) return null;
+  return build >= 0 && build <= 2_147_483_647 ? build : null;
 }
 
 /** Handle format: 3–20 chars of [A-Za-z0-9_]. */
@@ -148,10 +162,11 @@ export function registerDevicesRoutes(app: FastifyInstance, opts: DevicesRouteOp
     if (body.environment !== "sandbox" && body.environment !== "production") {
       return reply.code(422).send({ error: 'environment must be "sandbox" or "production"' });
     }
-    // `build` is accepted for triage (which client build registered this
-    // token) and deliberately NOT stored — the app's build number is already
-    // on every analytics event, and a column would have to be migrated the
-    // next time the client wants to send something else.
+    // `build` is which client build registered this token. It is STORED
+    // (`devices.app_build`, migration 0012) because a broadcast push can be
+    // true only for new enough clients — the streak-forgiveness announcement
+    // must skip builds that ignore forgiveness — and analytics can't answer
+    // "which tokens are on build ≥ N" at send time.
     //
     // `null` counts as absent (`== null` catches both). A client that can't
     // read its own build number sends null rather than omitting the key —
@@ -167,6 +182,7 @@ export function registerDevicesRoutes(app: FastifyInstance, opts: DevicesRouteOp
       body.token.toLowerCase(),
       environment,
       now(),
+      storableBuild(body.build),
     );
     request.log.info(
       { deviceId: device.id, environment, build: body.build ?? null },

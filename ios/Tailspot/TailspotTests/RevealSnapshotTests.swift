@@ -159,6 +159,19 @@ struct RevealSnapshotTests {
         if let img = streakRenderer.uiImage, let data = img.pngData() {
             try? data.write(to: dir.appendingPathComponent("a220_streak_day5.png"))
         }
+
+        // Day 7 earns a streak freeze: the stamp says so on the same row.
+        var earned = CatchRevealView(
+            plane: cases[0].1, entryNumber: 162,
+            onDismiss: {}, onViewInHangar: {}, streakDays: 14
+        )
+        earned._freezeEarnedOverride = true
+        let earnedRenderer = ImageRenderer(
+            content: earned._snapshotScreen(width: min(screen.width - 28, 420), size: screen))
+        earnedRenderer.scale = 3
+        if let img = earnedRenderer.uiImage, let data = img.pngData() {
+            try? data.write(to: dir.appendingPathComponent("a220_streak_freeze_earned.png"))
+        }
     }
 
     /// A stand-in for the tap-time viewfinder frame: a portrait sky

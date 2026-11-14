@@ -174,6 +174,19 @@ export const devices = pgTable(
     apnsEnvironment: text("apns_environment"),
     /** Last time the token was (re)registered; audit + staleness triage. */
     apnsUpdatedAt: timestamp("apns_updated_at", { withTimezone: true }),
+    /**
+     * The app build (Int CFBundleVersion) that registered the current push
+     * token (migration 0012). Null = unknown: the token was registered before
+     * this column existed, or the client could not read its own build.
+     *
+     * It exists for BROADCAST pushes that are only true for new enough clients
+     * — the streak-forgiveness announcement (`src/tools/forgive-streak-day.ts`)
+     * must not tell an old build "your streak is safe" when that build ignores
+     * forgiveness. A null build is therefore always EXCLUDED from a gated
+     * broadcast. Written with the token and cleared with it (it describes the
+     * registration, not the device).
+     */
+    appBuild: integer("app_build"),
   },
   (t) => ({
     /**
@@ -521,3 +534,25 @@ export const challengeResults = pgTable(
     pk: primaryKey({ columns: [t.challengeId, t.deviceId] }),
   }),
 );
+
+/**
+ * Operator-declared "forgiven days" for catch streaks (migration 0012).
+ *
+ * Streaks are computed entirely on the phone; the server has no streak concept.
+ * This table is only a public list the app fetches (GET /v1/streak-forgiveness)
+ * and applies locally: a missed catch on a forgiven day does not break a
+ * streak. `day` is a ZONE-FREE "yyyy-MM-dd" label that each phone reads as its
+ * own local calendar day — which is why it is text and not a `date` or a
+ * timestamp: there is no instant to store, and a driver that helpfully turned
+ * it into a Date would invent one.
+ *
+ * Written only by `src/tools/forgive-streak-day.ts` (`npm run streak:forgive`).
+ * Nothing in the request path writes it.
+ */
+export const streakForgiveness = pgTable("streak_forgiveness", {
+  /** "yyyy-MM-dd", zone-free. Natural PK: one row per forgiven day. */
+  day: text("day").primaryKey(),
+  /** Short user-facing phrase shown by the app, e.g. "FAA ground stop". */
+  reason: text("reason").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+});

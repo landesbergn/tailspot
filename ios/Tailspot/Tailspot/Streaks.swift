@@ -127,49 +127,77 @@ nonisolated enum Streaks {
         return String(format: "%04d-%02d-%02d", c.year ?? 0, c.month ?? 0, c.day ?? 0)
     }
 
+    /// "Tuesday" for a key, or "yesterday" when it is the day before
+    /// `todayKey` — how a covered day is named to the user.
+    static func dayPhrase(forKey key: String, todayKey: String) -> String {
+        if self.key(byAdding: -1, to: todayKey) == key { return "yesterday" }
+        if key == todayKey { return "today" }
+        guard let date = anchorDate(fromKey: key) else { return key }
+        let f = DateFormatter()
+        f.calendar = utc
+        f.timeZone = utc.timeZone
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "EEEE"
+        return f.string(from: date)
+    }
+
     // MARK: - Streak metrics
 
-    /// The LIVE run of consecutive catch-days ending at `todayKey` or the
-    /// day before. Grace semantics: a streak "reads through yesterday" —
-    /// it only drops to 0 after a FULL local day passes with no catch.
-    /// (Showing 0 at 00:01 after a 12-day run reads as data loss, and the
-    /// evening nudge would be nonsense if the streak it protects were
-    /// already displayed as dead.)
-    static func currentStreak(days: Set<String>, todayKey: String) -> Int {
-        let anchor: String
-        if days.contains(todayKey) {
-            anchor = todayKey
-        } else if let yesterday = key(byAdding: -1, to: todayKey), days.contains(yesterday) {
-            anchor = yesterday
-        } else {
-            return 0
-        }
-        var run = 1
-        var cursor = anchor
-        while let prev = key(byAdding: -1, to: cursor), days.contains(prev) {
-            run += 1
+    /// The LIVE run of catch-days ending at `todayKey` or the day before.
+    /// Grace semantics: a streak "reads through yesterday" — it only drops
+    /// to 0 after a FULL local day passes with no catch. (Showing 0 at
+    /// 00:01 after a 12-day run reads as data loss, and the evening nudge
+    /// would be nonsense if the streak it protects were already displayed
+    /// as dead.)
+    ///
+    /// `covered` days (a freeze, a repair, an operator forgiveness — see
+    /// StreakCover.swift) BRIDGE the run without adding to it: a 12-day
+    /// streak with one covered day is still 12, and 13 after the next
+    /// catch. Every counted day is a real catch.
+    static func currentStreak(
+        days: Set<String>, todayKey: String, covered: Set<String> = []
+    ) -> Int {
+        // Today counts if caught; if not it is still open, covered or not.
+        var run = days.contains(todayKey) ? 1 : 0
+        var cursor = todayKey
+        while let prev = key(byAdding: -1, to: cursor) {
+            if days.contains(prev) {
+                run += 1
+            } else if !covered.contains(prev) {
+                break
+            }
             cursor = prev
         }
         return run
     }
 
-    /// The longest run of consecutive days ever present in `days`.
-    /// Lexicographic order of "yyyy-MM-dd" keys IS chronological order,
-    /// so a single sorted pass suffices.
-    static func longestStreak(days: Set<String>) -> Int {
-        guard !days.isEmpty else { return 0 }
-        let sorted = days.sorted()
-        var best = 1
-        var run = 1
-        for i in 1..<sorted.count {
-            if key(byAdding: 1, to: sorted[i - 1]) == sorted[i] {
+    /// The most catch-days in any unbroken run, where `covered` days hold a
+    /// run together without counting. Lexicographic order of "yyyy-MM-dd"
+    /// keys IS chronological order, so a single sorted pass suffices.
+    static func longestStreak(days: Set<String>, covered: Set<String> = []) -> Int {
+        var best = 0
+        var run = 0
+        var previous: String?
+        for day in days.union(covered).sorted() {
+            if let previous, key(byAdding: 1, to: previous) != day { run = 0 }
+            if days.contains(day) {
                 run += 1
-            } else {
-                run = 1
+                best = max(best, run)
             }
-            best = max(best, run)
+            previous = day
         }
         return best
+    }
+
+    /// The covered-day set every DISPLAY reader shares, for the same reason
+    /// `daySet` is one funnel: two readers bridging different days would
+    /// show two different streaks. A wrench-forced streak is synthetic, so
+    /// nothing real bridges it.
+    static func coveredDays() -> Set<String> {
+        #if DEBUG
+        if StreakDebug.override != nil { return [] }
+        #endif
+        return StreakCoverStore.coveredDays()
     }
 
     /// Everything a streak display needs, computed in one pass.
@@ -177,9 +205,11 @@ nonisolated enum Streaks {
         let current: Int
         let longest: Int
         let caughtToday: Bool
+        /// Today is a forgiven day: no catch is needed to keep the streak.
+        var todayCovered = false
         /// A live streak with no catch yet today — it survives until
         /// midnight, then breaks. Drives the "catch today to keep it" hint.
-        var atRisk: Bool { current > 0 && !caughtToday }
+        var atRisk: Bool { current > 0 && !caughtToday && !todayCovered }
     }
 
     /// `assumingCatchOn` unions one extra day before the maths — the catch
@@ -192,15 +222,18 @@ nonisolated enum Streaks {
         catches: [Catch],
         assumingCatchOn extraDay: String? = nil,
         asOf: Date = Date(),
-        timeZone: TimeZone = .current
+        timeZone: TimeZone = .current,
+        covered: Set<String>? = nil
     ) -> Summary {
         var days = daySet(catches: catches, timeZone: timeZone)
         if let extraDay { days.insert(extraDay) }
         let today = dayKey(for: asOf, timeZone: timeZone)
+        let covered = covered ?? coveredDays()
         return Summary(
-            current: currentStreak(days: days, todayKey: today),
-            longest: longestStreak(days: days),
-            caughtToday: days.contains(today)
+            current: currentStreak(days: days, todayKey: today, covered: covered),
+            longest: longestStreak(days: days, covered: covered),
+            caughtToday: days.contains(today),
+            todayCovered: covered.contains(today)
         )
     }
 }

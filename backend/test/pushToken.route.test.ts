@@ -64,13 +64,14 @@ describe("push-token routes", () => {
         apnsToken: devices.apnsToken,
         apnsEnvironment: devices.apnsEnvironment,
         apnsUpdatedAt: devices.apnsUpdatedAt,
+        appBuild: devices.appBuild,
       })
       .from(devices)
       .where(eq(devices.id, deviceId));
     return rows[0];
   }
 
-  it("stores the token, environment and timestamp", async () => {
+  it("stores the token, environment, timestamp and build", async () => {
     const dev = await register();
     const res = await post(dev.token, { token: TOKEN_A, environment: "production", build: 96 });
     expect(res.statusCode).toBe(204);
@@ -80,6 +81,37 @@ describe("push-token routes", () => {
     expect(stored.apnsToken).toBe(TOKEN_A);
     expect(stored.apnsEnvironment).toBe("production");
     expect(new Date(stored.apnsUpdatedAt ?? 0).getTime()).toBe(T0_MS);
+    expect(stored.appBuild).toBe(96);
+  });
+
+  it("the stored build follows the latest registration, and goes with the token", async () => {
+    const dev = await register();
+    await post(dev.token, { token: TOKEN_A, environment: "production", build: 96 });
+    await post(dev.token, { token: TOKEN_A, environment: "production", build: 121 });
+    expect((await row(dev.deviceId)).appBuild).toBe(121);
+
+    // A registration that doesn't say its build replaces a known one with
+    // "unknown" — a stale build would let a gated broadcast reach a client
+    // that may no longer qualify.
+    await post(dev.token, { token: TOKEN_A, environment: "production" });
+    expect((await row(dev.deviceId)).appBuild).toBeNull();
+
+    // Numbers that aren't a real build are accepted (as before) but stored as
+    // unknown rather than overflowing the integer column.
+    for (const build of [96.5, -1, 2 ** 31, 1e300]) {
+      const res = await post(dev.token, { token: TOKEN_A, environment: "production", build });
+      expect(res.statusCode, String(build)).toBe(204);
+      expect((await row(dev.deviceId)).appBuild, String(build)).toBeNull();
+    }
+
+    await post(dev.token, { token: TOKEN_A, environment: "production", build: 121 });
+    const cleared = await app.inject({
+      method: "DELETE",
+      url: "/v1/devices/push-token",
+      headers: { authorization: `Bearer ${dev.token}` },
+    });
+    expect(cleared.statusCode).toBe(204);
+    expect(await row(dev.deviceId)).toMatchObject({ apnsToken: null, appBuild: null });
   });
 
   it("accepts a sandbox token and normalises hex casing", async () => {
@@ -171,8 +203,7 @@ describe("push-token routes", () => {
   it("treats build: null as 'no build', not as a bad request", async () => {
     // The client encodes an optional Int as null rather than omitting the key,
     // and a build number it genuinely can't read is an honest null. 422ing that
-    // would cost the install every notification for the sake of a field we
-    // don't even store.
+    // would cost the install every notification; it is stored as "unknown".
     const dev = await register();
     const res = await post(dev.token, {
       token: TOKEN_A,
@@ -181,6 +212,7 @@ describe("push-token routes", () => {
     });
     expect(res.statusCode).toBe(204);
     expect((await row(dev.deviceId)).apnsToken).toBe(TOKEN_A);
+    expect((await row(dev.deviceId)).appBuild).toBeNull();
   });
 
   it("422s a malformed body", async () => {
