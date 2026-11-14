@@ -82,7 +82,7 @@ enum TrophyInputsToken {
         hasher.combine(timeZone.identifier)
         // The longest-streak input bridges covered days, which change
         // without a row changing.
-        hasher.combine(Streaks.coveredDays())
+        hasher.combine(StreakCoverStore.stateToken())
         // `hasOccurred`, not `count(of:)`: the inputs only read whether an
         // event ever happened, and `record` bumps the counter on EVERY call.
         // Hashing the count made each grounded tap a guaranteed memo miss

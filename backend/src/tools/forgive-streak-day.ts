@@ -33,6 +33,16 @@
  *       --min-build 121
  *   DATABASE_URL=… npm run streak:forgive -- --day 2026-11-13 --remove
  *
+ * TEST SEND. `--only-device <uuid>` (with the push flags, instead of
+ * `--min-build`) sends to that ONE device and skips the build filter, so the
+ * first real broadcast is not also the first end-to-end test — a Debug build
+ * reports build 1 and no real `--min-build` would include it. It still writes
+ * the day's row, so test against a far-past day nobody's streak touches:
+ *
+ *   DATABASE_URL=… APNS_…=… npm run streak:forgive -- --day 2000-01-01 --reason "Test" \
+ *       --push-title "Test" --push-body "Test send" --only-device <device uuid>
+ *   DATABASE_URL=… npm run streak:forgive -- --day 2000-01-01 --remove
+ *
  * Re-running with a new `--reason` updates the row. Re-running WITH the push
  * flags pushes everyone again — the script keeps no record of who was told.
  * `--remove` deletes the day (for a mistake) and never pushes.
@@ -66,15 +76,26 @@ export const MAX_PUSH_TITLE_LENGTH = 100;
 export const MAX_PUSH_BODY_LENGTH = 300;
 
 export const USAGE =
-  'usage: npm run streak:forgive -- --day yyyy-MM-dd --reason "…" [--push-title "…" --push-body "…" --min-build N] [--dry-run]\n' +
+  'usage: npm run streak:forgive -- --day yyyy-MM-dd --reason "…" [--push-title "…" --push-body "…" (--min-build N | --only-device <uuid>)] [--dry-run]\n' +
   "       npm run streak:forgive -- --day yyyy-MM-dd --remove [--dry-run]";
 
-export interface PushRequest {
-  title: string;
-  body: string;
-  /** Lowest `devices.app_build` that receives the push. */
-  minBuild: number;
-}
+/** Who a push goes to: everyone on a new enough build, or one named device. */
+export type PushAudience =
+  | {
+      /** Lowest `devices.app_build` that receives the broadcast. */
+      minBuild: number;
+      onlyDevice?: undefined;
+    }
+  | {
+      /** A test send: this one device id, with NO build filter. */
+      onlyDevice: string;
+      minBuild?: undefined;
+    };
+
+export type PushRequest = { title: string; body: string } & PushAudience;
+
+/** A uuid shape — the same check `disable-device.ts` uses. */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export interface ForgiveStreakDayOptions {
   day: string;
@@ -90,7 +111,14 @@ export type ParsedArgs =
   | { ok: true; options: ForgiveStreakDayOptions }
   | { ok: false; error: string };
 
-const VALUE_FLAGS = new Set(["--day", "--reason", "--push-title", "--push-body", "--min-build"]);
+const VALUE_FLAGS = new Set([
+  "--day",
+  "--reason",
+  "--push-title",
+  "--push-body",
+  "--min-build",
+  "--only-device",
+]);
 const BOOLEAN_FLAGS = new Set(["--dry-run", "--remove"]);
 
 /**
@@ -142,8 +170,10 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
     // Removing is the "I made a mistake" path. It never pushes, and saying so
     // loudly beats silently ignoring flags the operator thought would do
     // something.
-    if (hasTitle || hasBody || values.has("--min-build")) {
-      return fail("--remove never pushes; drop --push-title / --push-body / --min-build");
+    if (hasTitle || hasBody || values.has("--min-build") || values.has("--only-device")) {
+      return fail(
+        "--remove never pushes; drop --push-title / --push-body / --min-build / --only-device",
+      );
     }
     if (values.has("--reason")) return fail("--remove takes no --reason");
     return { ok: true, options: { day, reason: "", dryRun, remove: true } };
@@ -162,6 +192,9 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
     if (values.has("--min-build")) {
       return fail("--min-build only applies to a push; add --push-title and --push-body");
     }
+    if (values.has("--only-device")) {
+      return fail("--only-device only applies to a push; add --push-title and --push-body");
+    }
     return { ok: true, options: { day, reason, dryRun, remove: false } };
   }
 
@@ -176,9 +209,27 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
   }
 
   const rawMinBuild = values.get("--min-build");
+  const rawOnlyDevice = values.get("--only-device");
+  if (rawOnlyDevice !== undefined) {
+    // A test send to one named device skips the build filter, so a --min-build
+    // beside it could only mislead about who is being pushed.
+    if (rawMinBuild !== undefined) {
+      return fail(
+        "--only-device and --min-build cannot be combined: a single-device test send ignores the build filter",
+      );
+    }
+    const onlyDevice = rawOnlyDevice.trim().toLowerCase();
+    if (!UUID_RE.test(onlyDevice)) {
+      return fail(`--only-device must be a device uuid (got ${JSON.stringify(rawOnlyDevice)})`);
+    }
+    return {
+      ok: true,
+      options: { day, reason, push: { title, body, onlyDevice }, dryRun, remove: false },
+    };
+  }
   if (rawMinBuild === undefined) {
     return fail(
-      "--min-build is required when pushing: pass the FIRST build that shipped streak forgiveness (older builds ignore it, so telling them their streak is safe would be untrue)",
+      "--min-build is required when pushing (or --only-device <uuid> for a single-device test send): pass the FIRST build that shipped streak forgiveness (older builds ignore it, so telling them their streak is safe would be untrue)",
     );
   }
   if (!/^\d+$/.test(rawMinBuild.trim())) {
@@ -241,12 +292,59 @@ export interface BroadcastStore {
    * EXCLUDED — unknown is not "new enough".
    */
   pushTargets(minBuild: number): Promise<PushTarget[]>;
+  /**
+   * The one device a `--only-device` test send names. NO build filter — that is
+   * the point — but it must still exist, be enabled and hold a usable token.
+   */
+  deviceTarget(deviceId: string): Promise<DeviceTargetLookup>;
   /** Forget a token APNs told us is dead, wherever it is. */
   clearToken(token: string): Promise<void>;
 }
 
+/** Why a named device can't be pushed. */
+export type TargetProblem = "not-found" | "disabled" | "no-token";
+
+export type DeviceTargetLookup =
+  | { ok: true; target: PushTarget; build: number | null }
+  | { ok: false; problem: TargetProblem };
+
+/** The operator-facing sentence for a `--only-device` that can't be pushed. */
+export function describeTargetProblem(deviceId: string, problem: TargetProblem): string {
+  switch (problem) {
+    case "not-found":
+      return `no device has id ${deviceId}`;
+    case "disabled":
+      return `device ${deviceId} is disabled`;
+    case "no-token":
+      return `device ${deviceId} has no push token registered (open the app with notifications allowed, then retry)`;
+  }
+}
+
 export class DrizzleBroadcastStore implements BroadcastStore {
   constructor(private readonly db: Database) {}
+
+  async deviceTarget(deviceId: string): Promise<DeviceTargetLookup> {
+    const rows = await this.db
+      .select({
+        token: devices.apnsToken,
+        environment: devices.apnsEnvironment,
+        build: devices.appBuild,
+        disabledAt: devices.disabledAt,
+      })
+      .from(devices)
+      .where(eq(devices.id, deviceId));
+    const row = rows[0];
+    if (!row) return { ok: false, problem: "not-found" };
+    if (row.disabledAt !== null) return { ok: false, problem: "disabled" };
+    // A token with no known environment can't be routed to an APNs host.
+    if (!row.token || !isApnsEnvironment(row.environment))
+      return { ok: false, problem: "no-token" };
+    return {
+      ok: true,
+      target: { deviceId, token: row.token, environment: row.environment },
+      build: row.build,
+    };
+  }
 
   async pushTargets(minBuild: number): Promise<PushTarget[]> {
     const rows = await this.db
@@ -303,6 +401,8 @@ export interface BroadcastSummary {
   deadTokensCleared: number;
   /** Everything else: transient or permanent failures, after the one retry. */
   failed: number;
+  /** Set only when a `--only-device` target can't be pushed; nothing was sent. */
+  targetProblem?: TargetProblem;
 }
 
 export interface BroadcastDeps {
@@ -312,11 +412,12 @@ export interface BroadcastDeps {
   log?: (message: string) => void;
 }
 
-export interface BroadcastOptions {
+export type BroadcastOptions = BroadcastAudienceOptions & PushAudience;
+
+interface BroadcastAudienceOptions {
   day: string;
   title: string;
   body: string;
-  minBuild: number;
   /** Count the targets and send nothing. */
   dryRun?: boolean;
   concurrency?: number;
@@ -337,13 +438,24 @@ export interface BroadcastOptions {
  * ONE more attempt after the first pass. A timed-out send that actually landed
  * can therefore show up twice on a phone; one duplicate beats a missed
  * announcement, the same trade the overtaken push makes.
+ *
+ * With `onlyDevice` the audience is that single device and the build filter is
+ * skipped; if it can't be pushed, nothing is sent and `targetProblem` says why.
  */
 export async function broadcastStreakForgiveness(
   deps: BroadcastDeps,
   options: BroadcastOptions,
 ): Promise<BroadcastSummary> {
   const log = deps.log ?? ((message: string) => console.error(message));
-  const targets = await deps.store.pushTargets(options.minBuild);
+  let targets: PushTarget[];
+  let targetProblem: TargetProblem | undefined;
+  if (options.onlyDevice !== undefined) {
+    const lookup = await deps.store.deviceTarget(options.onlyDevice);
+    targets = lookup.ok ? [lookup.target] : [];
+    if (!lookup.ok) targetProblem = lookup.problem;
+  } else {
+    targets = await deps.store.pushTargets(options.minBuild);
+  }
   const summary: BroadcastSummary = {
     targets: {
       sandbox: targets.filter((t) => t.environment === "sandbox").length,
@@ -354,6 +466,7 @@ export async function broadcastStreakForgiveness(
     deadTokensCleared: 0,
     failed: 0,
   };
+  if (targetProblem !== undefined) summary.targetProblem = targetProblem;
   if (options.dryRun || targets.length === 0) return summary;
 
   const payload = streakForgivenessPayload(options);
@@ -449,7 +562,8 @@ export interface ForgiveStreakDayResult {
     | "removed"
     | "not-found"
     | "dry-run"
-    | "push-unavailable";
+    | "push-unavailable"
+    | "target-unavailable";
   /** The day's reason BEFORE this run (null = it was not forgiven). */
   previousReason: string | null;
   /** Present when a push was requested (and, on a dry run, counted). */
@@ -519,6 +633,16 @@ export async function forgiveStreakDay(
       { store: deps.broadcastStore ?? new DrizzleBroadcastStore(deps.db), transport: NEVER_SEND },
       { day, ...push, dryRun: true },
     );
+    if (push.onlyDevice !== undefined) {
+      const environment = summary.targets.sandbox === 1 ? "sandbox" : "production";
+      out(
+        summary.targetProblem
+          ? `Would push NOBODY: ${describeTargetProblem(push.onlyDevice, summary.targetProblem)}.`
+          : `Would push 1 device (test send, no build filter): ${push.onlyDevice} (${environment}).\n` +
+              `  title: ${JSON.stringify(push.title)}\n  body:  ${JSON.stringify(push.body)}`,
+      );
+      return { outcome: "dry-run", previousReason, push: summary };
+    }
     const total = summary.targets.sandbox + summary.targets.production;
     out(
       `Would push ${total} device(s) on build ≥ ${push.minBuild}: ${summary.targets.production} production, ${summary.targets.sandbox} sandbox.\n` +
@@ -535,6 +659,19 @@ export async function forgiveStreakDay(
       "A push was requested but APNs is not configured here (APNS_KEY_P8 / APNS_KEY_ID / APNS_TEAM_ID). Nothing was written. Set them and re-run, or re-run without the push flags to write the row only.",
     );
     return { outcome: "push-unavailable", previousReason };
+  }
+
+  // Same for a test send whose one device can't be pushed: say why and write
+  // nothing, rather than forgive a day for a test that never happened.
+  const broadcastStore = deps.broadcastStore ?? new DrizzleBroadcastStore(deps.db);
+  if (push?.onlyDevice !== undefined) {
+    const lookup = await broadcastStore.deviceTarget(push.onlyDevice);
+    if (!lookup.ok) {
+      err(
+        `Cannot send: ${describeTargetProblem(push.onlyDevice, lookup.problem)}. Nothing was written and nothing was sent.`,
+      );
+      return { outcome: "target-unavailable", previousReason };
+    }
   }
 
   await store.upsert(day, reason);
@@ -554,15 +691,19 @@ export async function forgiveStreakDay(
   }
 
   const summary = await broadcastStreakForgiveness(
-    {
-      store: deps.broadcastStore ?? new DrizzleBroadcastStore(deps.db),
-      transport: deps.transport,
-      log: err,
-    },
+    { store: broadcastStore, transport: deps.transport, log: err },
     { day, ...push },
   );
+  if (summary.targetProblem) {
+    // The device changed between the check above and the send.
+    err(`Not sent: ${describeTargetProblem(push.onlyDevice ?? "", summary.targetProblem)}.`);
+  }
+  const audience =
+    push.onlyDevice !== undefined
+      ? `test send to device ${push.onlyDevice}, no build filter`
+      : `build ≥ ${push.minBuild}`;
   out(
-    `Push (build ≥ ${push.minBuild}): ${summary.attempted} attempted (${summary.targets.production} production, ${summary.targets.sandbox} sandbox) — ${summary.delivered} delivered, ${summary.deadTokensCleared} dead token(s) cleared, ${summary.failed} failed.`,
+    `Push (${audience}): ${summary.attempted} attempted (${summary.targets.production} production, ${summary.targets.sandbox} sandbox) — ${summary.delivered} delivered, ${summary.deadTokensCleared} dead token(s) cleared, ${summary.failed} failed.`,
   );
   return { outcome, previousReason, push: summary };
 }
@@ -596,10 +737,14 @@ async function main(): Promise<void> {
   try {
     const result = await forgiveStreakDay({ db, transport }, options);
     // Asked-for work that didn't happen is an operator-visible failure.
-    if (result.outcome === "not-found" || result.outcome === "push-unavailable") {
+    if (
+      result.outcome === "not-found" ||
+      result.outcome === "push-unavailable" ||
+      result.outcome === "target-unavailable"
+    ) {
       process.exitCode = 1;
     }
-    if (result.push && result.push.failed > 0) process.exitCode = 1;
+    if (result.push && (result.push.failed > 0 || result.push.targetProblem)) process.exitCode = 1;
   } finally {
     if (transport instanceof Http2ApnsTransport) transport.close();
     await closeDb();

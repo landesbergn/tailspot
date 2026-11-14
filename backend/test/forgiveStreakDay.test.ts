@@ -129,6 +129,38 @@ describe("parseArgs", () => {
     }
   });
 
+  it("parses --only-device as a single-device test send with no min-build", () => {
+    const id = "0B1C2D3E-1111-4222-8333-444455556666";
+    const push = ["--push-title", PUSH.title, "--push-body", PUSH.body];
+    expect(parseArgs(["--day", DAY, "--reason", REASON, ...push, "--only-device", id])).toEqual({
+      ok: true,
+      options: {
+        day: DAY,
+        reason: REASON,
+        push: { ...PUSH, onlyDevice: id.toLowerCase() },
+        dryRun: false,
+        remove: false,
+      },
+    });
+    expect(
+      error(["--day", DAY, "--reason", REASON, ...push, "--only-device", id, "--min-build=121"]),
+    ).toMatch(/cannot be combined/);
+    for (const bad of ["maverick", "1234", `${id}0`, ""]) {
+      expect(
+        error(["--day", DAY, "--reason", REASON, ...push, `--only-device=${bad}`]),
+        bad,
+      ).toMatch(/--only-device must be a device uuid/);
+    }
+    // Only meaningful with a push, and never with --remove.
+    expect(error(["--day", DAY, "--reason", REASON, "--only-device", id])).toMatch(
+      /only applies to a push/,
+    );
+    expect(
+      error(["--day", DAY, "--reason", REASON, "--push-title", "x", "--only-device", id]),
+    ).toMatch(/together/);
+    expect(error(["--day", DAY, "--remove", "--only-device", id])).toMatch(/--remove never pushes/);
+  });
+
   it("requires the push title and body as a pair", () => {
     expect(error(["--day", DAY, "--reason", REASON, "--push-title", "x"])).toMatch(/together/);
     expect(
@@ -431,6 +463,7 @@ describe("broadcast + forgiveStreakDay (PGlite)", () => {
     const cleared: string[] = [];
     const store: BroadcastStore = {
       pushTargets: async () => targets,
+      deviceTarget: async () => ({ ok: false, problem: "not-found" }),
       clearToken: async (token) => {
         if (token === tok(1)) throw new Error("db hiccup");
         cleared.push(token);
@@ -501,6 +534,108 @@ describe("broadcast + forgiveStreakDay (PGlite)", () => {
     expect(result.outcome).toBe("push-unavailable");
     expect(await rows()).toEqual([]);
     expect(err.join("\n")).toMatch(/APNs is not configured/);
+  });
+
+  describe("--only-device", () => {
+    const only = (onlyDevice: string, dryRun = false) => ({
+      day: "2000-01-01",
+      reason: "Test",
+      push: { ...PUSH, onlyDevice },
+      dryRun,
+      remove: false,
+    });
+
+    it("pushes exactly that device, ignoring the build filter", async () => {
+      const d = await seedAudience();
+      // Build 1 (a Debug build) and a null build are both fine for a test send.
+      const debug = await device("debug", { token: tok(20), environment: "sandbox", build: 1 });
+      const result = await forgiveStreakDay(deps(), only(debug));
+      expect(result.outcome).toBe("created");
+      expect(result.push).toEqual({
+        targets: { sandbox: 1, production: 0 },
+        attempted: 1,
+        delivered: 1,
+        deadTokensCleared: 0,
+        failed: 0,
+      });
+      expect(transport.sent).toEqual([
+        {
+          env: "sandbox",
+          token: tok(20),
+          payload: {
+            aps: { alert: { title: PUSH.title, body: PUSH.body }, sound: "default" },
+            kind: "streak_forgiveness",
+            day: "2000-01-01",
+          },
+        },
+      ]);
+      expect(await rows()).toEqual([{ day: "2000-01-01", reason: "Test" }]);
+      expect(out.join("\n")).toMatch(/test send to device .* no build filter\): 1 attempted/);
+
+      transport.sent = [];
+      const nullBuild = await forgiveStreakDay(deps(), only(d.nullBuild));
+      expect(nullBuild.push?.delivered).toBe(1);
+      expect(transport.sent.map((s) => s.token)).toEqual([tok(5)]);
+    });
+
+    it("refuses an unknown, disabled or token-less device without writing or sending", async () => {
+      const d = await seedAudience();
+      const cases: [string, RegExp][] = [
+        ["00000000-0000-4000-8000-00000000dead", /no device has id/],
+        [d.disabled, /is disabled/],
+        [d.noToken, /has no push token/],
+        [d.badEnvironment, /has no push token/],
+      ];
+      for (const [id, message] of cases) {
+        err = [];
+        const result = await forgiveStreakDay(deps(), only(id));
+        expect(result, id).toEqual({ outcome: "target-unavailable", previousReason: null });
+        expect(err.join("\n"), id).toMatch(message);
+        expect(err.join("\n")).toMatch(/Nothing was written and nothing was sent/);
+      }
+      expect(await rows()).toEqual([]);
+      expect(transport.sent).toHaveLength(0);
+    });
+
+    it("a dry run reports the one target, or why there is none", async () => {
+      const d = await seedAudience();
+      const ok = await forgiveStreakDay(deps(null), only(d.tooOld, true));
+      expect(ok.outcome).toBe("dry-run");
+      expect(ok.push?.targets).toEqual({ sandbox: 0, production: 1 });
+      expect(ok.push?.targetProblem).toBeUndefined();
+      expect(out.join("\n")).toContain(
+        `Would push 1 device (test send, no build filter): ${d.tooOld} (production)`,
+      );
+
+      out = [];
+      const none = await forgiveStreakDay(deps(null), only(d.disabled, true));
+      expect(none.outcome).toBe("dry-run");
+      expect(none.push).toMatchObject({
+        targets: { sandbox: 0, production: 0 },
+        attempted: 0,
+        targetProblem: "disabled",
+      });
+      expect(out.join("\n")).toMatch(/Would push NOBODY: device .* is disabled/);
+      expect(await rows()).toEqual([]);
+      expect(transport.sent).toHaveLength(0);
+    });
+
+    it("clears the token when the one device turns out to be dead", async () => {
+      const gone = await device("gone", { token: tok(30), build: 1 });
+      transport.responses.set(tok(30), { status: 410 });
+      const summary = await broadcastStreakForgiveness(
+        { store: new DrizzleBroadcastStore(db), transport },
+        { day: DAY, ...PUSH, onlyDevice: gone },
+      );
+      expect(summary).toEqual({
+        targets: { sandbox: 0, production: 1 },
+        attempted: 1,
+        delivered: 0,
+        deadTokensCleared: 1,
+        failed: 0,
+      });
+      expect((await tokenOf(gone)).apnsToken).toBeNull();
+    });
   });
 
   it("--remove deletes the day and never pushes", async () => {

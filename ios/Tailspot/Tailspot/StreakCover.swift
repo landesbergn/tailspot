@@ -48,10 +48,16 @@ nonisolated struct StreakLedger: Codable, Equatable, Sendable {
     /// The catch-day that last earned (or would have earned) a freeze, so
     /// one day can never award twice.
     var lastAwardDay: String?
+    /// The day a freeze was last actually added; the catch reveal says
+    /// "freeze earned" on that day.
+    var lastEarnedDay: String?
     /// Forgiven days already announced in a toast.
     var announcedForgiven: [String] = []
     /// The missed day the repair toast last pointed at.
     var repairAnnouncedFor: String?
+    /// A freeze spent at catch time, where there is no toast slot (the
+    /// reveal covers the camera). The next foreground says it.
+    var pendingFreezeLine: String?
 
     var coveredDays: Set<String> { Set(freezeDays).union(repairedDays) }
 }
@@ -87,6 +93,7 @@ nonisolated enum StreakCover {
         next.lastAwardDay = todayKey
         guard next.freezesHeld < maxFreezes else { return (next, false) }
         next.freezesHeld += 1
+        next.lastEarnedDay = todayKey
         return (next, true)
     }
 
@@ -132,6 +139,19 @@ nonisolated enum StreakCover {
         let kept = Streaks.currentStreak(
             days: catchDays, todayKey: todayKey, covered: covered.union(missed))
         return (next, FreezeUse(days: missed, streakKept: kept))
+    }
+
+    /// Hand back freezes spent on days the operator has since forgiven. A
+    /// freeze can be spent before the forgiven list arrives (offline, or
+    /// the day was forgiven late); the day is covered either way, so the
+    /// freeze should not be the price.
+    static func refunded(_ ledger: StreakLedger, forgiven: Set<String>) -> StreakLedger {
+        let doubled = ledger.freezeDays.filter(forgiven.contains)
+        guard !doubled.isEmpty else { return ledger }
+        var next = ledger
+        next.freezeDays.removeAll(where: forgiven.contains)
+        next.freezesHeld = min(maxFreezes, next.freezesHeld + doubled.count)
+        return next
     }
 
     // MARK: Repair
@@ -213,8 +233,11 @@ nonisolated enum StreakCover {
         todayKey: String
     ) -> Pass {
         let forgivenKeys = Set(forgiven.map(\.day))
-        let settled = settle(ledger, catchDays: catchDays, forgiven: forgivenKeys, todayKey: todayKey)
+        let settled = settle(refunded(ledger, forgiven: forgivenKeys), catchDays: catchDays,
+                             forgiven: forgivenKeys, todayKey: todayKey)
         var pass = Pass(ledger: settled.ledger, freezeUse: settled.used)
+        let pendingLine = pass.ledger.pendingFreezeLine
+        pass.ledger.pendingFreezeLine = nil
         let covered = forgivenKeys.union(pass.ledger.coveredDays)
         let current = Streaks.currentStreak(days: catchDays, todayKey: todayKey, covered: covered)
 
@@ -241,6 +264,8 @@ nonisolated enum StreakCover {
 
         if let use = pass.freezeUse {
             pass.toastLine = freezeUsedLine(use, todayKey: todayKey)
+        } else if let pendingLine {
+            pass.toastLine = pendingLine
         } else if let offer = pass.repairToAnnounce {
             pass.toastLine = repairAvailableLine(offer, todayKey: todayKey)
         } else if let day = pass.forgivenToAnnounce {
@@ -323,12 +348,28 @@ nonisolated enum StreakCoverStore {
         return (try? JSONDecoder().decode([ForgivenDay].self, from: data)) ?? []
     }
 
-    /// Replace the cache with the server's list. Wholesale, not a union: the
-    /// server returns every day it has ever forgiven, and replacing is what
-    /// lets the operator take back a day declared by mistake.
     static func saveForgiven(_ days: [ForgivenDay], defaults: UserDefaults = .standard) {
         guard let data = try? JSONEncoder().encode(days) else { return }
         defaults.set(data, forKey: forgivenKey)
+    }
+
+    /// How long the operator has to take back a day declared by mistake.
+    static let takeBackWindowDays = 7
+
+    /// The server's list, plus any cached day older than the take-back
+    /// window that the server no longer lists. Recent days follow the
+    /// server exactly, which is what lets a mistake be removed; older days
+    /// are settled history, and a server that comes back empty (a restore,
+    /// a fresh database) must not break every streak that crossed one.
+    static func merged(
+        cached: [ForgivenDay], server: [ForgivenDay], todayKey: String
+    ) -> [ForgivenDay] {
+        guard let cutoff = Streaks.key(byAdding: -takeBackWindowDays, to: todayKey) else {
+            return server
+        }
+        let listed = Set(server.map(\.day))
+        let kept = cached.filter { $0.day < cutoff && !listed.contains($0.day) }
+        return (server + kept).sorted { $0.day < $1.day }
     }
 
     /// A hash of everything stored here, for memo keys that must recompute
@@ -412,7 +453,11 @@ nonisolated enum StreakCoverTelemetry {
 
 /// The three moments the ledger changes: a foreground, a catch, and a tap
 /// on Repair. Each loads, applies a pure rule, saves and reports.
-nonisolated enum StreakCoverCenter {
+///
+/// MainActor (the project default) on purpose: every entry point is a
+/// load-modify-save of the same ledger, and the foreground pass and the
+/// catch path can run within moments of each other.
+enum StreakCoverCenter {
 
     /// The ledger, created on first use from the streak the Hangar already
     /// holds.
@@ -431,21 +476,22 @@ nonisolated enum StreakCoverCenter {
     /// covered days this produces): refresh the forgiven list, spend
     /// freezes on any missed days, and return the toast line to show, if
     /// any. A failed fetch keeps the cached list.
-    ///
-    /// Takes the day set, not the rows: this runs off the main actor (it
-    /// awaits the network), and SwiftData models must not follow it there.
     static func foreground(
         catchDays: Set<String>,
         now: Date = Date(),
         client: StreakForgivenessClient = StreakForgivenessClient(),
         defaults: UserDefaults = .standard
     ) async -> String? {
+        let todayKey = Streaks.dayKey(for: now)
         do {
-            StreakCoverStore.saveForgiven(try await client.fetch(), defaults: defaults)
+            let server = try await client.fetch()
+            StreakCoverStore.saveForgiven(
+                StreakCoverStore.merged(cached: StreakCoverStore.forgiven(defaults: defaults),
+                                        server: server, todayKey: todayKey),
+                defaults: defaults)
         } catch {
             Log.ui.debug("Streak forgiveness fetch failed: \(String(describing: error), privacy: .public)")
         }
-        let todayKey = Streaks.dayKey(for: now)
         let ledger = loadOrSeed(catchDays: catchDays, todayKey: todayKey, defaults: defaults)
         let pass = StreakCover.foregroundPass(
             ledger, catchDays: catchDays,
@@ -479,7 +525,9 @@ nonisolated enum StreakCoverCenter {
         let settled = StreakCover.settle(
             ledger, catchDays: priorDays, forgiven: forgiven, todayKey: todayKey)
         guard let use = settled.used else { return }
-        StreakCoverStore.save(settled.ledger, defaults: defaults)
+        var spent = settled.ledger
+        spent.pendingFreezeLine = StreakCover.freezeUsedLine(use, todayKey: todayKey)
+        StreakCoverStore.save(spent, defaults: defaults)
         Analytics.capture(StreakCoverTelemetry.freezeUsedEvent,
                           StreakCoverTelemetry.freezeUsedProperties(use, held: settled.ledger.freezesHeld))
     }

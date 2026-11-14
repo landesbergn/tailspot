@@ -94,6 +94,7 @@ struct StreakCoverTests {
         result = StreakCover.award(ledger, streakAfterCatch: 7, todayKey: "2026-11-02")
         #expect(result.earned)
         #expect(result.ledger.freezesHeld == 1)
+        #expect(result.ledger.lastEarnedDay == "2026-11-02")
         ledger = result.ledger
         // Same day again: no second freeze.
         #expect(!StreakCover.award(ledger, streakAfterCatch: 7, todayKey: "2026-11-02").earned)
@@ -169,6 +170,53 @@ struct StreakCoverTests {
         let result = StreakCover.settle(
             StreakLedger(freezesHeld: 1), catchDays: days, forgiven: [], todayKey: today)
         #expect(result.used?.streakKept == 5)
+    }
+
+    @Test func aFreezeSpentOnALaterForgivenDayIsRefunded() {
+        var ledger = StreakLedger(freezesHeld: 0)
+        ledger.freezeDays = ["2026-11-05", "2026-11-12"]
+        let refunded = StreakCover.refunded(ledger, forgiven: ["2026-11-12"])
+        #expect(refunded.freezesHeld == 1)
+        #expect(refunded.freezeDays == ["2026-11-05"])
+        #expect(StreakCover.refunded(ledger, forgiven: []) == ledger)
+        // The foreground pass refunds before it settles.
+        let days = run(endingAt: "2026-11-11", count: 8)
+        var spent = StreakLedger()
+        spent.freezeDays = ["2026-11-12"]
+        let pass = StreakCover.foregroundPass(
+            spent, catchDays: days,
+            forgiven: [ForgivenDay(day: "2026-11-12", reason: "FAA ground stop")], todayKey: today)
+        #expect(pass.ledger.freezesHeld == 1)
+        #expect(pass.ledger.freezeDays.isEmpty)
+        #expect(pass.freezeUse == nil)
+    }
+
+    @Test func aCatchTimeFreezeIsAnnouncedOnTheNextForeground() {
+        let d = defaults()
+        let days = run(endingAt: "2026-11-11", count: 8)
+        StreakCoverStore.save(StreakLedger(freezesHeld: 1), defaults: d)
+        StreakCoverCenter.settleBeforeCatch(priorDays: days, todayKey: today, defaults: d)
+        let ledger = StreakCoverStore.ledger(defaults: d)!
+        #expect(ledger.pendingFreezeLine == "Freeze used for yesterday. 8-day streak intact.")
+        let pass = StreakCover.foregroundPass(
+            ledger, catchDays: days.union([today]), forgiven: [], todayKey: today)
+        #expect(pass.toastLine == "Freeze used for yesterday. 8-day streak intact.")
+        #expect(pass.ledger.pendingFreezeLine == nil)
+    }
+
+    @Test func mergeFollowsTheServerForRecentDaysAndKeepsOldOnes() {
+        let old = ForgivenDay(day: "2026-10-01", reason: "Volcanic ash")
+        let recent = ForgivenDay(day: "2026-11-12", reason: "Declared by mistake")
+        let new = ForgivenDay(day: today, reason: "FAA ground stop")
+        // The server came back without either cached day.
+        #expect(StreakCoverStore.merged(cached: [old, recent], server: [new], todayKey: today)
+                == [old, new])
+        // An empty server list keeps settled history.
+        #expect(StreakCoverStore.merged(cached: [old, recent], server: [], todayKey: today) == [old])
+        // The server's reason wins for a day it still lists.
+        let reworded = ForgivenDay(day: "2026-10-01", reason: "Ash cloud")
+        #expect(StreakCoverStore.merged(cached: [old], server: [reworded], todayKey: today)
+                == [reworded])
     }
 
     // MARK: - Repair

@@ -838,6 +838,9 @@ struct CatchRevealView: View {
     /// Snapshot/visual-pass seam — `accessibilityReduceMotion` is a read-only
     /// environment key, so the render harness forces it here instead.
     /// nil (production) = follow the system setting.
+    /// Snapshot-test seam for the "FREEZE EARNED" stamp, which otherwise
+    /// reads the streak ledger.
+    var _freezeEarnedOverride: Bool? = nil
     var _reduceMotionOverride: Bool? = nil
     private var reduceMotion: Bool { _reduceMotionOverride ?? systemReduceMotion }
     #else
@@ -1466,12 +1469,41 @@ struct CatchRevealView: View {
                 // the Profile card's flame, scaled to this glyph size.
                 .offset(y: 0.5 * scale)
                 .accessibilityHidden(true)
-            Text("\(days) DAY STREAK")
+            // "N DAYS" beside the freeze note: the row also holds ENTRY #N,
+            // and the full "N DAY STREAK" plus the note doesn't fit.
+            Text(freezeEarned ? "\(days) DAYS" : "\(days) DAY STREAK")
                 .font(.system(size: 9 * scale, weight: .semibold, design: .monospaced))
                 .tracking(1.5).foregroundColor(RP.muted)
+            // Today's catch earned a streak freeze (every 7th streak day,
+            // StreakCover.swift). Said here because this row is where the
+            // streak already speaks; a simulated reveal never earns one.
+            if freezeEarned {
+                Image(systemName: "snowflake")
+                    .font(.system(size: 9 * scale, weight: .semibold))
+                    .foregroundStyle(Brand.Color.cyan)
+                    .padding(.leading, 3 * scale)
+                    .accessibilityHidden(true)
+                Text("FREEZE EARNED")
+                    .font(.system(size: 9 * scale, weight: .semibold, design: .monospaced))
+                    .tracking(1.5).foregroundColor(RP.muted)
+            }
         }
+        .lineLimit(1)
+        .minimumScaleFactor(0.8)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(days) day streak")
+        .accessibilityLabel(freezeEarned
+                            ? "\(days) day streak. Streak freeze earned."
+                            : "\(days) day streak")
+    }
+
+    /// Whether today's first catch earned a freeze. Read from the ledger
+    /// rather than threaded through the reveal's presentation paths: the
+    /// award is written before the streak count reaches this view.
+    private var freezeEarned: Bool {
+        #if DEBUG
+        if let _freezeEarnedOverride { return _freezeEarnedOverride }
+        #endif
+        return !isSimulated && StreakCoverStore.ledger()?.lastEarnedDay == Streaks.dayKey(for: Date())
     }
 
     // MARK: - VoiceOver copy

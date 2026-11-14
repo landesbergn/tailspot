@@ -642,6 +642,11 @@ DATABASE_URL=… APNS_KEY_P8=… APNS_KEY_ID=… APNS_TEAM_ID=… npm run streak
   --day 2026-11-13 --reason "FAA ground stop" \
   --push-title "…" --push-body "…" --min-build <N>
 
+# Test send to ONE device, with no build filter (see below).
+DATABASE_URL=… APNS_KEY_P8=… APNS_KEY_ID=… APNS_TEAM_ID=… npm run streak:forgive -- \
+  --day 2000-01-01 --reason "Test" \
+  --push-title "…" --push-body "…" --only-device <device uuid>
+
 # Undo a mistake. Deletes the day and never pushes.
 DATABASE_URL=… npm run streak:forgive -- --day 2026-11-13 --remove
 ```
@@ -650,7 +655,8 @@ DATABASE_URL=… npm run streak:forgive -- --day 2026-11-13 --remove
   rejected). It is a zone-free label: each phone treats it as its own local day.
 - `--reason` is the short phrase the app shows; required, at most 80 characters.
 - A push is sent only when **both** `--push-title` and `--push-body` are given.
-- **`--min-build` is required whenever pushing, and it must be the first build
+- **`--min-build` is required whenever pushing** (unless `--only-device` is
+  used), **and it must be the first build
   that shipped streak forgiveness.** Older app versions ignore the list, so
   telling them "your streak is safe" would be untrue. The broadcast goes to
   every non-disabled device that has an APNs token and a recorded
@@ -659,6 +665,17 @@ DATABASE_URL=… npm run streak:forgive -- --day 2026-11-13 --remove
   after this deploy. The client re-uploads its token whenever its build
   changes, so every install of a forgiveness-capable build records one as long
   as the server was deployed before that build reached users.
+- **`--only-device <device uuid>` is the test send.** Use it before the first
+  real broadcast, so that broadcast is not also the first end-to-end test. With
+  the push flags it sends to that one device only and does **not** apply the
+  build filter — a Debug build reports build 1, which any real `--min-build`
+  excludes. It cannot be combined with `--min-build`. The device must exist, be
+  enabled and have a push token; otherwise the script says which of those
+  failed, writes nothing, sends nothing and exits non-zero. With `--dry-run` it
+  reports the one target, or why there is none.
+  **It still writes the day's row**, so test with a far-past day that touches
+  nobody's streak, such as `2000-01-01`, and `--remove` it afterwards (the row
+  is otherwise served to every phone, harmlessly, until removed).
 - The push needs the same `APNS_*` variables the server uses. If they are
   missing and a push was requested, the script stops **before** writing
   anything.

@@ -13,12 +13,16 @@ Git history + PLAN.md §9 remain the authoritative record.
 - **Repair (manual).** Offered in the Profile streak card only when no freeze covered the miss: one missed day, yesterday or the day before, once every 30 days. One tap, no catch required.
 - Freezes and repairs only protect a streak of 2 or more days.
 - **Forgiven days (operator).** New `streak_forgiveness` table, public `GET /v1/streak-forgiveness` (60 s cache, 120/min per IP), and `npm run streak:forgive -- --day … --reason … [--push-title … --push-body … --min-build N] [--dry-run] [--remove]`. The app fetches the list on every foreground and applies it locally, so people with notifications off are covered too. The push is only the announcement and goes to devices whose recorded build is at least `--min-build`, because older builds ignore forgiveness.
+- `--only-device <device id>` sends the push to one device with no build filter, for a test send before a real broadcast. Test against a far-past day such as `2000-01-01` and `--remove` it afterwards.
+- A freeze spent on a day that is later forgiven is handed back. A forgiven day older than 7 days stays cached even if the server stops listing it, so an empty server list can't break old streaks; newer days follow the server, which is how a mistake is taken back.
 - The server now stores the build a push token came from (`devices.app_build`); it used to be logged and dropped.
 - The 5pm reminder skips forgiven days. It can still fire on a day forgiven after the app was last opened, because the app can't be woken to cancel it.
+- Catch reveal: on a day that earns a freeze, the card's streak stamp adds "FREEZE EARNED".
 - Profile: a snowflake and count on the streak row while freezes are held, "No catch needed today" on a forgiven day, and the repair row. Wrench: a ❄ button cycles freezes held 0 → 1 → 2, and Reset forgets the ledger.
+- Noah's calls after the review doc (2026-11-13): repair stays a free tap, 7 days per freeze and 2 held stay, the forgiven reason stays off the Profile card, and making the push respect the streak-reminder toggle is a separate change.
 - Local-only like the Hangar: the ledger lives in UserDefaults, so deleting the app loses held freezes and past covered days. No SwiftData change.
 - **Deploy order:** apply migration `0012_streak-forgiveness.sql` to prod, then deploy the server, then ship the app. An un-migrated database fails device registration once the new server is live.
-- Tests: `StreakCoverTests` (25) plus the existing streak suites; backend `streakForgiveness.route`, `forgiveStreakDay`, `pushToken.route`.
+- Tests: `StreakCoverTests` (28; full `TailspotTests` 2,001 passing) plus the existing streak suites; backend `streakForgiveness.route`, `forgiveStreakDay`, `pushToken.route`.
 
 ## 2026-11-13 — CLAUDE.md cleanup (branch `claude/claude-md-cleanup-6fcac8`)
 

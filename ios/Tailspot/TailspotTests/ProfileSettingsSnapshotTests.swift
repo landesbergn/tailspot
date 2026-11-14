@@ -205,8 +205,15 @@ extension StandardDefaultsSnapshotSuites {
         @Test func renderStreakCoverStates() async throws {
             let defaults = UserDefaults.standard
             let keys = [SpotterHandle.storageKey, "tailspot.standing.points",
-                        "tailspot.standing.rank", StreakCoverStore.ledgerKey,
-                        StreakCoverStore.forgivenKey]
+                        "tailspot.standing.rank"]
+            // The streak state goes in its own suite, never standard
+            // defaults: other suites' memo keys hash the standard copy.
+            let cover = UserDefaults(suiteName: "ProfileStreakCover.\(UUID().uuidString)")!
+            func profile(_ c: ModelContainer) -> some View {
+                var screen = ProfileScreen()
+                screen._coverDefaults = cover
+                return screen.modelContainer(c)
+            }
             let saved = keys.map { defaults.object(forKey: $0) }
             defaults.set("noah", forKey: SpotterHandle.storageKey)
             defaults.set(1370, forKey: "tailspot.standing.points")
@@ -235,28 +242,29 @@ extension StandardDefaultsSnapshotSuites {
             }
 
             // Two freezes held on a safe 15-day streak.
-            StreakCoverStore.save(StreakLedger(freezesHeld: 2))
-            StreakCoverStore.saveForgiven([])
-            await snapshot(ProfileScreen().modelContainer(try container(daysAgo: Array(0...14))),
+            StreakCoverStore.save(StreakLedger(freezesHeld: 2), defaults: cover)
+            StreakCoverStore.saveForgiven([], defaults: cover)
+            await snapshot(profile(try container(daysAgo: Array(0...14))),
                            as: "profile_streak_freezes_held")
 
             // One freeze held while at risk: the longest row the card fits.
-            StreakCoverStore.save(StreakLedger(freezesHeld: 1))
-            await snapshot(ProfileScreen().modelContainer(try container(daysAgo: Array(1...9))),
+            StreakCoverStore.save(StreakLedger(freezesHeld: 1), defaults: cover)
+            await snapshot(profile(try container(daysAgo: Array(1...9))),
                            as: "profile_streak_freeze_at_risk")
 
             // Missed yesterday with no freeze: the repair is on offer.
-            StreakCoverStore.save(StreakLedger())
+            StreakCoverStore.save(StreakLedger(), defaults: cover)
             let missed = try container(daysAgo: Array(2...13))
             let status = StreakCoverCenter.status(
-                catches: try missed.mainContext.fetch(FetchDescriptor<Catch>()))
+                catches: try missed.mainContext.fetch(FetchDescriptor<Catch>()), defaults: cover)
             #expect(status.repair?.streakRestored == 12)
-            await snapshot(ProfileScreen().modelContainer(missed), as: "profile_streak_repair_offer")
+            await snapshot(profile(missed), as: "profile_streak_repair_offer")
 
             // Today is a forgiven day on a live streak.
             StreakCoverStore.saveForgiven(
-                [ForgivenDay(day: Streaks.dayKey(for: Date()), reason: "FAA ground stop")])
-            await snapshot(ProfileScreen().modelContainer(try container(daysAgo: Array(1...8))),
+                [ForgivenDay(day: Streaks.dayKey(for: Date()), reason: "FAA ground stop")],
+                defaults: cover)
+            await snapshot(profile(try container(daysAgo: Array(1...8))),
                            as: "profile_streak_forgiven_today")
         }
 
