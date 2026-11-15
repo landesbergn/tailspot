@@ -75,7 +75,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         // APNs hands the token over as raw bytes; every server API on earth
         // wants the lowercase hex string.
         let hex = deviceToken.map { String(format: "%02x", $0) }.joined()
-        guard let environment = PushEnvironment.current() else {
+        guard let environment = PushEnvironment.forThisBuild else {
             Log.ui.notice("APNs token received with no aps-environment — not uploading")
             return
         }
@@ -104,13 +104,15 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
 @MainActor
 enum PushRegistration {
 
-    /// Ask iOS for an APNs device token — unless this build could not
-    /// possibly have one. The simulator has no APNs, and a build with no
-    /// `aps-environment` entitlement would only ever reach
-    /// `didFailToRegister`, so both skip silently rather than logging a
-    /// failure that means nothing.
+    /// Ask iOS for an APNs device token, unless this build could not
+    /// possibly have one. In practice that is the simulator (no APNs) and a
+    /// development or ad hoc build whose profile carries no
+    /// `aps-environment` entitlement, which would only ever reach
+    /// `didFailToRegister`. Both skip silently rather than logging a
+    /// failure that means nothing. App Store and TestFlight builds always
+    /// register: see `PushEnvironment.resolve`.
     static func registerForRemoteNotifications() {
-        guard PushEnvironment.current() != nil else {
+        guard PushEnvironment.forThisBuild != nil else {
             Log.ui.debug("Skipping APNs registration: no aps-environment")
             return
         }
@@ -146,9 +148,18 @@ enum PushRegistration {
 /// would mean Security-framework work for one string, so the standard
 /// approach — and the one used here — is to find the `<plist` … `</plist>`
 /// window inside the bytes and hand that to `PropertyListSerialization`.
-/// A Debug/TestFlight build says "development", which APNs calls "sandbox";
-/// an App Store build says "production". The simulator has no profile at
-/// all, which is exactly the case where registration must not happen.
+/// A development-signed build says "development", which APNs calls
+/// "sandbox"; an ad hoc build says "production".
+///
+/// App Store and TestFlight builds are the exception: Apple strips
+/// `embedded.mobileprovision` when it re-signs the app for distribution, so
+/// on a real device a MISSING profile means a store build, and store builds
+/// always use the production gateway. Reading "no profile" as "no token
+/// possible" is the bug that kept every released install from registering
+/// from 2026-09-27 (found 2026-11-15; builds before the fix still have
+/// it). The simulator also has no
+/// profile, and there registration must not happen, so the two cases are
+/// told apart by the compile-time simulator check and not by the file.
 nonisolated enum PushEnvironment {
     /// What the backend expects in the `environment` field.
     static let sandbox = "sandbox"
@@ -158,17 +169,39 @@ nonisolated enum PushEnvironment {
     static let entitlementKey = "aps-environment"
 
     /// The environment for the running build, or nil when this build can
-    /// have no APNs token (simulator, or an unsigned build with no profile).
+    /// have no APNs token (see `resolve`).
     static func current(bundle: Bundle = .main) -> String? {
         #if targetEnvironment(simulator)
-        // The simulator has no APNs and no embedded profile. Bail before
-        // touching the bundle so the intent is unmistakable.
-        return nil
+        let isSimulator = true
         #else
-        guard let url = bundle.url(forResource: "embedded", withExtension: "mobileprovision"),
-              let data = try? Data(contentsOf: url) else { return nil }
-        return environment(fromProvisioningProfile: data)
+        let isSimulator = false
         #endif
+        guard let url = bundle.url(forResource: "embedded", withExtension: "mobileprovision") else {
+            return resolve(provisioningProfile: nil, isSimulator: isSimulator)
+        }
+        // A profile that is there but cannot be read is NOT a store build.
+        // Guessing production for it would upload a sandbox token under
+        // the wrong gateway, so it gets no environment at all.
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        return resolve(provisioningProfile: data, isSimulator: isSimulator)
+    }
+
+    /// `current()` for the main bundle, worked out once. The answer cannot
+    /// change while the app runs, and both the registration gate and the
+    /// token callback ask on the main thread during launch.
+    static let forThisBuild: String? = current()
+
+    /// The rule, with the bundle and the build target passed in so it is
+    /// testable without a signed app:
+    /// - simulator: nil, whatever else is true (it has no APNs);
+    /// - device with no embedded profile: an App Store or TestFlight build,
+    ///   so `production`;
+    /// - device with a profile (development or ad hoc): whatever the
+    ///   profile's `aps-environment` says, or nil when it has none.
+    static func resolve(provisioningProfile: Data?, isSimulator: Bool) -> String? {
+        if isSimulator { return nil }
+        guard let provisioningProfile else { return production }
+        return environment(fromProvisioningProfile: provisioningProfile)
     }
 
     /// The pure half: profile bytes in, environment string out. Separated so
