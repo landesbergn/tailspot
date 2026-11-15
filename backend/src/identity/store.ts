@@ -98,12 +98,19 @@ export interface IdentityStore {
    * both kept it, one physical phone would receive another identity's
    * notifications. Last writer wins, which is also the truth (APNs gave the
    * token to whoever asked most recently).
+   *
+   * `build` is the registering app's build number (Int CFBundleVersion), or
+   * null/omitted when the client didn't say. It is stored as `app_build` and
+   * REPLACES the previous value, null included: a stale build left behind by an
+   * older registration could let a gated broadcast reach a client that no
+   * longer qualifies.
    */
   setPushToken(
     deviceId: string,
     token: string,
     environment: PushEnvironment,
     now: Date,
+    build?: number | null,
   ): Promise<SetPushTokenResult>;
   /** Forget this device's push token (the client's opt-out / sign-off path). */
   clearPushToken(deviceId: string): Promise<void>;
@@ -117,12 +124,13 @@ export type PushEnvironment = "sandbox" | "production";
  * token up — eviction when it moves to another install, the client's explicit
  * DELETE, and the sender's dead-token cleanup — uses this, so a row can never
  * end up half-cleared (no token but a stale `apns_environment`, or a
- * `apns_updated_at` that outlives the token it described).
+ * `apns_updated_at` or `app_build` that outlives the token it described).
  */
 export const CLEARED_PUSH_TOKEN = {
   apnsToken: null,
   apnsEnvironment: null,
   apnsUpdatedAt: null,
+  appBuild: null,
 } as const;
 
 /** What `setPushToken` did, so the route can report a token that MOVED. */
@@ -197,6 +205,7 @@ export class DrizzleIdentityStore implements IdentityStore {
     token: string,
     environment: PushEnvironment,
     now: Date,
+    build: number | null = null,
   ): Promise<SetPushTokenResult> {
     // Both writes in ONE transaction: between the clear and the set, a token
     // must never be on zero rows (a lost notification) or on two (a leak to
@@ -209,7 +218,12 @@ export class DrizzleIdentityStore implements IdentityStore {
         .returning({ id: devices.id });
       await tx
         .update(devices)
-        .set({ apnsToken: token, apnsEnvironment: environment, apnsUpdatedAt: now })
+        .set({
+          apnsToken: token,
+          apnsEnvironment: environment,
+          apnsUpdatedAt: now,
+          appBuild: build,
+        })
         .where(eq(devices.id, deviceId));
       return { movedFrom: moved.map((m) => m.id) };
     });

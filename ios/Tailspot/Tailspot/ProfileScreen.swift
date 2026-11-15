@@ -68,6 +68,10 @@ struct ProfileScreen: View {
     /// and a box that outlived its container could hand back a row from a
     /// torn-down store. The expensive part, the trophy inputs, comes from
     /// the process-wide `TrophyInputsMemo`, which holds only values.
+    /// Where the forgiven-day list is read from. Standard in the app;
+    /// snapshot tests pass a suite so they never write streak state into
+    /// the defaults every other test reads.
+    var _coverDefaults: UserDefaults = .standard
     @State private var derivedCache = DerivedCacheBox<ProfileDerived>()
 
     var body: some View {
@@ -91,10 +95,14 @@ struct ProfileScreen: View {
         // The trophy inputs come from the shared memo, usually already filled
         // by the app-root unlock center's launch/catch diff.
         let trophyToken = TrophyInputsToken.of(catches)
-        let derived = derivedCache.value(for: ProfileDerived.token(trophyToken: trophyToken)) {
+        let coverDefaults = _coverDefaults
+        let derived = derivedCache.value(for: ProfileDerived.token(
+            trophyToken: trophyToken,
+            coverToken: StreakCoverStore.stateToken(defaults: coverDefaults))
+        ) {
             ProfileDerived(catches: catches, inputs: TrophyInputsMemo.shared.inputs(for: trophyToken) {
                 Trophies.inputs(from: catches)
-            })
+            }, coverDefaults: coverDefaults)
         }
         let stats = derived.stats
         let inputs = derived.inputs
@@ -722,6 +730,9 @@ struct ProfileScreen: View {
     /// The card's one editorial line. Sentence case: it's a sentence.
     private func streakStateLine(_ s: Streaks.Summary) -> String {
         if s.caughtToday { return "Extended today" }
+        // A forgiven day (StreakCover.swift): the streak is alive and today
+        // can't break it.
+        if s.todayCovered && s.current > 0 { return "No catch needed today" }
         if s.atRisk { return "Catch today to keep it" }
         return "Catch a plane to start one"
     }
@@ -1009,11 +1020,17 @@ struct ProfileDerived {
         events: TrophyEventStore = TrophyEventStore(),
         standing: LeaderboardStandingCache = LeaderboardStandingCache(),
         now: Date = Date(),
-        inputs: TrophyProgressInputs? = nil
+        inputs: TrophyProgressInputs? = nil,
+        coverDefaults: UserDefaults = .standard
     ) {
         stats = ProfileStats(catches: catches)
         self.inputs = inputs ?? Trophies.inputs(from: catches, events: events, standing: standing)
-        streak = Streaks.summary(catches: catches, asOf: now)
+        // Standard defaults go through the shared funnel (which also knows
+        // about the wrench override); an injected store is read directly.
+        streak = Streaks.summary(
+            catches: catches, asOf: now,
+            covered: coverDefaults === UserDefaults.standard
+                ? nil : StreakCoverStore.coveredDays(defaults: coverDefaults))
         bestCatch = catches.max(by: {
             ($0.resolvedRarity.ordinal, $0.caughtAt.timeIntervalSince1970)
                 < ($1.resolvedRarity.ordinal, $1.caughtAt.timeIntervalSince1970)
@@ -1051,7 +1068,8 @@ struct ProfileDerived {
     static func token(
         trophyToken: Int,
         now: Date = Date(),
-        streakOverride: Streaks.Summary? = debugStreakOverride
+        streakOverride: Streaks.Summary? = debugStreakOverride,
+        coverToken: Int = StreakCoverStore.stateToken()
     ) -> Int {
         var hasher = Hasher()
         hasher.combine(trophyToken)
@@ -1059,6 +1077,8 @@ struct ProfileDerived {
         hasher.combine(streakOverride?.current)
         hasher.combine(streakOverride?.longest)
         hasher.combine(streakOverride?.caughtToday)
+        // A forgiven day changes the streak without any row changing.
+        hasher.combine(coverToken)
         return hasher.finalize()
     }
 

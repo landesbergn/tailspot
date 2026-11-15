@@ -131,6 +131,7 @@ nonisolated enum StreakReminders {
     /// testable at a fixed clock.
     static func decision(
         days: Set<String>,
+        covered: Set<String> = [],
         now: Date,
         timeZone: TimeZone = .current,
         enabled: Bool,
@@ -138,14 +139,19 @@ nonisolated enum StreakReminders {
     ) -> Decision {
         guard enabled, authorized else { return .cancel }
         let todayKey = Streaks.dayKey(for: now, timeZone: timeZone)
-        let current = Streaks.currentStreak(days: days, todayKey: todayKey)
+        let current = Streaks.currentStreak(days: days, todayKey: todayKey, covered: covered)
         guard current >= minimumStreak else { return .cancel }
-        if days.contains(todayKey) {
-            // Today is safe — protect the streak's continuation tomorrow.
-            // (By tomorrow evening, "streak through yesterday" == today's
+        if days.contains(todayKey) || covered.contains(todayKey) {
+            // Today is safe (caught, or a forgiven day) — protect the
+            // streak's continuation on the next day that needs a catch.
+            // (By that evening, "streak through yesterday" == today's
             // `current`, so the stake reads correctly when it fires.)
-            guard let tomorrow = Streaks.key(byAdding: 1, to: todayKey) else { return .cancel }
-            return .schedule(dayKey: tomorrow, streakAtStake: current)
+            var next = Streaks.key(byAdding: 1, to: todayKey)
+            while let day = next, covered.contains(day) {
+                next = Streaks.key(byAdding: 1, to: day)
+            }
+            guard let next else { return .cancel }
+            return .schedule(dayKey: next, streakAtStake: current)
         }
         // Live streak through yesterday, nothing today: nudge this evening —
         // but only while the reminder hour is still ahead (a past calendar
@@ -348,7 +354,8 @@ final class StreakReminderCenter: NSObject, UNUserNotificationCenterDelegate {
         // the planner sees a forced streak without needing to know it exists.
         let days = Streaks.daySet(catches: catches)
         let decision = StreakReminders.decision(
-            days: days, now: now, enabled: remindersEnabled, authorized: authorized
+            days: days, covered: Streaks.coveredDays(), now: now,
+            enabled: remindersEnabled, authorized: authorized
         )
         // Replace-not-accumulate: clear the singular slot first. The
         // delivered copy is retired too — once the user has caught (or
