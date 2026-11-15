@@ -5,6 +5,17 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-11-15 — Frame catch rule rolled out to everyone; multi-plane catches get a detector verdict (branch `claude/catch-rule-experiment-33d5ad`)
+
+- Rollout: PostHog flag `frame-is-the-catch` went from a 50/50 split to 100% (flag version 6). No code change; users get the frame rule at their next cold launch or return from the background. Builds older than 1.2.4 (111), and sessions where the flag hasn't loaded, still run legacy because the code default is `.legacy`.
+- Why now: Noah asked for an interim read on day 6 of the A/B planned to run to 2026-12-21, and chose to roll out. 57 people, no flips. Share of open days with a catch: frame 0.58 (23 people) vs legacy 0.50 (34), 74% chance frame is better, below the pre-set 90% bar, so a tie decided by Noah. Existing users only: 0.68 vs 0.65.
+- The A/B notebook's "confirmed share" guardrail looked bad for frame (33% vs 64%) but was not a fair comparison: a detection counts as corroborated even on planes too small to expect one. Counting only `catch_detector_gate` rows inside the envelope, frame was 11 of 54 and legacy 45 of 116; without one heavy frame user, 11 of 31. Per-person averages 33% vs 45%, inside noise.
+- Evidence gap closed: a frame multi-plane press already searched the still once per plane to place brackets, but only single catches recorded the result. Now every searched plane gets a `catch_detector_gate` event and a `detector_verdict` on its `catch_performed` row.
+- `catch_detector_gate` gains `targets` (planes in the press) and `snap_conflict` (the search found a plane but a nearer target claimed it). Older builds send neither; read them as 1 and false.
+- Suspicion is unchanged: only a single-target in-envelope miss can join the shadow signal, and only with enforcement on (`DetectorGate.raisesSuspicion`). Legacy multi-catches (zone clusters) are still not searched and carry no verdict.
+- Tests: three new cases in `DetectorGateTests.swift` (the two new properties, and the suspicion rule).
+- Still open: delete the legacy rule and make frame the code default after a watch period.
+
 ## 2026-11-15 — Push registration works on App Store and TestFlight builds (branch `fix/push-registration-app-store`)
 
 - Found while testing the forgiven-streak-day push ([PR #426](https://github.com/landesbergn/tailspot/pull/426)): the production `devices` table held one `apns_token`, a sandbox token from Noah's development build on 2026-09-28. No released install had ever registered, so no challenge "overtaken" push has reached a real user since they shipped on 2026-09-27.

@@ -57,14 +57,15 @@ read the source and each one's focused test file.
   `docs/plans/2026-08-28-feat-frame-is-the-catch.md`). The detector runs at catch
   time only; `VisualConfirmationPipeline.updateTarget` is the kept-but-unarmed
   live-tracking upgrade path.
-<!-- TEMPORARY: the next bullet describes the live frame-is-the-catch A/B
-(50/50 since 2026-11-09). Once the rule is decided, delete the losing side
-together with CatchMode.swift, then delete that bullet and drop the
-"behind the flag" / legacy mentions above. -->
+<!-- TEMPORARY: the frame-is-the-catch A/B ended 2026-11-15 and frame won
+(flag at 100%). After the watch period, delete the legacy side together with
+CatchMode.swift, then delete the next bullet and drop the "behind the flag" /
+legacy mentions above. -->
 - **Catch-rule feature flag (PostHog `frame-is-the-catch`).** `CatchMode.swift`:
   `.frame` (the model above) vs `.legacy` (the zones-and-pins model in
-  `LockOnEngine.swift` and its zone/dominance helpers). Default is `.legacy`: the
-  flag is off for anyone it doesn't target. Resolution is one funnel,
+  `LockOnEngine.swift` and its zone/dominance helpers). The flag has targeted
+  everyone since 2026-11-15, but the code default is still `.legacy`: that is
+  what a user gets when the flag is off or hasn't loaded. Resolution is one funnel,
   `CatchMode.effective`: a Debug-only wrench override (`tailspot.debug.catchMode`;
   Release never reads it) beats the PostHog value; flag off / not loaded /
   keyless analytics → `.legacy`. `CatchModeFlag` applies the PostHog value only at
