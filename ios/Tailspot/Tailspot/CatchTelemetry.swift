@@ -730,7 +730,9 @@ nonisolated enum CatchTelemetry {
         liveFix: Bool,
         expectedFootprintPx: Double?,
         meanLuminance: Double?,
-        enforcing: Bool
+        enforcing: Bool,
+        targets: Int = 1,
+        snapConflict: Bool = false
     ) -> [String: AnalyticsValue] {
         var props: [String: AnalyticsValue] = [
             "verdict": .string(verdict.rawValue),
@@ -738,27 +740,36 @@ nonisolated enum CatchTelemetry {
             "live_fix": .bool(liveFix),
             "would_flag": .bool(verdict == .noDetection),
             "enforcing": .bool(enforcing),
+            // How many planes the press caught, and whether this plane's
+            // detection was claimed by a nearer target. Both absent on
+            // builds before per-plane verdicts (read as 1 / false).
+            "targets": .int(targets),
+            "snap_conflict": .bool(snapConflict),
         ]
         if let f = expectedFootprintPx { props["expected_footprint_px"] = .double(f) }
         if let l = meanLuminance { props["mean_luminance"] = .double(l) }
         return props
     }
 
-    /// Fired once per single-target catch with the L4 verdict — on every such
-    /// catch, in shadow and enforce mode. The calibration stream that gates
-    /// flipping enforcement.
+    /// Fired once per searched target with the L4 verdict, in shadow and
+    /// enforce mode: every single catch, and each plane of a frame-mode
+    /// multi-plane press. The calibration stream that gates flipping
+    /// enforcement.
     static func fireDetectorGate(
         verdict: DetectorGateVerdict,
         snapHit: Bool,
         liveFix: Bool,
         expectedFootprintPx: Double?,
         meanLuminance: Double?,
-        enforcing: Bool
+        enforcing: Bool,
+        targets: Int = 1,
+        snapConflict: Bool = false
     ) {
         Analytics.capture(detectorGateEvent, detectorGateProperties(
             verdict: verdict, snapHit: snapHit, liveFix: liveFix,
             expectedFootprintPx: expectedFootprintPx,
-            meanLuminance: meanLuminance, enforcing: enforcing
+            meanLuminance: meanLuminance, enforcing: enforcing,
+            targets: targets, snapConflict: snapConflict
         ))
     }
 

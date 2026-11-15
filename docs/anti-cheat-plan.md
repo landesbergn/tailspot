@@ -255,7 +255,10 @@ Reuse the existing offline harness rather than guessing thresholds:
   preview VisualFix; envelope = daylight (`meanLuminance ≥ 0.12`) + expected
   footprint ≥ 24 px in the still (`DetectorGate.expectedFootprintPx`). Watch
   `catch_detector_gate` — flip `detectorGateEnforcing` when the in-envelope
-  no-detection stream reads as cheats, not detector-recall misses.)*
+  no-detection stream reads as cheats, not detector-recall misses. Since
+  2026-11-15 each plane of a frame-mode multi-plane press is judged too
+  (`targets`, `snap_conflict` on the event); only a single-target miss can
+  raise suspicion.)*
 - **Risk:** re-breaking "never hide a visible plane." **Mitigated by:** catch-eligibility
   decoupled from label rendering (labels stay generous); fail-open everywhere; an
   override on every block; override-rate watch. The doctrine stays intact — labels
