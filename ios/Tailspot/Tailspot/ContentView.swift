@@ -2644,14 +2644,15 @@ struct ContentView: View {
             // detector evidence the catch path has, so its outcome doubles
             // as the corroboration signal. Judged only inside the detector's
             // competence envelope (daylight + expected footprint above the
-            // model's resolution floor — DetectorGate); out-of-envelope and
-            // multi-catches are never doubted. SHADOW by default: telemetry
-            // always fires, and the debug flag controls whether a no-detection
-            // outcome joins the combined shadow signal.
+            // model's resolution floor — DetectorGate); out-of-envelope
+            // catches are never doubted. Every searched target gets a
+            // verdict in telemetry, but only a single-target miss can join
+            // the combined shadow signal (`DetectorGate.raisesSuspicion`).
+            // SHADOW by default: telemetry always fires, and the debug flag
+            // controls whether a no-detection outcome joins that signal.
             var authenticitySignals = authenticitySignals
-            var detectorVerdict: DetectorGateVerdict?
-            var singleSnap: CatchPhotoSnapper.Snap?
-            var singleSnapped: CGPoint?
+            var detectorVerdicts: [String: DetectorGateVerdict] = [:]
+            var snapEvidence: [(icao: String, snap: CatchPhotoSnapper.Snap, snapped: CGPoint?)] = []
             // The legacy rule snaps single catches only, as shipped: a
             // multi-catch there is a zone cluster, and per-target searches
             // (each up to ~19 CoreML passes, sequential) would slow the
@@ -2713,12 +2714,26 @@ struct ContentView: View {
                         "targets": .int(icaos.count),
                     ])
                 }
-                if icaos.count == 1 {
-                    singleSnap = outcomes.first?.snap
-                    singleSnapped = resolved.first?.snapped
+                // `resolveSnapConflicts` returns the input's order, so the
+                // two arrays line up target for target.
+                snapEvidence = zip(outcomes, resolved).map {
+                    (icao: $0.icao, snap: $0.snap, snapped: $1.snapped)
                 }
             }
-            if let snap = singleSnap, let icao = icaos.first {
+            // One verdict per searched target. A multi-plane press (frame
+            // mode) is judged plane by plane, so those catches carry the
+            // same evidence as a single catch.
+            // Same for every plane of the press: one photo, one frame. The
+            // count is the press's, not the searched subset's, so a plane
+            // that couldn't be projected never makes its neighbour look
+            // like a single catch.
+            let meanLum = visualConfirm.latestSkyFeatures?.meanLuminance
+            let enforcing = visualConfirm.detectorGateEnforcing
+            let pressTargetCount = icaos.count
+            for evidence in snapEvidence {
+                let icao = evidence.icao
+                let snap = evidence.snap
+                let snapHit = evidence.snapped != nil
                 // A live preview fix also corroborates (fresh by construction
                 // — it expires after ~1 s of detector misses). Only the
                 // legacy mode tracks pre-press, so in the frame mode this is
@@ -2738,20 +2753,24 @@ struct ContentView: View {
                         }
                     }
                     : nil
-                let meanLum = visualConfirm.latestSkyFeatures?.meanLuminance
                 let verdict = DetectorGate().verdict(
-                    sawPlane: singleSnapped != nil || liveFix,
+                    sawPlane: snapHit || liveFix,
                     expectedFootprintPx: footprintPx,
                     meanLuminance: meanLum
                 )
-                detectorVerdict = verdict
-                let enforcing = visualConfirm.detectorGateEnforcing
+                detectorVerdicts[icao] = verdict
                 CatchTelemetry.fireDetectorGate(
-                    verdict: verdict, snapHit: singleSnapped != nil, liveFix: liveFix,
+                    verdict: verdict, snapHit: snapHit, liveFix: liveFix,
                     expectedFootprintPx: footprintPx, meanLuminance: meanLum,
-                    enforcing: enforcing
+                    enforcing: enforcing,
+                    targets: pressTargetCount,
+                    // The search found a plane but a nearer target claimed
+                    // it, so this miss is weaker evidence than a clean one.
+                    snapConflict: snap.screenPoint != nil && !snapHit
                 )
-                if verdict == .noDetection, enforcing {
+                if DetectorGate.raisesSuspicion(
+                    verdict, enforcing: enforcing, targetCount: pressTargetCount
+                ) {
                     authenticitySignals[icao] = CatchSuspicion.preferred(
                         authenticitySignals[icao], .noDetection
                     )
@@ -3009,9 +3028,10 @@ struct ContentView: View {
                     // the caught plane's apparent size (L3 → trending bigger).
                     multiN: newCatches.count,
                     angularSizeArcmin: visibleByIcao[row.icao24]?.apparentSizeArcminutes,
-                    // Only ever non-nil for a single-target catch, so it can't
-                    // mislabel a multi-catch row.
-                    detectorVerdict: detectorVerdict,
+                    // Keyed by plane, so a multi-catch row carries its own
+                    // verdict. nil when the still wasn't searched for it (a
+                    // legacy zone cluster, or no photo).
+                    detectorVerdict: detectorVerdicts[row.icao24],
                     catchMode: pressCatchMode,
                     skyVerdict: skyVerdict
                 )
