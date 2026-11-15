@@ -5,6 +5,15 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-11-15 — Push registration works on App Store and TestFlight builds (branch `fix/push-registration-app-store`)
+
+- Found while testing the forgiven-streak-day push ([PR #426](https://github.com/landesbergn/tailspot/pull/426)): the production `devices` table held one `apns_token`, a sandbox token from Noah's development build on 2026-09-28. No released install had ever registered, so no challenge "overtaken" push has reached a real user since they shipped on 2026-09-27.
+- Cause: `PushEnvironment.current()` read `embedded.mobileprovision` and returned nil when the file was missing, and `PushRegistration` skipped registration on nil. Apple strips that file from App Store and TestFlight builds, so only development-signed builds passed the check.
+- Fix: new pure `PushEnvironment.resolve(provisioningProfile:isSimulator:)`. Simulator → nil. Real device with no profile → `production` (a store build; TestFlight uses the production gateway too). Real device with a profile → what the profile says, as before. The profile parser is unchanged.
+- Tests: five new cases in `PushTokenClientTests.swift` for the rule (no profile, development, production, profile without push, simulator).
+- Not verifiable on a development build, which always has a profile. Needs a TestFlight build: after one is installed with notifications allowed, `devices` should start showing rows with `apns_environment = 'production'`.
+- No backend change. Existing installs register on their first launch of the fixed build if notification permission is already granted.
+
 ## 2026-11-14 — Forgiven streak days (branch `claude/streak-forgiveness-extensions-15f61d`)
 
 - Noah's ask: forgive a day for everyone (an FAA ground stop, say) so a missed catch doesn't break anyone's streak, with a push to announce it.

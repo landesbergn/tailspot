@@ -629,6 +629,10 @@ and migration **`0012_streak-forgiveness`** applied (see the migration note
 below). Without the table the script fails; without the deploy nothing serves
 the row.
 
+The no-push forms (`--dry-run`, row only, `--remove`) run from a laptop
+through `fly proxy 15432:5432 -a tailspot-db` with `DATABASE_URL` pointed at
+`localhost:15432`. The push forms run on the Fly machine, as shown.
+
 ```sh
 # Show what would happen. Writes nothing, sends nothing; with the push flags it
 # also prints how many devices would be pushed, split by production / sandbox.
@@ -637,15 +641,17 @@ DATABASE_URL=… npm run streak:forgive -- --day 2026-11-13 --reason "FAA ground
 # Write the row only (re-running with a new --reason updates it).
 DATABASE_URL=… npm run streak:forgive -- --day 2026-11-13 --reason "FAA ground stop"
 
-# Write the row, then announce it.
-DATABASE_URL=… APNS_KEY_P8=… APNS_KEY_ID=… APNS_TEAM_ID=… npm run streak:forgive -- \
-  --day 2026-11-13 --reason "FAA ground stop" \
-  --push-title "…" --push-body "…" --min-build <N>
+# Write the row, then announce it. A push needs the APNs secrets, which live
+# on the Fly machine, so run the built script THERE (it uses the machine's own
+# DATABASE_URL and APNS_* env; nothing is copied to a laptop).
+fly ssh console -a tailspot-api -C "sh -c 'node dist/tools/forgive-streak-day.js \
+  --day 2026-11-13 --reason \"FAA ground stop\" \
+  --push-title \"…\" --push-body \"…\" --min-build <N>'"
 
-# Test send to ONE device, with no build filter (see below).
-DATABASE_URL=… APNS_KEY_P8=… APNS_KEY_ID=… APNS_TEAM_ID=… npm run streak:forgive -- \
-  --day 2000-01-01 --reason "Test" \
-  --push-title "…" --push-body "…" --only-device <device uuid>
+# Test send to ONE device, with no build filter (see below). Same place.
+fly ssh console -a tailspot-api -C "sh -c 'node dist/tools/forgive-streak-day.js \
+  --day 2000-01-01 --reason \"Test\" \
+  --push-title \"…\" --push-body \"…\" --only-device <device uuid>'"
 
 # Undo a mistake. Deletes the day and never pushes.
 DATABASE_URL=… npm run streak:forgive -- --day 2026-11-13 --remove
