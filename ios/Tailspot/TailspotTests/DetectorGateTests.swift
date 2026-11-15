@@ -147,6 +147,42 @@ struct DetectorGateTests {
         #expect(p["would_flag"]?.jsonValue as? Bool == false)
     }
 
+    @Test func detectorGatePropertiesDefaultToASingleCleanTarget() {
+        let p = CatchTelemetry.detectorGateProperties(
+            verdict: .corroborated, snapHit: true, liveFix: false,
+            expectedFootprintPx: 60, meanLuminance: 0.4, enforcing: false
+        )
+        #expect(p["targets"]?.jsonValue as? Int == 1)
+        #expect(p["snap_conflict"]?.jsonValue as? Bool == false)
+    }
+
+    @Test func detectorGatePropertiesCarryTheMultiPlaneContext() {
+        // One plane of a three-plane press whose detection a nearer target
+        // claimed: the row must say so, so the miss can be read separately.
+        let p = CatchTelemetry.detectorGateProperties(
+            verdict: .noDetection, snapHit: false, liveFix: false,
+            expectedFootprintPx: 60, meanLuminance: 0.4, enforcing: false,
+            targets: 3, snapConflict: true
+        )
+        #expect(p["targets"]?.jsonValue as? Int == 3)
+        #expect(p["snap_conflict"]?.jsonValue as? Bool == true)
+        #expect(p["verdict"]?.jsonValue as? String == "no_detection")
+    }
+
+    // MARK: - Suspicion
+
+    @Test func onlyAnEnforcedSingleTargetMissRaisesSuspicion() {
+        #expect(DetectorGate.raisesSuspicion(.noDetection, enforcing: true, targetCount: 1))
+        // Shadow mode records and never doubts.
+        #expect(!DetectorGate.raisesSuspicion(.noDetection, enforcing: false, targetCount: 1))
+        // A multi-plane press is recorded per plane but never doubted.
+        #expect(!DetectorGate.raisesSuspicion(.noDetection, enforcing: true, targetCount: 2))
+        #expect(!DetectorGate.raisesSuspicion(.noDetection, enforcing: true, targetCount: 3))
+        // Passing verdicts never do.
+        #expect(!DetectorGate.raisesSuspicion(.corroborated, enforcing: true, targetCount: 1))
+        #expect(!DetectorGate.raisesSuspicion(.outOfEnvelope, enforcing: true, targetCount: 1))
+    }
+
     @Test func performedPropertiesCarryTheVerdictOnlyWhenJudged() {
         let judged = CatchTelemetry.performedProperties(
             icao24: "a1b2c3", rarity: "common", aircraftType: "narrow",
@@ -155,7 +191,8 @@ struct DetectorGateTests {
         )
         #expect(judged["detector_verdict"]?.jsonValue as? String == "corroborated")
 
-        // Multi-catch / no-photo rows must read "not judged", not a value.
+        // Rows the still was never searched for (a legacy zone cluster, no
+        // photo) must read "not judged", not a value.
         let unjudged = CatchTelemetry.performedProperties(
             icao24: "a1b2c3", rarity: "common", aircraftType: "narrow",
             slantKm: 4.2, visualConfirmEnabled: true, visualFixConfidence: nil

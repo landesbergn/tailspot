@@ -15,6 +15,10 @@
 //  Outside the envelope the verdict is `outOfEnvelope`, which callers treat
 //  exactly like a pass — fail open, same doctrine as SkyCheck/LocalSkyGate.
 //
+//  Every searched target gets a verdict: a single catch, and each plane of
+//  a frame-mode multi-plane press. Only a single-target miss can raise the
+//  shadow signal (`raisesSuspicion`).
+//
 //  "Saw the plane" comes from the catch path's strongest detector evidence:
 //  the CatchPhotoSnapper pass over the captured full-res still (9-tile ring
 //  search, zero hallucinated snaps in the 2026-07-07 labeled eval), OR a live
@@ -81,6 +85,20 @@ nonisolated struct DetectorGate {
         guard lum >= thresholds.minLuminance else { return .outOfEnvelope }
         guard footprint >= thresholds.minFootprintPx else { return .outOfEnvelope }
         return .noDetection
+    }
+
+    /// Whether a verdict joins the catch's combined shadow signal. Only an
+    /// in-envelope miss on a single-target catch does, and only while
+    /// enforcement is on. A multi-plane press records each plane's verdict
+    /// in telemetry but is never doubted: the unique-assignment step can
+    /// hand one detection to a neighbouring plane, so a miss there is
+    /// weaker evidence.
+    static func raisesSuspicion(
+        _ verdict: DetectorGateVerdict,
+        enforcing: Bool,
+        targetCount: Int
+    ) -> Bool {
+        verdict == .noDetection && enforcing && targetCount == 1
     }
 
     /// Expected plane footprint in captured-still pixels: the small-angle
