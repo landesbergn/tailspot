@@ -101,7 +101,17 @@ struct ContentView: View {
     /// to reveal the sensor readout (top) + nearby-aircraft list
     /// (bottom). Field-testing UI is intentionally clean; raw sensor
     /// dumps are for inspection, not normal use.
-    @State private var showDebug = false
+    /// Debug builds can open with the wrench panel showing (launch argument
+    /// `-tailspotShowDebugPanel`), so the panel can be screenshotted in the
+    /// Simulator without a tap. Release always starts with it closed.
+    @State private var showDebug = ContentView.debugPanelOpenAtLaunch
+    private static var debugPanelOpenAtLaunch: Bool {
+        #if DEBUG
+        ProcessInfo.processInfo.arguments.contains("-tailspotShowDebugPanel")
+        #else
+        false
+        #endif
+    }
     #if DEBUG
     /// Cycles the debug "Simulate catch" preset (tier) on each tap.
     @State private var simCatchIndex = 0
@@ -722,52 +732,8 @@ struct ContentView: View {
                 // Debug overlays — hidden by default; revealed by the
                 // wrench toggle below.
                 if showDebug {
-                    VStack(spacing: 0) {
-                        sensorReadout
-                            .padding(.vertical, 12)
-                            .padding(.horizontal, 6)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-
-                        #if DEBUG
-                        // Panel declutter (2026-09-05): only the affordances
-                        // a field session still reaches for. ✦ Catch fakes a
-                        // reveal without a plane overhead; ★ Rearm un-burns
-                        // the once-per-version review-ask stamp so the
-                        // trophy → rating-sheet path can be exercised again
-                        // (dev builds always show the sheet; ReviewPrompt.swift).
-                        // The trophy-unlock / icon-gallery previews went with
-                        // their features shipping. The STREAK row stayed:
-                        // main grew its 🔔 Ask re-offer tester after the
-                        // declutter (#366).
-                        // Two rows: three buttons don't fit one on a 6.1".
-                        VStack(alignment: .leading, spacing: 6) {
-                            HStack(spacing: 8) {
-                                Button("✦ Fake a catch") { simulateCatch() }
-                                Button("★ Reset rating prompt") { ReviewPrompter.shared.debugClearStamp() }
-                            }
-                            // The card's new-user peek (CardFlipTease) runs
-                            // again on the next cards.
-                            HStack(spacing: 8) {
-                                Button("↻ Reset card peek") { CardFlipTeaseStore.debugReset() }
-                                // The post-reveal "Almost there" card, without
-                                // needing a catch that lands two short.
-                                Button("◔ Almost-there card") { unlockCenter.debugShowSampleNearMiss() }
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .font(Brand.Font.mono(size: 11, weight: .bold))
-                        .buttonStyle(.bordered)
-                        .tint(Brand.Color.cyan)
-                        .padding(.horizontal, 12)
-
-                        streakDebugRow
-                        #endif
-
-                        Spacer(minLength: 0)
-
-                        aircraftList
-                    }
-                    .transition(.opacity)
+                    debugPanel
+                        .transition(.opacity)
                 }
 
                 // Top-trailing controls: the account button (Profile), with
@@ -3365,8 +3331,6 @@ struct ContentView: View {
     private var streakDebugRow: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
-                Text("STREAK")
-                    .foregroundStyle(Brand.Color.textTertiary)
                 Text(StreakDebug.label)
                     .foregroundStyle(StreakDebug.override == nil
                                      ? Brand.Color.textTertiary
@@ -3380,17 +3344,17 @@ struct ContentView: View {
             .lineLimit(1)
             .minimumScaleFactor(0.7)
 
-            HStack(spacing: 8) {
+            debugActionGrid {
                 // nil → 2 → 3 → … → 12 → nil. Re-plans on every step so the
                 // pending reminder always matches what the panel claims.
-                Button("🔥 \(StreakDebug.override.map { "\($0.current)d" } ?? "Set")") {
+                debugAction(StreakDebug.override.map { "Streak: \($0.current) days" } ?? "Set a streak") {
                     StreakDebug.cycle()
                     streakDebugRefresh &+= 1
                     Task { await StreakReminderCenter.shared.sync(context: modelContext) }
                 }
                 // At-risk vs safe — the branch the card's state line and the
                 // planner's "today" test both hang off.
-                Button(streakSummaryNow.caughtToday ? "🔥 Safe" : "🔥 Risk") {
+                debugAction(streakSummaryNow.caughtToday ? "Today: caught" : "Today: at risk") {
                     StreakDebug.toggleCaughtToday()
                     streakDebugRefresh &+= 1
                     Task { await StreakReminderCenter.shared.sync(context: modelContext) }
@@ -3401,7 +3365,7 @@ struct ContentView: View {
                 // lets it through the camera-silence rule (this button IS on
                 // the camera). Re-reads the status once it has landed so the
                 // row reports what the delegate actually did with it.
-                Button("🔔 Fire") {
+                debugAction("Send reminder in 10 s") {
                     let streak = max(streakSummaryNow.current, StreakReminders.minimumStreak)
                     Task {
                         streakDebugStatus = await StreakReminderCenter.shared
@@ -3411,7 +3375,7 @@ struct ContentView: View {
                     }
                 }
                 // The one-shot pre-prompt, unlatched so it can be re-tested.
-                Button("🔔 Ask") {
+                debugAction("Show notify ask") {
                     streakAskFromDebug = true
                     withAnimation(.easeOut(duration: 0.25)) {
                         streakAsk = StreakReminders.Offer(
@@ -3420,7 +3384,7 @@ struct ContentView: View {
                 }
                 // Clear the override AND the asked latch, then re-plan from
                 // the real Hangar — back to a truthful device.
-                Button("↺ Reset") {
+                debugAction("Reset streak tools") {
                     StreakDebug.clear()
                     for key in [StreakReminders.permissionAskedKey,
                                 StreakReminders.permissionDeclinedKey,
@@ -3443,12 +3407,7 @@ struct ContentView: View {
                     }
                 }
             }
-            .font(Brand.Font.mono(size: 11, weight: .bold))
-            .buttonStyle(.bordered)
-            .tint(Brand.Color.cyan)
         }
-        .padding(.horizontal, 12)
-        .padding(.top, 8)
         // `streakDebugRefresh` is read here so mutating it re-evaluates the
         // row — the override lives in UserDefaults, which SwiftUI can't
         // observe on its own.
@@ -4301,45 +4260,120 @@ struct ContentView: View {
             .foregroundStyle(Brand.Color.textPrimary)
             // One readout per line, always: shrink a hair rather than wrap.
             .lineLimit(1)
-            .minimumScaleFactor(0.85)
-
-            // TOOLS section
-            Text("TOOLS")
-                .font(Brand.Font.mono(size: 10))
-                .foregroundStyle(Brand.Color.textTertiary)
-                .padding(.top, 8)
-            // Declutter (2026-09-05): rows that stopped testing anything
-            // real are gone — the on-device replay analyzer (the offline
-            // bench + FieldReplays own that now), the raw Gate-1 sky
-            // features (shipped 2026-07; `indoor_hint_shown` telemetry
-            // covers it), and the visual-confirm ON/OFF toggle (it only
-            // gated the legacy mode's live pre-press tracking and the
-            // `visual_confirm_enabled` property — under the frame mode it
-            // changed nothing observable while still flipping telemetry).
-            Group {
-                recordingRow
-                localGateRow
-                detectorGateRow
-                liveTrackingRow
-                #if DEBUG
-                catchModeRow
-                steeringDebugRow
-                #endif
-            }
-            .font(Brand.Font.mono(size: 12))
-            .foregroundStyle(Brand.Color.textPrimary)
+            .minimumScaleFactor(0.7)
         }
-        // Inner padding so content isn't jammed against the panel edge, plus a
-        // hairline border for definition — declutter pass (on-device feedback
-        // that the readout looked busy/ugly). Horizontal padding is tight on
-        // purpose (2026-09-05): the GPS readout has to fit on one line.
-        .padding(.vertical, 12)
-        .padding(.horizontal, 10)
-        .background(Brand.Color.bgPrimary.opacity(0.6), in: .rect(cornerRadius: Brand.Radius.card))
+    }
+
+    /// The wrench panel (rebuilt 2026-11-15, Noah: "basically unusable").
+    /// It had grown past the screen: the switches ran under the capture
+    /// button, the action buttons sat on top of the bottom bar and the
+    /// steering pill, and the streak buttons truncated to "S…". Now it is
+    /// ONE scrolling card that ends above the capture button, nearly opaque
+    /// so it reads over a bright camera frame, with every control inside it
+    /// under a plain section title.
+    private var debugPanel: some View {
+        ScrollView(.vertical) {
+            VStack(alignment: .leading, spacing: 18) {
+                // Readouts first, inset on the right so the account and
+                // wrench buttons (which float above the panel) cover nothing.
+                sensorReadout
+                    .padding(.trailing, TopStripLayout.controlDiameter + 8)
+                // Buttons before switches: they are short, and the
+                // switch descriptions fill a screen on their own.
+                debugSection("ACTIONS") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        recordingRow
+                            .font(Brand.Font.mono(size: 12))
+                            .foregroundStyle(Brand.Color.textPrimary)
+                        #if DEBUG
+                        debugActionGrid {
+                            debugAction("Fake a catch") { simulateCatch() }
+                            debugAction("Reset rating prompt") {
+                                ReviewPrompter.shared.debugClearStamp()
+                            }
+                            // The card's new-user peek (CardFlipTease) runs
+                            // again on the next cards.
+                            debugAction("Reset card peek") { CardFlipTeaseStore.debugReset() }
+                            // The post-reveal "Almost there" card, without
+                            // needing a catch that lands two short.
+                            debugAction("Show almost-there card") {
+                                unlockCenter.debugShowSampleNearMiss()
+                            }
+                        }
+                        #endif
+                    }
+                }
+                #if DEBUG
+                debugSection("STREAK") { streakDebugRow }
+                #endif
+                debugSection("SWITCHES") {
+                    VStack(alignment: .leading, spacing: 10) {
+                        localGateRow
+                        detectorGateRow
+                        liveTrackingRow
+                        #if DEBUG
+                        catchModeRow
+                        steeringDebugRow
+                        #endif
+                    }
+                    .font(Brand.Font.mono(size: 12))
+                    .foregroundStyle(Brand.Color.textPrimary)
+                }
+                aircraftList
+            }
+            .padding(14)
+        }
+        .scrollBounceBehavior(.basedOnSize)
+        .background(Brand.Color.bgPrimary.opacity(0.93), in: .rect(cornerRadius: Brand.Radius.card))
         .overlay(
             RoundedRectangle(cornerRadius: Brand.Radius.card)
-                .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
         )
+        .clipShape(.rect(cornerRadius: Brand.Radius.card))
+        .padding(.horizontal, 8)
+        .padding(.top, 4)
+        // Ends above the capture button and the bottom bar, which stay
+        // usable while the panel is open.
+        .padding(.bottom, Self.debugPanelBottomInset)
+    }
+
+    /// Space the panel leaves at the bottom of the safe area: the 72 pt
+    /// capture button, its inset, and a gap.
+    static let debugPanelBottomInset: CGFloat = 100
+
+    /// A titled group in the wrench panel.
+    private func debugSection<Content: View>(
+        _ title: String, @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(Brand.Font.mono(size: 10, weight: .bold))
+                .foregroundStyle(Brand.Color.textTertiary)
+            content()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Two equal columns of full-width buttons: every label is whole, and
+    /// every button is a comfortable target.
+    private func debugActionGrid<Content: View>(
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible())],
+                  spacing: 8, content: content)
+            .font(Brand.Font.mono(size: 11, weight: .bold))
+            .buttonStyle(.bordered)
+            .tint(Brand.Color.cyan)
+    }
+
+    /// One wrench-panel button, filling its grid column.
+    private func debugAction(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .frame(maxWidth: .infinity, minHeight: 28)
+        }
     }
 
     // MARK: - Bottom: nearby-aircraft list
