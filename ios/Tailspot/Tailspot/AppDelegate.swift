@@ -75,7 +75,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         // APNs hands the token over as raw bytes; every server API on earth
         // wants the lowercase hex string.
         let hex = deviceToken.map { String(format: "%02x", $0) }.joined()
-        guard let environment = PushEnvironment.current() else {
+        guard let environment = PushEnvironment.forThisBuild else {
             Log.ui.notice("APNs token received with no aps-environment — not uploading")
             return
         }
@@ -112,7 +112,7 @@ enum PushRegistration {
     /// failure that means nothing. App Store and TestFlight builds always
     /// register: see `PushEnvironment.resolve`.
     static func registerForRemoteNotifications() {
-        guard PushEnvironment.current() != nil else {
+        guard PushEnvironment.forThisBuild != nil else {
             Log.ui.debug("Skipping APNs registration: no aps-environment")
             return
         }
@@ -156,7 +156,8 @@ enum PushRegistration {
 /// on a real device a MISSING profile means a store build, and store builds
 /// always use the production gateway. Reading "no profile" as "no token
 /// possible" is the bug that kept every released install from registering
-/// between 2026-09-27 and the fix on 2026-11-15. The simulator also has no
+/// from 2026-09-27 (found 2026-11-15; builds before the fix still have
+/// it). The simulator also has no
 /// profile, and there registration must not happen, so the two cases are
 /// told apart by the compile-time simulator check and not by the file.
 nonisolated enum PushEnvironment {
@@ -175,10 +176,20 @@ nonisolated enum PushEnvironment {
         #else
         let isSimulator = false
         #endif
-        let profile = bundle.url(forResource: "embedded", withExtension: "mobileprovision")
-            .flatMap { try? Data(contentsOf: $0) }
-        return resolve(provisioningProfile: profile, isSimulator: isSimulator)
+        guard let url = bundle.url(forResource: "embedded", withExtension: "mobileprovision") else {
+            return resolve(provisioningProfile: nil, isSimulator: isSimulator)
+        }
+        // A profile that is there but cannot be read is NOT a store build.
+        // Guessing production for it would upload a sandbox token under
+        // the wrong gateway, so it gets no environment at all.
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        return resolve(provisioningProfile: data, isSimulator: isSimulator)
     }
+
+    /// `current()` for the main bundle, worked out once. The answer cannot
+    /// change while the app runs, and both the registration gate and the
+    /// token callback ask on the main thread during launch.
+    static let forThisBuild: String? = current()
 
     /// The rule, with the bundle and the build target passed in so it is
     /// testable without a signed app:
