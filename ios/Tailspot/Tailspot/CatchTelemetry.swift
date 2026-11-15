@@ -49,7 +49,7 @@
 //      ├─ catch_blocked_size      gate 3 (angular size) raised suspicion
 //      └─ catch_uncertain_aim     aim confidence was low
 //           ↓
-//    catch_detector_gate         L4 detector verdict (shadow), once per tap
+//    catch_detector_gate         L4 detector verdict (shadow), once per searched plane
 //           ↓
 //    catch_performed             ONE per processed target — the catch is
 //                                committed locally and a `Catch` row exists.
@@ -103,8 +103,9 @@ nonisolated enum CatchTelemetry {
     // (shadow + enforce) with the per-target verdict + features — the
     // calibration stream for the on-device texture threshold.
     static let localGateEvent = "catch_local_gate"
-    // Lever 4 (detector soft-gate). `catch_detector_gate` fires on every
-    // single-target catch (shadow + enforce) with the verdict + envelope
+    // Lever 4 (detector soft-gate). `catch_detector_gate` fires for every
+    // searched plane (each single catch, and each plane of a frame-mode
+    // multi-plane press; shadow + enforce) with the verdict + envelope
     // signals — the calibration stream that decides when enforcement is safe
     // to flip (watch the in-envelope no-detection rate on real catches).
     static let detectorGateEvent = "catch_detector_gate"
@@ -199,7 +200,8 @@ nonisolated enum CatchTelemetry {
         if let c = visualFixConfidence { props["visual_fix_confidence"] = .double(Double(c)) }
         if let a = angularSizeArcmin { props["angular_size_arcmin"] = .double(a) }
         // L4 detector soft-gate verdict for this target; omitted when the
-        // gate didn't run (multi-catch, no photo) so absent means "not judged".
+        // gate didn't run (a legacy zone cluster, no photo) so absent means
+        // "not judged".
         if let v = detectorVerdict { props["detector_verdict"] = .string(v.rawValue) }
         // Whole-frame sky verdict at the exact catch moment. Unlike the
         // one-per-tap gate stream, this makes repeated strong indoor catches
@@ -730,7 +732,9 @@ nonisolated enum CatchTelemetry {
         liveFix: Bool,
         expectedFootprintPx: Double?,
         meanLuminance: Double?,
-        enforcing: Bool
+        enforcing: Bool,
+        targets: Int = 1,
+        snapConflict: Bool = false
     ) -> [String: AnalyticsValue] {
         var props: [String: AnalyticsValue] = [
             "verdict": .string(verdict.rawValue),
@@ -738,27 +742,39 @@ nonisolated enum CatchTelemetry {
             "live_fix": .bool(liveFix),
             "would_flag": .bool(verdict == .noDetection),
             "enforcing": .bool(enforcing),
+            // How many planes the press targeted, and whether this plane's
+            // detection was claimed by a nearer target. `targets` counts
+            // Hangar duplicates too, unlike `multi_n` on `catch_performed`,
+            // which counts new catches only. Both are absent on builds
+            // before per-plane verdicts: read them as 1 / false, and filter
+            // single catches with coalesce(targets, 1) = 1.
+            "targets": .int(targets),
+            "snap_conflict": .bool(snapConflict),
         ]
         if let f = expectedFootprintPx { props["expected_footprint_px"] = .double(f) }
         if let l = meanLuminance { props["mean_luminance"] = .double(l) }
         return props
     }
 
-    /// Fired once per single-target catch with the L4 verdict — on every such
-    /// catch, in shadow and enforce mode. The calibration stream that gates
-    /// flipping enforcement.
+    /// Fired once per searched target with the L4 verdict, in shadow and
+    /// enforce mode: every single catch, and each plane of a frame-mode
+    /// multi-plane press. The calibration stream that gates flipping
+    /// enforcement.
     static func fireDetectorGate(
         verdict: DetectorGateVerdict,
         snapHit: Bool,
         liveFix: Bool,
         expectedFootprintPx: Double?,
         meanLuminance: Double?,
-        enforcing: Bool
+        enforcing: Bool,
+        targets: Int = 1,
+        snapConflict: Bool = false
     ) {
         Analytics.capture(detectorGateEvent, detectorGateProperties(
             verdict: verdict, snapHit: snapHit, liveFix: liveFix,
             expectedFootprintPx: expectedFootprintPx,
-            meanLuminance: meanLuminance, enforcing: enforcing
+            meanLuminance: meanLuminance, enforcing: enforcing,
+            targets: targets, snapConflict: snapConflict
         ))
     }
 
