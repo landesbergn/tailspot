@@ -207,7 +207,7 @@ describe("rescoreCatches", () => {
       expect((await row(survivor)).points).toBe(150);
     });
 
-    it("migration 0012's backfill counts distinct airframes per (device, instant)", async () => {
+    it("migration 0013's backfill counts distinct airframes per (device, instant)", async () => {
       // A real double, a restored duplicate row (same airframe, same instant),
       // and a lone catch, all as they sit before the migration: press_size 1.
       const a = await insertCatch({ icao24: FOREIGN, points: 100, caughtAt: PRESS });
@@ -218,7 +218,7 @@ describe("rescoreCatches", () => {
       const lone = await insertCatch({ icao24: KNOWN, points: 10 });
 
       const migration = readFileSync(
-        join(dirname(fileURLToPath(import.meta.url)), "../drizzle/0012_press-size.sql"),
+        join(dirname(fileURLToPath(import.meta.url)), "../drizzle/0013_press-size.sql"),
         "utf8",
       );
       const backfill = migration.split("--> statement-breakpoint")[1];

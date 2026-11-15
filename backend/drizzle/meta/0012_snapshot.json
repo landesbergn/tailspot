@@ -1,5 +1,5 @@
 {
-  "id": "ff3512df-204c-49e9-bff0-ff5004f2afb9",
+  "id": "169db653-c254-4741-afd4-3300f3ab98f0",
   "prevId": "38a1eea2-6940-4cdd-93b7-8aaf2749ac8a",
   "version": "7",
   "dialect": "postgresql",
@@ -128,13 +128,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": false
-        },
-        "press_size": {
-          "name": "press_size",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
         },
         "caught_at": {
           "name": "caught_at",
@@ -705,6 +698,12 @@
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
+        },
+        "app_build": {
+          "name": "app_build",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {
@@ -848,6 +847,38 @@
         },
         "updated_at": {
           "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.streak_forgiveness": {
+      "name": "streak_forgiveness",
+      "schema": "",
+      "columns": {
+        "day": {
+          "name": "day",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,

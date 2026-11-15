@@ -78,7 +78,7 @@ export const UNKNOWN_RARITY_POINTS = 10;
  *       CURRENT`) never revisits it. Then rescore; review the dry-run delta.
  *  10 — multi-catch bonus (2026-11-13, Noah's call): each plane caught in one
  *       shutter press with one other plane earns +25% of its base, with two
- *       or more others +50%. RETROACTIVE: migration 0012 adds `press_size`
+ *       or more others +50%. RETROACTIVE: migration 0013 adds `press_size`
  *       and backfills it for every past press (rows of one press share
  *       `caught_at`), so the v9→v10 rescore pays the combo the reveal showed
  *       from 2026-05-21 to 2026-10-23 and the server never awarded. Apply the

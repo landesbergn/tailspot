@@ -125,7 +125,7 @@ export async function rescoreCatches(
   if (rows.length === 0) return report;
 
   // Press sizes are normally frozen (counted at insert, backfilled by
-  // migration 0012), but two kinds of row miss that count: a press uploaded
+  // migration 0013), but two kinds of row miss that count: a press uploaded
   // between the migration and the deploy of the v10 server, and one whose
   // insert-time `reconcilePress` failed. Re-count every press here and RAISE a
   // stale size (never lower: a deleted sibling keeps the survivor's bonus), so
@@ -172,7 +172,7 @@ export async function rescoreCatches(
     const guess = rowGuess(row);
     const guessPart = guess ? `${guess.kind}:${guess.correct ? 1 : 0}:${guessEra(row)}` : "-";
     // `press_size` is read like the flags (counted at insert, backfilled by
-    // migration 0012, raised above when a press was missed): two rows of one airframe score differently when one
+    // migration 0013, raised above when a press was missed): two rows of one airframe score differently when one
     // was a lone catch and the other half of a double.
     return `${row.icao24}:${row.firstOfType ? 1 : 0}:${guessPart}:${row.pressSize}`;
   };

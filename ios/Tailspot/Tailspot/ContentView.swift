@@ -3092,7 +3092,8 @@ struct ContentView: View {
                 let realPriorDays = Streaks.realDaySet(catches: priorRows)
                 if !realPriorDays.contains(todayKey) {
                     let realCurrent = Streaks.currentStreak(
-                        days: realPriorDays.union([todayKey]), todayKey: todayKey
+                        days: realPriorDays.union([todayKey]), todayKey: todayKey,
+                        covered: StreakCoverStore.coveredDays()
                     )
                     StreakTelemetry.fireExtended(streakDays: realCurrent)
                 }
