@@ -191,7 +191,8 @@ struct DetectorGateTests {
         )
         #expect(judged["detector_verdict"]?.jsonValue as? String == "corroborated")
 
-        // Multi-catch / no-photo rows must read "not judged", not a value.
+        // Rows the still was never searched for (a legacy zone cluster, no
+        // photo) must read "not judged", not a value.
         let unjudged = CatchTelemetry.performedProperties(
             icao24: "a1b2c3", rarity: "common", aircraftType: "narrow",
             slantKm: 4.2, visualConfirmEnabled: true, visualFixConfidence: nil

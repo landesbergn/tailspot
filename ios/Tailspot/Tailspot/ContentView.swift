@@ -2723,6 +2723,13 @@ struct ContentView: View {
             // One verdict per searched target. A multi-plane press (frame
             // mode) is judged plane by plane, so those catches carry the
             // same evidence as a single catch.
+            // Same for every plane of the press: one photo, one frame. The
+            // count is the press's, not the searched subset's, so a plane
+            // that couldn't be projected never makes its neighbour look
+            // like a single catch.
+            let meanLum = visualConfirm.latestSkyFeatures?.meanLuminance
+            let enforcing = visualConfirm.detectorGateEnforcing
+            let pressTargetCount = icaos.count
             for evidence in snapEvidence {
                 let icao = evidence.icao
                 let snap = evidence.snap
@@ -2746,25 +2753,23 @@ struct ContentView: View {
                         }
                     }
                     : nil
-                let meanLum = visualConfirm.latestSkyFeatures?.meanLuminance
                 let verdict = DetectorGate().verdict(
                     sawPlane: snapHit || liveFix,
                     expectedFootprintPx: footprintPx,
                     meanLuminance: meanLum
                 )
                 detectorVerdicts[icao] = verdict
-                let enforcing = visualConfirm.detectorGateEnforcing
                 CatchTelemetry.fireDetectorGate(
                     verdict: verdict, snapHit: snapHit, liveFix: liveFix,
                     expectedFootprintPx: footprintPx, meanLuminance: meanLum,
                     enforcing: enforcing,
-                    targets: snapEvidence.count,
+                    targets: pressTargetCount,
                     // The search found a plane but a nearer target claimed
                     // it, so this miss is weaker evidence than a clean one.
                     snapConflict: snap.screenPoint != nil && !snapHit
                 )
                 if DetectorGate.raisesSuspicion(
-                    verdict, enforcing: enforcing, targetCount: snapEvidence.count
+                    verdict, enforcing: enforcing, targetCount: pressTargetCount
                 ) {
                     authenticitySignals[icao] = CatchSuspicion.preferred(
                         authenticitySignals[icao], .noDetection

@@ -76,7 +76,7 @@ final class VisualConfirmationPipeline: ObservableObject {
 
     /// L4 detector soft-gate ENFORCEMENT. Ships in SHADOW (default OFF, the
     /// same rollout the L2 gate used): `catch_detector_gate` telemetry fires
-    /// on every single-target catch either way, but only enforcement adds
+    /// for every searched plane either way, but only enforcement adds
     /// `no_detection` to the combined shadow signal. Flip after the stream shows the in-envelope
     /// no-detection rate is a cheat signal, not a detector-recall artifact.
     /// Debug-overlay toggle; no user-facing control by design.
