@@ -265,10 +265,11 @@ export const catches = pgTable(
      * catch. Rows of one press share `caught_at` exactly (the app stamps one
      * instant on every row of a press), so the server derives this itself; the
      * wire carries no press size. Drives the multi-catch bonus in the ONE
-     * canonical scorer. Kept current on INSERT only (`reconcilePress` re-counts
-     * the press and re-scores its rows when a sibling arrives); a rescore READS
-     * it, like `first_of_type`, and a later delete of a sibling does not take
-     * the bonus back.
+     * canonical scorer. Kept current on INSERT (`reconcilePress` re-counts
+     * the press and re-scores its rows when a sibling arrives). A rescore
+     * re-counts too and RAISES a stale size (a press uploaded between the
+     * migration and the v10 deploy, or one whose reconcile failed), but never
+     * lowers one: a later delete of a sibling does not take the bonus back.
      */
     pressSize: integer("press_size").notNull().default(1),
     /** When the client says it was caught. */

@@ -47,6 +47,23 @@ enum CatchDeletion {
         // JPEGs in Documents/catches, and rows pointing at dead files
         // rendered placeholder stripes.
         CatchPhotoStore.delete(filename: c.photoFilename)
+        // Multi-catch: a plane deleted BEFORE it uploaded never reaches the
+        // server, so the server's press is one smaller and the planes caught
+        // with it earn a smaller bonus (or none). Lower their stored size to
+        // match. A plane that did upload is different: the server keeps the
+        // others' bonus after a delete, and so do we.
+        if c.uploadedAt == nil, (c.pressSize ?? 1) >= 2 {
+            let key = CatchBackfill.pressKey(c.caughtAt)
+            let lo = c.caughtAt.addingTimeInterval(-0.002)
+            let hi = c.caughtAt.addingTimeInterval(0.002)
+            let near = FetchDescriptor<Catch>(
+                predicate: #Predicate { $0.caughtAt >= lo && $0.caughtAt <= hi })
+            for sibling in (try? context.fetch(near)) ?? []
+            where sibling !== c && CatchBackfill.pressKey(sibling.caughtAt) == key {
+                guard let size = sibling.pressSize, size >= 2 else { continue }
+                sibling.pressSize = size > 2 ? size - 1 : nil
+            }
+        }
         context.delete(c)
         var saved = true
         do { try context.save() } catch {

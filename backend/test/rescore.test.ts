@@ -28,6 +28,7 @@ describe("rescoreCatches", () => {
   const KNOWN = "bbb222";
 
   let uuidSeq = 0;
+  let caughtSeq = 0;
   const uuid = () => `00000000-0000-4000-8000-${String(++uuidSeq).padStart(12, "0")}`;
 
   async function insertCatch(opts: {
@@ -61,7 +62,10 @@ describe("rescoreCatches", () => {
         guessKind: opts.guessKind ?? null,
         guessCorrect: opts.guessCorrect ?? false,
         pressSize: opts.pressSize ?? 1,
-        caughtAt: opts.caughtAt ?? new Date("2026-06-11T00:00:00Z"),
+        // Staggered a second apart: the rescore re-counts presses, and two
+        // airframes sharing a (device, instant) would read as a double.
+        caughtAt:
+          opts.caughtAt ?? new Date(Date.parse("2026-06-11T00:00:00Z") + ++caughtSeq * 1000),
         observerLat: 37.8,
         observerLon: -122.3,
       })
@@ -157,7 +161,50 @@ describe("rescoreCatches", () => {
       expect((await pts(triple)).points).toBe(200); // 100 + first-of-type 50 + round(100*0.5)
       expect((await pts(lone)).points).toBe(100);
       expect((await pts(lone)).scoringVersion).toBe(CURRENT_SCORING_VERSION);
-      expect((await pts(double)).pressSize).toBe(2); // frozen: read, never recounted
+      expect((await pts(double)).pressSize).toBe(2); // no sibling row: the stored size stands
+    });
+
+    it("re-counts a press the insert missed (uploaded between the migration and the deploy) and never lowers one", async () => {
+      // Two airframes at one instant, both still press_size 1 at v9.
+      const a = await insertCatch({
+        icao24: FOREIGN,
+        typecode: "A388",
+        rarity: "epic",
+        points: 100,
+        scoringVersion: 9,
+        caughtAt: PRESS,
+      });
+      const b = await insertCatch({
+        icao24: KNOWN,
+        typecode: "C172",
+        rarity: "common",
+        points: 10,
+        scoringVersion: 9,
+        caughtAt: PRESS,
+      });
+      // A stored triple whose siblings were deleted keeps its size.
+      const survivor = await insertCatch({
+        icao24: FOREIGN,
+        typecode: "A388",
+        rarity: "epic",
+        points: 150,
+        scoringVersion: 9,
+        pressSize: 3,
+      });
+
+      const dry = await rescoreCatches(db, { dryRun: true });
+      expect(dry.pointsAfter - dry.pointsBefore).toBe(25 + 3);
+      const row = async (id: string) =>
+        (await db.select().from(catches).where(eq(catches.id, id)))[0];
+      expect((await row(a)).pressSize).toBe(1); // a dry run writes nothing
+
+      await rescoreCatches(db, {});
+      expect((await row(a)).pressSize).toBe(2);
+      expect((await row(a)).points).toBe(125);
+      expect((await row(b)).pressSize).toBe(2);
+      expect((await row(b)).points).toBe(13); // 10 + round(10*0.25)
+      expect((await row(survivor)).pressSize).toBe(3);
+      expect((await row(survivor)).points).toBe(150);
     });
 
     it("migration 0012's backfill counts distinct airframes per (device, instant)", async () => {
