@@ -61,12 +61,15 @@ Below the hero, a full-bleed band of 5-star US App Store reviews drifts left
 as a CSS marquee: the card list is printed twice (the copy `aria-hidden`) and
 the track slides by -50%, so the loop has no seam. Hover pauses it; Reduce
 Motion swaps it for a plain swipeable row. Each card is the reviewer's own
-title and text, verbatim (long ones trimmed to their first sentences, never
-reworded), with no names. Same rule as the photos: nothing invented. Add
-cards as real reviews arrive, from the public feed:
+title and text, verbatim (long ones trimmed to whole sentences, never
+reworded), with no names. One card per review, so no title shows
+twice on screen. The marquee runs 15s per card: set
+`--love-cards` on `.love-track` in `style.css` to the number of reviews. Same
+rule as the photos: nothing invented. Add cards as real reviews arrive, from
+the public feed:
 `https://itunes.apple.com/us/rss/customerreviews/id=6773470079/sortBy=mostRecent/json`.
 
-The band is counted in the desktop single-screen budget (the `515px` in
+The band is counted in the desktop single-screen budget (the `536px` in
 `.catch-frame`'s width): the tallest card sets the band's height, so a much
 longer quote makes the photo shrink on short windows, and past a point the
 page scrolls. Re-check at 1280x700 after adding one.
