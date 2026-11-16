@@ -277,7 +277,7 @@ a.btn-primary:hover { transform: translateY(-2px) scale(1.02); box-shadow: 0 0 0
      the half-width includes one trailing gap and the seam spacing matches. */
   /* 15s per card, so the drift speed stays the same as cards are added.
      Keep --love-cards equal to the number of reviews in index.html. */
-  --love-cards: 6;
+  --love-cards: 5;
   animation: love-scroll calc(var(--love-cards) * 15s) linear infinite;
 }
 .love-viewport:hover .love-track { animation-play-state: paused; }

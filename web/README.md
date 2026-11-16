@@ -62,8 +62,8 @@ as a CSS marquee: the card list is printed twice (the copy `aria-hidden`) and
 the track slides by -50%, so the loop has no seam. Hover pauses it; Reduce
 Motion swaps it for a plain swipeable row. Each card is the reviewer's own
 title and text, verbatim (long ones trimmed to whole sentences, never
-reworded), with no names. A long review can give two cards; both keep its
-title, so they read as one review. The marquee runs 15s per card: set
+reworded), with no names. One card per review, so no title shows
+twice on screen. The marquee runs 15s per card: set
 `--love-cards` on `.love-track` in `style.css` to the number of reviews. Same
 rule as the photos: nothing invented. Add cards as real reviews arrive, from
 the public feed:
