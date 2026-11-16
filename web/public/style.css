@@ -261,7 +261,7 @@ a.btn-primary:hover { transform: translateY(-2px) scale(1.02); box-shadow: 0 0 0
    gradient, so the cards dissolve into whatever is behind them (the page's
    aura included) instead of into a painted strip of --bg. */
 .love {
-  padding: 0.25rem 0 1.5rem;
+  padding: 0.25rem 0 1.25rem;
 }
 .love-viewport {
   overflow: hidden;
@@ -275,8 +275,10 @@ a.btn-primary:hover { transform: translateY(-2px) scale(1.02); box-shadow: 0 0 0
   /* The track holds the list twice; sliding by -50% lands copy two exactly
      where copy one started. The gap is on the cards' margin, not `gap`, so
      the half-width includes one trailing gap and the seam spacing matches. */
-  /* 15s per card, so the drift speed stays the same as cards are added. */
-  animation: love-scroll 90s linear infinite;
+  /* 15s per card, so the drift speed stays the same as cards are added.
+     Keep --love-cards equal to the number of reviews in index.html. */
+  --love-cards: 6;
+  animation: love-scroll calc(var(--love-cards) * 15s) linear infinite;
 }
 .love-viewport:hover .love-track { animation-play-state: paused; }
 @keyframes love-scroll {
@@ -343,13 +345,13 @@ a.btn-primary:hover { transform: translateY(-2px) scale(1.02); box-shadow: 0 0 0
   position: relative;
   /* Same defensive sizing as the old mockup: capped against the VIEWPORT
      HEIGHT as well as the column, because the page does not scroll. The
-     540px is everything else on the screen: nav, hero padding, caption,
+     536px is everything else on the screen: nav, hero padding, caption,
      review band and footer (it was 275 before the band, and 515 until a
      card with a two-line title made the band a line taller). 1.587 is
      the photo's 900/567 aspect, converting the height budget into a width
      (the mockup used 0.8 for 4:5). 260px is the floor — below that the meta
      line's type stops scaling and wraps. */
-  width: min(100%, 480px, max(260px, calc((100svh - 540px) * 1.587)));
+  width: min(100%, 480px, max(260px, calc((100svh - 536px) * 1.587)));
   aspect-ratio: 900 / 567;
   border: 1px solid var(--border);
   border-radius: 14px;
