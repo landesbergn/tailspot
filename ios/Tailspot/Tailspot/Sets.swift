@@ -1323,6 +1323,22 @@ nonisolated enum CardSets {
                   // "chinook" also names an ASAP ultralight, and "vertol" matches the
                   // H-21 Work Horse and the CH-46 Sea Knight, which are different helicopters.
                   excludedTypecodes: ["CHIN", "H21", "H46"]),
+            // "ah-64", never bare "apache" — the Piper PA-23 Apache has its own slot.
+            .init(id: "fm-ah64", canonicalName: "AH-64 Apache", rarity: .epic,
+                  modelTokens: ["ah-64"], summary: "Army attack helicopter. Tandem seats, chin gun, stub wings.",
+                  representativeTypecode: "H64"),
+            // Both designators: H53S is the three-engine CH-53E/K (the usual
+            // catch), H53 the twin-engine CH-53A/D and MH-53.
+            .init(id: "fm-ch53", canonicalName: "CH-53 Sea Stallion / Super Stallion", rarity: .epic,
+                  modelTokens: ["ch-53", "mh-53", "sikorsky s-80", "sikorsky s-65"],
+                  summary: "The heaviest helicopter in US service. Seven main blades on the E.",
+                  exactTypecodes: ["H53"],
+                  representativeTypecode: "H53S"),
+            // "grumman e-2", never bare "e-2" — too short to be safe as a substring.
+            .init(id: "fm-e2", canonicalName: "Grumman E-2 Hawkeye", rarity: .epic,
+                  modelTokens: ["grumman e-2", "e-2 hawkeye", "e-2c hawkeye", "e-2d hawkeye"],
+                  summary: "Carrier airborne early warning. Twin turboprops under a radar dish.",
+                  representativeTypecode: "E2"),
             .init(id: "fm-hh65", canonicalName: "HH-65 Dolphin", rarity: .uncommon,
                   modelTokens: ["hh-65", "dauphin", "dolphin"], summary: "Coast Guard orange. Fenestron tail.",
                   representativeTypecode: "AS65"),
@@ -1437,6 +1453,12 @@ nonisolated enum CardSets {
                   modelTokens: ["tbm avenger", "tbm-3"],
                   summary: "WWII carrier torpedo bomber. The biggest single-engine warbird you'll see.",
                   representativeTypecode: "TBM"),
+            // "p4y", never bare "privateer" — the Privateer amphibian (PVTR)
+            // and the Arctic S-4 Privateer are different aircraft.
+            .init(id: "fv-p4y", canonicalName: "Consolidated PB4Y-2 Privateer", rarity: .epic,
+                  modelTokens: ["p4y", "pb4y"],
+                  summary: "WWII Navy patrol bomber, a single-tail B-24. Flew on as a fire tanker.",
+                  representativeTypecode: "P4Y"),
         ]),
         .init(id: "fam-sport-classics", type: .ga, title: "Sport & classics", entries: [
             .init(id: "fsc-aquila-a210", canonicalName: "Aquila A210", rarity: .common,
