@@ -5,6 +5,16 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-11-17 — Five set slots for caught types that had no home (branch `claude/add-to-set-4baa1f`)
+
+- Noah's ask: a player's Boeing E-3B Sentry catch filled no set slot. A check of every military type players have caught found four more with no slot.
+- Military set: Boeing E-3 Sentry (`E3TF`, `E3CF`), AH-64 Apache (`H64`), CH-53 Sea Stallion / Super Stallion (`H53S`, `H53`), Grumman E-2 Hawkeye (`E2`). Vintage & warbirds: Consolidated PB4Y-2 Privateer (`P4Y`).
+- Tokens are full designators, never the bare name: "sentry" would pull in the Lancair Sentry 4T, "apache" the Piper PA-23, "privateer" the `PVTR` amphibian.
+- Card backs: `TypeInfo.json` gains an `entries` record for each slot. The CH-53, E-2 and Privateer had no record before. `tools/generate-type-info.py` gains four Wikipedia title overrides; only the new records were kept from the regeneration.
+- The E-6 Mercury already had a slot ([PR #328](https://github.com/landesbergn/tailspot/pull/328)); no change.
+- Not done: military types nobody has caught yet (B-52, B-1, B-2, F-15, F-16, F-22, F-35, A-10, V-22, P-3 and others) still have no slot.
+- Tests: seven catalog rows and slot assignments in `SetsCoverageTests.swift`.
+
 ## 2026-11-15 — Frame catch rule rolled out to everyone; multi-plane catches get a detector verdict (branch `claude/catch-rule-experiment-33d5ad`)
 
 - Rollout: PostHog flag `frame-is-the-catch` went from a 50/50 split to 100% (flag version 6). No code change; users get the frame rule at their next cold launch or return from the background. Builds older than 1.2.4 (111), and sessions where the flag hasn't loaded, still run legacy because the code default is `.legacy`.
