@@ -2239,6 +2239,20 @@
       "wikipediaTitle": "Airbus A400M Atlas",
       "wingspanMeters": 42.36
     },
+    "fm-ah64": {
+      "entryId": "fm-ah64",
+      "firstFlightYear": 1975,
+      "lengthMeters": 14.68,
+      "numberBuilt": 2000,
+      "photo": {
+        "artist": "Nehemia Gershuni-Aylho",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/44/IAF_AH-64.jpg/960px-IAF_AH-64.jpg",
+        "license": "CC BY-SA 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:IAF_AH-64.jpg"
+      },
+      "wikidataId": "Q171468",
+      "wikipediaTitle": "Boeing AH-64 Apache"
+    },
     "fm-c130": {
       "entryId": "fm-c130",
       "firstFlightYear": 1954,
@@ -2311,6 +2325,19 @@
       "wikidataId": "Q209613",
       "wikipediaTitle": "Boeing CH-47 Chinook"
     },
+    "fm-ch53": {
+      "entryId": "fm-ch53",
+      "lengthMeters": 22.38,
+      "numberBuilt": 234,
+      "photo": {
+        "artist": "U.S. Navy photo by Mass Communication Specialist Seaman Sarah E. Bitter",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/2/21/US_Navy_080710-N-5148B-031_A_CH-53E_Super_Stallion_helicopter_assigned_to_Marine_Medium_Helicopter_Squadron_%28HMM%29_165_prepares_to_land_on_the_flight_deck_of_the_amphibious_assault_ship_USS_Peleliu_%28LHA_5%29.jpg/960px-thumbnail.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:US_Navy_080710-N-5148B-031_A_CH-53E_Super_Stallion_helicopter_assigned_to_Marine_Medium_Helicopter_Squadron_(HMM)_165_prepares_to_land_on_the_flight_deck_of_the_amphibious_assault_ship_USS_Peleliu_(LHA_5).jpg"
+      },
+      "wikidataId": "Q856317",
+      "wikipediaTitle": "Sikorsky CH-53E Super Stallion"
+    },
     "fm-cn235": {
       "entryId": "fm-cn235",
       "firstFlightYear": 1983,
@@ -2325,6 +2352,36 @@
       "wikidataId": "Q6498",
       "wikipediaTitle": "CASA/IPTN CN-235",
       "wingspanMeters": 25.81
+    },
+    "fm-e2": {
+      "entryId": "fm-e2",
+      "firstFlightYear": 1960,
+      "lengthMeters": 17.6,
+      "numberBuilt": 200,
+      "photo": {
+        "artist": "Marcin Zieliński",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/37/Grumman_E-2C_Hawkeye_0014.jpg/960px-Grumman_E-2C_Hawkeye_0014.jpg",
+        "license": "CC BY 2.5",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:Grumman_E-2C_Hawkeye_0014.jpg"
+      },
+      "wikidataId": "Q223372",
+      "wikipediaTitle": "Grumman E-2 Hawkeye",
+      "wingspanMeters": 24.56
+    },
+    "fm-e3": {
+      "entryId": "fm-e3",
+      "firstFlightYear": 1972,
+      "lengthMeters": 46.61,
+      "numberBuilt": 68,
+      "photo": {
+        "artist": "user:Pajx",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/b9/060610-SKP-E-3-01.jpg/960px-060610-SKP-E-3-01.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:060610-SKP-E-3-01.jpg"
+      },
+      "wikidataId": "Q261384",
+      "wikipediaTitle": "Boeing E-3 Sentry",
+      "wingspanMeters": 44.42
     },
     "fm-e6": {
       "entryId": "fm-e6",
@@ -3751,6 +3808,19 @@
       "wikidataId": "Q689357",
       "wikipediaTitle": "Piaggio P.149",
       "wingspanMeters": 11.12
+    },
+    "fv-p4y": {
+      "entryId": "fv-p4y",
+      "firstFlightYear": 1943,
+      "numberBuilt": 739,
+      "photo": {
+        "artist": "USN",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/ba/PB4Y-2_Privateer_VP-23_in_flight.jpg/960px-PB4Y-2_Privateer_VP-23_in_flight.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:PB4Y-2_Privateer_VP-23_in_flight.jpg"
+      },
+      "wikidataId": "Q1127585",
+      "wikipediaTitle": "Consolidated PB4Y-2 Privateer"
     },
     "fv-p51": {
       "entryId": "fv-p51",
@@ -7099,28 +7169,6 @@
       "wikidataId": "Q975281",
       "wikipediaTitle": "Embraer C-390 Millennium"
     },
-    "E3CF": {
-      "entryId": "",
-      "photo": {
-        "artist": "user:Pajx",
-        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/b9/060610-SKP-E-3-01.jpg/960px-060610-SKP-E-3-01.jpg",
-        "license": "Public domain",
-        "pageURL": "https://commons.wikimedia.org/wiki/File:060610-SKP-E-3-01.jpg"
-      },
-      "wikidataId": "Q261384",
-      "wikipediaTitle": "Boeing E-3 Sentry"
-    },
-    "E3TF": {
-      "entryId": "",
-      "photo": {
-        "artist": "user:Pajx",
-        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/b9/060610-SKP-E-3-01.jpg/960px-060610-SKP-E-3-01.jpg",
-        "license": "Public domain",
-        "pageURL": "https://commons.wikimedia.org/wiki/File:060610-SKP-E-3-01.jpg"
-      },
-      "wikidataId": "Q261384",
-      "wikipediaTitle": "Boeing E-3 Sentry"
-    },
     "E500": {
       "entryId": "",
       "firstFlightYear": 2002,
@@ -8186,20 +8234,6 @@
       },
       "wikidataId": "Q522281",
       "wikipediaTitle": "Kaman HH-43 Huskie"
-    },
-    "H64": {
-      "entryId": "",
-      "firstFlightYear": 1975,
-      "lengthMeters": 14.68,
-      "numberBuilt": 2000,
-      "photo": {
-        "artist": "Nehemia Gershuni-Aylho",
-        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/44/IAF_AH-64.jpg/960px-IAF_AH-64.jpg",
-        "license": "CC BY-SA 3.0",
-        "pageURL": "https://commons.wikimedia.org/wiki/File:IAF_AH-64.jpg"
-      },
-      "wikidataId": "Q171468",
-      "wikipediaTitle": "Boeing AH-64 Apache"
     },
     "HA31": {
       "entryId": "",
