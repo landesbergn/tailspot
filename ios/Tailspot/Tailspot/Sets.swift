@@ -1331,7 +1331,7 @@ nonisolated enum CardSets {
             // catch), H53 the twin-engine CH-53A/D and MH-53.
             .init(id: "fm-ch53", canonicalName: "CH-53 Sea Stallion / Super Stallion", rarity: .epic,
                   modelTokens: ["ch-53", "mh-53", "sikorsky s-80", "sikorsky s-65"],
-                  summary: "The heaviest helicopter in US service. Seven main blades on the E.",
+                  summary: "Marine and Navy heavy lifter. The Super Stallion adds a third engine and a seventh blade.",
                   exactTypecodes: ["H53"],
                   representativeTypecode: "H53S"),
             // "grumman e-2", never bare "e-2" — too short to be safe as a substring.
