@@ -2326,6 +2326,21 @@
       "wikipediaTitle": "CASA/IPTN CN-235",
       "wingspanMeters": 25.81
     },
+    "fm-e3": {
+      "entryId": "fm-e3",
+      "firstFlightYear": 1972,
+      "lengthMeters": 46.61,
+      "numberBuilt": 68,
+      "photo": {
+        "artist": "user:Pajx",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/b9/060610-SKP-E-3-01.jpg/960px-060610-SKP-E-3-01.jpg",
+        "license": "Public domain",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:060610-SKP-E-3-01.jpg"
+      },
+      "wikidataId": "Q261384",
+      "wikipediaTitle": "Boeing E-3 Sentry",
+      "wingspanMeters": 44.42
+    },
     "fm-e6": {
       "entryId": "fm-e6",
       "firstFlightYear": 1987,
@@ -7098,28 +7113,6 @@
       },
       "wikidataId": "Q975281",
       "wikipediaTitle": "Embraer C-390 Millennium"
-    },
-    "E3CF": {
-      "entryId": "",
-      "photo": {
-        "artist": "user:Pajx",
-        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/b9/060610-SKP-E-3-01.jpg/960px-060610-SKP-E-3-01.jpg",
-        "license": "Public domain",
-        "pageURL": "https://commons.wikimedia.org/wiki/File:060610-SKP-E-3-01.jpg"
-      },
-      "wikidataId": "Q261384",
-      "wikipediaTitle": "Boeing E-3 Sentry"
-    },
-    "E3TF": {
-      "entryId": "",
-      "photo": {
-        "artist": "user:Pajx",
-        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/b9/060610-SKP-E-3-01.jpg/960px-060610-SKP-E-3-01.jpg",
-        "license": "Public domain",
-        "pageURL": "https://commons.wikimedia.org/wiki/File:060610-SKP-E-3-01.jpg"
-      },
-      "wikidataId": "Q261384",
-      "wikipediaTitle": "Boeing E-3 Sentry"
     },
     "E500": {
       "entryId": "",

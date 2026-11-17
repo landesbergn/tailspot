@@ -301,6 +301,8 @@ struct SetsCoverageTests {
         ("BE60", "Beechcraft", "60 Duke"),
         ("RJ85", "Avro", "RJ-85 Avroliner"),
         // Public catalog coverage additions validated 2026-10-25.
+        ("E3TF", "Boeing", "E-3B Sentry"),
+        ("E3CF", "Boeing", "E-3D Sentry"),
         ("BUSH", "Rainbow Skyreach", "BushCat"),
         ("C337", "Cessna", "337 Super Skymaster"),
         ("SLH4", "Sling Aircraft", "4 High Wing"),
@@ -453,6 +455,8 @@ struct SetsCoverageTests {
             (("A400", "Airbus", "A400M Atlas"), "fam-military", "fm-a400m"),
             (("DH82", "De Havilland", "DH-82 Queen Bee"), "fam-vintage", "fv-dh82"),
             (("E6", "Boeing", "E-6 Mercury"), "fam-military", "fm-e6"),
+            (("E3TF", "Boeing", "E-3B Sentry"), "fam-military", "fm-e3"),
+            (("E3CF", "Boeing", "E-3D Sentry"), "fam-military", "fm-e3"),
             (("L39", "Aero", "L-39 Albatros"), "fam-military", "fm-l39"),
             (("LA4", "Lake", "LA-4"), "fam-sport-classics", "fsc-lake-la4"),
             (("S92", "Sikorsky", "S-92"), "fam-heli", "fh-s92"),

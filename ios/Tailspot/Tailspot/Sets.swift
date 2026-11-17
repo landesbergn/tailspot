@@ -1254,6 +1254,15 @@ nonisolated enum CardSets {
                   modelTokens: ["boeing e-6 mercury"],
                   summary: "Airborne strategic command post and submarine communications relay.",
                   representativeTypecode: "E6"),
+            // E3TF is the USAF/NATO E-3A/B/C/G; E3CF is the CFM56-engined
+            // E-3D/F (RAF, France, Saudi). Full "e-3x sentry" tokens, never
+            // bare "sentry" — the Sentry 4T ultralight would bleed in.
+            .init(id: "fm-e3", canonicalName: "Boeing E-3 Sentry", rarity: .legendary,
+                  modelTokens: ["e-3 sentry", "e-3a sentry", "e-3b sentry", "e-3c sentry",
+                                "e-3d sentry", "e-3f sentry", "e-3g sentry"],
+                  summary: "AWACS. A 707 airframe carrying a 30-foot rotating radar dome.",
+                  exactTypecodes: ["E3CF"],
+                  representativeTypecode: "E3TF"),
             .init(id: "fm-f5", canonicalName: "Northrop F-5 Tiger II", rarity: .legendary,
                   modelTokens: ["northrop f-5 tiger 2", "northrop f-5 tiger ii", "northrop f-5 freedom fighter",
                                 "northrop f 5f"],
