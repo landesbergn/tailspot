@@ -5,6 +5,14 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-11-18 — TestFlight build 124 for 1.2.6 (branch `claude/1-2-6-changelog-ed4cf0`)
+
+- Build 124 cut from `main` at ce31085 and succeeded. It is build 123 plus the five set slots ([PR #433](https://github.com/landesbergn/tailspot/pull/433)), and is the build meant for the App Store.
+- The multi-catch bonus ([PR #428](https://github.com/landesbergn/tailspot/pull/428)) is held for 1.2.7 (Noah).
+- Readiness read before the cut: `main` green and no Sentry issues, but builds 121 to 123 saw one real tester (12 catches over 3 days) plus Apple's test devices, no `trophies_tab_viewed` on a store build, and no `trophy_near_shown` on any build.
+- Push registration ([PR #427](https://github.com/landesbergn/tailspot/pull/427)) is confirmed on a store-signed install: one production token from build 122, registered 2026-11-16.
+- Not done: the soak on 124, App Store Connect crash check, screenshot check against the new Trophies tab, release notes. Docs only; no code change.
+
 ## 2026-11-17 — Five set slots for caught types that had no home (branch `claude/add-to-set-4baa1f`)
 
 - Noah's ask: a player's Boeing E-3B Sentry catch filled no set slot. A check of every military type players have caught found four more with no slot.
