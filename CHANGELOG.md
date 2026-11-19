@@ -10,7 +10,7 @@ Git history + PLAN.md §9 remain the authoritative record.
 - The 1.2.5 slide 5 showed hex medals in gold and platinum, which the Trophies rebuild ([PR #425](https://github.com/landesbergn/tailspot/pull/425)) removed.
 - New slide 5 shows the Trophies tab: an "On approach" chase card and three level rows with the ring badge. Noah picked it over an unlock-moment version.
 - New folder `marketing/releases/v1.2.6/` with the deck source and all seven slides at 1206 × 2622 and 1320 × 2868. The other six slides match 1.2.5 pixel for pixel.
-- Not uploaded to App Store Connect. No app change.
+- Uploaded to App Store Connect on 2026-11-19: slide 5 replaced in both screenshot sets of version 1.2.6. No app change.
 
 ## 2026-11-17 — Five set slots for caught types that had no home (branch `claude/add-to-set-4baa1f`)
 
