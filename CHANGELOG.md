@@ -5,6 +5,13 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-11-19 — App Store Trophies slide redrawn for 1.2.6 (branch `marketing/1-2-6-trophies-slide`)
+
+- The 1.2.5 slide 5 showed hex medals in gold and platinum, which the Trophies rebuild ([PR #425](https://github.com/landesbergn/tailspot/pull/425)) removed.
+- New slide 5 shows the Trophies tab: an "On approach" chase card and three level rows with the ring badge. Noah picked it over an unlock-moment version.
+- New folder `marketing/releases/v1.2.6/` with the deck source and all seven slides at 1206 × 2622 and 1320 × 2868. The other six slides match 1.2.5 pixel for pixel.
+- Not uploaded to App Store Connect. No app change.
+
 ## 2026-11-17 — Five set slots for caught types that had no home (branch `claude/add-to-set-4baa1f`)
 
 - Noah's ask: a player's Boeing E-3B Sentry catch filled no set slot. A check of every military type players have caught found four more with no slot.
