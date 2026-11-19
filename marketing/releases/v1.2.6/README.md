@@ -1,6 +1,6 @@
 # v1.2.6
 
-**Status:** slide 5 redrawn 2026-11-19 and picked by Noah the same day (option B of two). **Uploaded to App Store Connect 2026-11-19** (by Claude, through the API, at Noah's request): slide 5 replaced in both screenshot sets of version 1.2.6, in position 5, both processed. Version 1.2.6 is not submitted.
+**Status:** slide 5 redrawn 2026-11-19 and picked by Noah the same day (option B of two). **Uploaded to App Store Connect 2026-11-19** (by Claude, through the API, at Noah's request): slide 5 replaced in both screenshot sets of version 1.2.6, in position 5, both processed. Version 1.2.6 was submitted to App Review on 2026-11-19 with these screenshots, so they are locked.
 
 ## What changed from v1.2.5
 
@@ -32,7 +32,7 @@ The header and search-results images are unchanged; they stay in `../v1.2.5/crea
 
 ## Upload
 
-Done 2026-11-19 for en-US: in each set (`APP_IPHONE_67` from `screenshots-6.9in/`, `APP_IPHONE_61` from `screenshots/`) the new slide 5 was uploaded first, then the old one deleted and the set's order patched back to 1–7. The other six were left as they were, since they are the same files. The method and the accepted sizes are in `../v1.2.5/README.md`. Screenshots lock when 1.2.6 is submitted.
+Done 2026-11-19 for en-US: in each set (`APP_IPHONE_67` from `screenshots-6.9in/`, `APP_IPHONE_61` from `screenshots/`) the new slide 5 was uploaded first, then the old one deleted and the set's order patched back to 1–7. The other six were left as they were, since they are the same files. The method and the accepted sizes are in `../v1.2.5/README.md`.
 
 ## Re-render
 

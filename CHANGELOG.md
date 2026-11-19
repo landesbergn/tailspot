@@ -5,6 +5,12 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-11-19 — 1.2.6 submitted to App Review
+
+- Noah submitted version 1.2.6 with build 124 (ce31085). State: waiting for review; release type after-approval, so it goes live when approved; phased release off.
+- Submitted after one day on build 124. No catch had been made on 124 by then, and badge sharing, the "On final" card and a forgiven day on a TestFlight install had not been seen on any build.
+- After it goes live: App Store Connect crashes for 1.2.6, the first-catch funnel by version, production push tokens, then tag `v1.2.6`.
+
 ## 2026-11-19 — App Store Trophies slide redrawn for 1.2.6 (branch `marketing/1-2-6-trophies-slide`)
 
 - The 1.2.5 slide 5 showed hex medals in gold and platinum, which the Trophies rebuild ([PR #425](https://github.com/landesbergn/tailspot/pull/425)) removed.
