@@ -11,6 +11,13 @@ Git history + PLAN.md §9 remain the authoritative record.
 - New slide 5 shows the Trophies tab: an "On approach" chase card and three level rows with the ring badge. Noah picked it over an unlock-moment version.
 - New folder `marketing/releases/v1.2.6/` with the deck source and all seven slides at 1206 × 2622 and 1320 × 2868. The other six slides match 1.2.5 pixel for pixel.
 - Uploaded to App Store Connect on 2026-11-19: slide 5 replaced in both screenshot sets of version 1.2.6. No app change.
+## 2026-11-18 — TestFlight build 124 for 1.2.6 (branch `claude/1-2-6-changelog-ed4cf0`)
+
+- Build 124 cut from `main` at ce31085 and succeeded. It is build 123 plus the five set slots ([PR #433](https://github.com/landesbergn/tailspot/pull/433)), and is the build meant for the App Store.
+- The multi-catch bonus ([PR #428](https://github.com/landesbergn/tailspot/pull/428)) is held for 1.2.7 (Noah).
+- Readiness read before the cut: `main` green and no Sentry issues, but builds 121 to 123 saw one real tester (12 catches over 3 days) plus Apple's test devices, no `trophies_tab_viewed` on a store build, and no `trophy_near_shown` on any build.
+- Push registration ([PR #427](https://github.com/landesbergn/tailspot/pull/427)) is confirmed on a store-signed install: one production token from build 122, registered 2026-11-16.
+- Not done: the soak on 124, App Store Connect crash check, screenshot check against the new Trophies tab, release notes. Docs only; no code change.
 
 ## 2026-11-17 — Five set slots for caught types that had no home (branch `claude/add-to-set-4baa1f`)
 
