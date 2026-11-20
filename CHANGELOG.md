@@ -11,6 +11,19 @@ Git history + PLAN.md §9 remain the authoritative record.
 - The multi-catch bonus ([PR #428](https://github.com/landesbergn/tailspot/pull/428), entry of 2026-11-13) passed Noah's field test on 2026-11-19 and merges into `main` as the first change of the train. A TestFlight build follows from `main`.
 - Not done: the server half (DB snapshot, migration 0013, API deploy, rescore dry-run, rescore). Each step waits for Noah's go. Until then the app shows the bonus and the leaderboard does not pay it.
 
+## 2026-11-19 — 1.2.6 submitted to App Review
+
+- Noah submitted version 1.2.6 with build 124 (ce31085). State: waiting for review; release type after-approval, so it goes live when approved; phased release off.
+- Submitted after one day on build 124. No catch had been made on 124 by then, and badge sharing, the "On final" card and a forgiven day on a TestFlight install had not been seen on any build.
+- After it goes live: App Store Connect crashes for 1.2.6, the first-catch funnel by version, production push tokens, then tag `v1.2.6`.
+
+## 2026-11-19 — App Store Trophies slide redrawn for 1.2.6 (branch `marketing/1-2-6-trophies-slide`)
+
+- The 1.2.5 slide 5 showed hex medals in gold and platinum, which the Trophies rebuild ([PR #425](https://github.com/landesbergn/tailspot/pull/425)) removed.
+- New slide 5 shows the Trophies tab: an "On approach" chase card and three level rows with the ring badge. Noah picked it over an unlock-moment version.
+- New folder `marketing/releases/v1.2.6/` with the deck source and all seven slides at 1206 × 2622 and 1320 × 2868. The other six slides match 1.2.5 pixel for pixel.
+- Uploaded to App Store Connect on 2026-11-19: slide 5 replaced in both screenshot sets of version 1.2.6. No app change.
+
 ## 2026-11-18 — TestFlight build 124 for 1.2.6 (branch `claude/1-2-6-changelog-ed4cf0`)
 
 - Build 124 cut from `main` at ce31085 and succeeded. It is build 123 plus the five set slots ([PR #433](https://github.com/landesbergn/tailspot/pull/433)), and is the build meant for the App Store.
