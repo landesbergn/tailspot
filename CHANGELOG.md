@@ -8,7 +8,7 @@ Git history + PLAN.md §9 remain the authoritative record.
 ## 2026-11-20 — 1.2.7 train opened with the multi-catch bonus (branch `claude/catch-multiplier-scoring-a94f12`)
 
 - 1.2.6 is live on the App Store (Noah), so `MARKETING_VERSION` goes 1.2.6 → 1.2.7 in both app-target config blocks.
-- The multi-catch bonus ([PR #428](https://github.com/landesbergn/tailspot/pull/428), entry of 2026-11-13) passed Noah's field test on 2026-11-19 and merges into `main` as the first change of the train. A TestFlight build follows from `main`.
+- The multi-catch bonus ([PR #428](https://github.com/landesbergn/tailspot/pull/428), entry of 2026-11-13) passed Noah's field test on 2026-11-19 and merges into `main` as the first change of the train. Merged as 1d4b6e7; TestFlight build 125 cut from `main` at that commit and succeeded.
 - Not done: the server half (DB snapshot, migration 0013, API deploy, rescore dry-run, rescore). Each step waits for Noah's go. Until then the app shows the bonus and the leaderboard does not pay it.
 
 ## 2026-11-19 — 1.2.6 submitted to App Review
