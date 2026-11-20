@@ -124,7 +124,11 @@ legacy mentions above. -->
   check", "Plane-in-photo check", "New catch rule") plus one "On: … Off: …"
   sentence, one look for every row, no hint text. Never show internal names
   (L2/L4, enforce/shadow, membership, rearm) on screen; telemetry keeps them.
-  GPS/ADS-B readouts stay one line each.
+  GPS/ADS-B readouts stay one line each. The panel is ONE scrolling card
+  (`debugPanel`) that ends above the capture button: new controls go inside it
+  under a section title (buttons via `debugAction` in a `debugActionGrid`),
+  never floating beside it. `-tailspotShowDebugPanel` opens it at launch for
+  Simulator screenshots.
 - **Logging through `Log.swift`, never `print(...)`.** `os.Logger` instances by
   category (`adsb`, `location`, `motion`, `ui`, `analytics`, `metrics`);
   subsystem `com.landesberg.tailspot`. Use `privacy: .public` on interpolations

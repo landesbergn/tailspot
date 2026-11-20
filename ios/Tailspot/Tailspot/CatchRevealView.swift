@@ -1001,7 +1001,14 @@ struct CatchRevealView: View {
     /// The target the reveal's own count-up climbs to — base + first-of-type +
     /// any pre-frozen bonus. The LIVE route bonus is deliberately excluded: it
     /// counts up separately (on `bonusStart`) once the player answers correctly.
-    private var revealTargetTotal: Int { isDuplicate ? 0 : base + firstOfTypeBonus + frozenGuessBonus }
+    private var revealTargetTotal: Int {
+        isDuplicate ? 0 : base + firstOfTypeBonus + frozenGuessBonus + multiCatchBonus
+    }
+    /// The multi-catch bonus this plane earns as one of a press of two or
+    /// more fresh planes (scoring v10). 0 for a lone catch or a duplicate.
+    private var multiCatchBonus: Int {
+        isDuplicate ? 0 : ScoringBonuses.multiCatchBonus(base: base, pressSize: livePlane.pressSize)
+    }
 
     var body: some View {
         GeometryReader { geo in
@@ -1486,6 +1493,9 @@ struct CatchRevealView: View {
         }
         var parts = ["Caught \(model)", livePlane.rarity.label]
         if firstOfTypeBonus > 0 { parts.append("first of type") }
+        if multiCatchBonus > 0 {
+            parts.append(ScoringBonuses.multiCatchLabel(pressSize: livePlane.pressSize).lowercased())
+        }
         parts.append("\(revealTargetTotal) points")
         if let days = liveStreakDays { parts.append("\(days) day streak") }
         return parts.joined(separator: ", ")
@@ -1836,6 +1846,10 @@ struct CatchRevealView: View {
                             ledgerRow(livePlane.rarity.label.uppercased(), "+\(base)", accent, ss(0.78, 0.86, t), scale: scale)
                             if firstOfTypeBonus > 0 {
                                 ledgerRow("FIRST OF TYPE", "+\(firstOfTypeBonus)", RP.gold, ss(0.82, 0.9, t), scale: scale)
+                            }
+                            if multiCatchBonus > 0 {
+                                ledgerRow(ScoringBonuses.multiCatchLabel(pressSize: livePlane.pressSize),
+                                          "+\(multiCatchBonus)", RP.gold, ss(0.83, 0.91, t), scale: scale)
                             }
                             // Route-guess bonus. In the live in-card round it
                             // appears ONLY on a correct call and fades in with

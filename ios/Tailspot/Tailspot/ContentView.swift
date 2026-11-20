@@ -59,6 +59,9 @@ struct ContentView: View {
     /// machine. Stays `.idle` for the whole session while the frame mode
     /// is live — nothing calls `update`/`forceLock` on it there.
     @StateObject private var lockOn = LockOnEngine()
+    /// Steadies the capture button's press between frames (see `PressHold`).
+    /// A plain reference in @State: ticking it never invalidates the view.
+    @State private var pressHold = PressHold()
     /// Catch-rule feature flag (see `CatchMode.swift`). `catchMode` is
     /// what the view actually runs: the PostHog `frame-is-the-catch` flag,
     /// unless this Debug install has a wrench override (Release ignores
@@ -98,7 +101,17 @@ struct ContentView: View {
     /// to reveal the sensor readout (top) + nearby-aircraft list
     /// (bottom). Field-testing UI is intentionally clean; raw sensor
     /// dumps are for inspection, not normal use.
-    @State private var showDebug = false
+    /// Debug builds can open with the wrench panel showing (launch argument
+    /// `-tailspotShowDebugPanel`), so the panel can be screenshotted in the
+    /// Simulator without a tap. Release always starts with it closed.
+    @State private var showDebug = ContentView.debugPanelOpenAtLaunch
+    private static var debugPanelOpenAtLaunch: Bool {
+        #if DEBUG
+        ProcessInfo.processInfo.arguments.contains("-tailspotShowDebugPanel")
+        #else
+        false
+        #endif
+    }
     #if DEBUG
     /// Cycles the debug "Simulate catch" preset (tier) on each tap.
     @State private var simCatchIndex = 0
@@ -719,52 +732,8 @@ struct ContentView: View {
                 // Debug overlays — hidden by default; revealed by the
                 // wrench toggle below.
                 if showDebug {
-                    VStack(spacing: 0) {
-                        sensorReadout
-                            .padding(.vertical, 12)
-                            .padding(.horizontal, 6)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-
-                        #if DEBUG
-                        // Panel declutter (2026-09-05): only the affordances
-                        // a field session still reaches for. ✦ Catch fakes a
-                        // reveal without a plane overhead; ★ Rearm un-burns
-                        // the once-per-version review-ask stamp so the
-                        // trophy → rating-sheet path can be exercised again
-                        // (dev builds always show the sheet; ReviewPrompt.swift).
-                        // The trophy-unlock / icon-gallery previews went with
-                        // their features shipping. The STREAK row stayed:
-                        // main grew its 🔔 Ask re-offer tester after the
-                        // declutter (#366).
-                        // Two rows: three buttons don't fit one on a 6.1".
-                        VStack(alignment: .leading, spacing: 6) {
-                            HStack(spacing: 8) {
-                                Button("✦ Fake a catch") { simulateCatch() }
-                                Button("★ Reset rating prompt") { ReviewPrompter.shared.debugClearStamp() }
-                            }
-                            // The card's new-user peek (CardFlipTease) runs
-                            // again on the next cards.
-                            HStack(spacing: 8) {
-                                Button("↻ Reset card peek") { CardFlipTeaseStore.debugReset() }
-                                // The post-reveal "Almost there" card, without
-                                // needing a catch that lands two short.
-                                Button("◔ Almost-there card") { unlockCenter.debugShowSampleNearMiss() }
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .font(Brand.Font.mono(size: 11, weight: .bold))
-                        .buttonStyle(.bordered)
-                        .tint(Brand.Color.cyan)
-                        .padding(.horizontal, 12)
-
-                        streakDebugRow
-                        #endif
-
-                        Spacer(minLength: 0)
-
-                        aircraftList
-                    }
-                    .transition(.opacity)
+                    debugPanel
+                        .transition(.opacity)
                 }
 
                 // Top-trailing controls: the account button (Profile), with
@@ -835,6 +804,12 @@ struct ContentView: View {
         // allowlist, so on every other install this returns immediately
         // without touching the network. Delete once it has run.
         .task {
+            // Press sizes for multi-catches made before the field existed
+            // (and for restored rows, which arrive without one), so their
+            // points include the multi-catch bonus the server now pays.
+            // Cheap and idempotent. Rides this task rather than its own
+            // modifier: `body` is at the type-check budget.
+            CatchBackfill.backfillPressSizes(catches, in: modelContext)
             await missedCatchRepair.runIfNeeded(context: modelContext)
         }
         // When any primary sheet closes, re-diff the trophies. Hangar: a
@@ -1271,6 +1246,15 @@ struct ContentView: View {
         }
     }
 
+    /// The capture button's mode for a chosen set of planes.
+    private static func captureMode(for icaos: [String]) -> CaptureMode {
+        switch icaos.count {
+        case 0:  return .disabled
+        case 1:  return .single(icaos[0])
+        default: return .multi(icaos)
+        }
+    }
+
     /// Resolve the frame's selection for whichever catch mode is live.
     /// Called from inside the TimelineView body every frame, so it must
     /// stay free of @State writes: the legacy path's `lockOn.update` is a
@@ -1317,16 +1301,15 @@ struct ContentView: View {
                     )
                 }
             )
-            let mode: CaptureMode
-            switch membership.chosen.count {
-            case 0:  mode = .disabled
-            case 1:  mode = .single(membership.chosen[0])
-            default: mode = .multi(membership.chosen)
-            }
+            // Steadied so a plane on a threshold can't flip ×2 to a single
+            // catch between the look and the tap. The labels follow the
+            // steadied set, so bright still means "in the press".
+            let chosen = pressHold.steady(
+                raw: membership.chosen, onScreen: Set(onScreenPositions.keys), now: now)
             return FrameSelection(
-                mode: mode,
-                bright: Set(membership.chosen),
-                quiet: Set(membership.overflow),
+                mode: Self.captureMode(for: chosen),
+                bright: Set(chosen),
+                quiet: Set(membership.overflow).subtracting(chosen),
                 labelPositions: onScreenPositions,
                 pinned: nil
             )
@@ -1381,13 +1364,33 @@ struct ContentView: View {
             let quiet: Set<String> = pinned == nil
                 ? Set(visible.filter { $0.visibilityTier == .full }.map(\.aircraft.icao24))
                 : []
+            let rawMode = legacyCaptureMode(
+                visible: visible, onScreenPositions: onScreenPositions,
+                pinned: pinned, screenSize: screenSize,
+                headingDeg: headingDeg, cameraElevationDeg: cameraElevationDeg,
+                rollDeg: rollDeg, hfovDeg: hfovDeg, vfovDeg: vfovDeg
+            )
+            // Same steadying as frame mode, for a multi-catch only: a pin is
+            // the user's explicit choice and takes effect at once, and a
+            // lone target swapping for another is the rule working, not
+            // flicker. So only a press that WAS several planes is held.
+            let legacyMode: CaptureMode
+            if pinned != nil {
+                pressHold.reset()
+                legacyMode = rawMode
+            } else if case .multi(let icaos) = rawMode {
+                legacyMode = Self.captureMode(for: pressHold.steady(
+                    raw: icaos, onScreen: Set(onScreenPositions.keys), now: now,
+                    maxCount: max(icaos.count, maxCatchTargets)))
+            } else {
+                let held = pressHold.steady(
+                    raw: [], onScreen: Set(onScreenPositions.keys), now: now)
+                let wanted = rawMode.icaos
+                legacyMode = held.count >= 2 && wanted.allSatisfy(held.contains)
+                    ? .multi(held) : rawMode
+            }
             return FrameSelection(
-                mode: legacyCaptureMode(
-                    visible: visible, onScreenPositions: onScreenPositions,
-                    pinned: pinned, screenSize: screenSize,
-                    headingDeg: headingDeg, cameraElevationDeg: cameraElevationDeg,
-                    rollDeg: rollDeg, hfovDeg: hfovDeg, vfovDeg: vfovDeg
-                ),
+                mode: legacyMode,
                 bright: [],
                 quiet: quiet,
                 labelPositions: labelPositions,
@@ -2568,6 +2571,12 @@ struct ContentView: View {
             }
         }
 
+        // Multi-catches get the same early shell (see `presentMultiShell`);
+        // empty when it couldn't be built, which keeps the settled flow.
+        let multiShell: [String: RevealLoader] = icaos.count >= 2
+            ? presentMultiShell(icaos: icaos, visibleByIcao: visibleByIcao, tapAt: tapAt)
+            : [:]
+
         Task { @MainActor in
             // Backstop: the latch is normally cleared by the reveal's
             // dismiss callbacks, but if this task exits before a reveal
@@ -2575,8 +2584,9 @@ struct ContentView: View {
             // catch button would soft-lock. Clear it unless a sheet
             // actually went up. The early shell counts as up from the start
             // (its dismiss callbacks own the latch from presentation on).
-            var revealPresented = (earlyLoader != nil)
+            var revealPresented = (earlyLoader != nil) || !multiShell.isEmpty
             defer { if !revealPresented { captureInFlight = false } }
+            defer { for loader in multiShell.values { loader.pipelineFinished = true } }
             // However this task exits, the shell must stop reading as
             // "loading" — a photo-less catch settles to the classic
             // placeholder instead of a perpetual loading slot.
@@ -2976,6 +2986,14 @@ struct ContentView: View {
                 newCatches.append(row)
             }
 
+            // Multi-catch (scoring v10): every fresh row of this press records
+            // how many fresh planes it caught, before the save, so the reveal,
+            // the Hangar and the weekly recap all show the bonus the server
+            // pays. Already-caught planes made no row and don't count.
+            if newCatches.count >= 2 {
+                for row in newCatches { row.pressSize = newCatches.count }
+            }
+
             if !newCatches.isEmpty {
                 do {
                     try modelContext.save()
@@ -3208,6 +3226,17 @@ struct ContentView: View {
                 revealPresented = (pendingReveal != nil)
                 presentMs = 0
                 revealMode = "shell"
+            } else if !multiShell.isEmpty {
+                // The run has been up since the tap: fill each fresh plane.
+                fillMultiShell(multiShell, newCatches: newCatches, visibleByIcao: visibleByIcao)
+                // Dismissed before the pipeline finished: its callbacks
+                // already ran, so flush any moment that became ready since.
+                if pendingMultiReveal == nil {
+                    presentPostRevealMomentIfNeeded()
+                }
+                revealPresented = (pendingMultiReveal != nil)
+                presentMs = 0
+                revealMode = "multi_shell"
             } else {
                 presentReveal(newCatches: newCatches, duplicates: duplicates,
                               visibleByIcao: visibleByIcao, guess: guessPayload,
@@ -3323,8 +3352,6 @@ struct ContentView: View {
     private var streakDebugRow: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
-                Text("STREAK")
-                    .foregroundStyle(Brand.Color.textTertiary)
                 Text(StreakDebug.label)
                     .foregroundStyle(StreakDebug.override == nil
                                      ? Brand.Color.textTertiary
@@ -3338,17 +3365,17 @@ struct ContentView: View {
             .lineLimit(1)
             .minimumScaleFactor(0.7)
 
-            HStack(spacing: 8) {
+            debugActionGrid {
                 // nil → 2 → 3 → … → 12 → nil. Re-plans on every step so the
                 // pending reminder always matches what the panel claims.
-                Button("🔥 \(StreakDebug.override.map { "\($0.current)d" } ?? "Set")") {
+                debugAction(StreakDebug.override.map { "Streak: \($0.current) days" } ?? "Set a streak") {
                     StreakDebug.cycle()
                     streakDebugRefresh &+= 1
                     Task { await StreakReminderCenter.shared.sync(context: modelContext) }
                 }
                 // At-risk vs safe — the branch the card's state line and the
                 // planner's "today" test both hang off.
-                Button(streakSummaryNow.caughtToday ? "🔥 Safe" : "🔥 Risk") {
+                debugAction(streakSummaryNow.caughtToday ? "Today: caught" : "Today: at risk") {
                     StreakDebug.toggleCaughtToday()
                     streakDebugRefresh &+= 1
                     Task { await StreakReminderCenter.shared.sync(context: modelContext) }
@@ -3359,7 +3386,7 @@ struct ContentView: View {
                 // lets it through the camera-silence rule (this button IS on
                 // the camera). Re-reads the status once it has landed so the
                 // row reports what the delegate actually did with it.
-                Button("🔔 Fire") {
+                debugAction("Send reminder in 10 s") {
                     let streak = max(streakSummaryNow.current, StreakReminders.minimumStreak)
                     Task {
                         streakDebugStatus = await StreakReminderCenter.shared
@@ -3369,7 +3396,7 @@ struct ContentView: View {
                     }
                 }
                 // The one-shot pre-prompt, unlatched so it can be re-tested.
-                Button("🔔 Ask") {
+                debugAction("Show notify ask") {
                     streakAskFromDebug = true
                     withAnimation(.easeOut(duration: 0.25)) {
                         streakAsk = StreakReminders.Offer(
@@ -3378,7 +3405,7 @@ struct ContentView: View {
                 }
                 // Clear the override AND the asked latch, then re-plan from
                 // the real Hangar — back to a truthful device.
-                Button("↺ Reset") {
+                debugAction("Reset streak tools") {
                     StreakDebug.clear()
                     for key in [StreakReminders.permissionAskedKey,
                                 StreakReminders.permissionDeclinedKey,
@@ -3401,12 +3428,7 @@ struct ContentView: View {
                     }
                 }
             }
-            .font(Brand.Font.mono(size: 11, weight: .bold))
-            .buttonStyle(.bordered)
-            .tint(Brand.Color.cyan)
         }
-        .padding(.horizontal, 12)
-        .padding(.top, 8)
         // `streakDebugRefresh` is read here so mutating it re-evaluates the
         // row — the override lives in UserDefaults, which SwiftUI can't
         // observe on its own.
@@ -3659,6 +3681,7 @@ struct ContentView: View {
             isFirstOfType: isFirstOfType,
             guessKind: guessKind,
             guessBonusPoints: guessBonusPoints,
+            pressSize: row.pressSize ?? 1,
             icao24: row.icao24
         )
     }
@@ -3679,8 +3702,13 @@ struct ContentView: View {
     /// slot instead; at pipeline end the loader swaps in plane + row + guess
     /// in one MainActor pass, so the slot resolves atomically to either the
     /// real route or the masked prompt — never one then the other.
+    ///
+    /// `firstOfType` / `pressSize` are the multi-catch shell's overrides: a
+    /// run of two planes of a new type pays first-of-type once, and each
+    /// fresh plane of the run shows its multi-catch bonus from the start.
     private func shellCardPlane(
-        observed: ObservedAircraft, metadata: AircraftMetadata?
+        observed: ObservedAircraft, metadata: AircraftMetadata?,
+        firstOfType: Bool? = nil, pressSize: Int = 1
     ) -> CardPlane {
         let aircraft = observed.aircraft
         let typecode = Catch.preferredAirframeField(
@@ -3704,7 +3732,7 @@ struct ContentView: View {
         // No row exists yet, so unlike `cardPlane(from:)` there's nothing to
         // exclude from the scan: first-of-type ⇔ no existing row shares the
         // typecode.
-        let isFirstOfType = typecode.map { tc in
+        let isFirstOfType = firstOfType ?? typecode.map { tc in
             !catches.contains { $0.typecode == tc }
         } ?? false
         return CardPlane(
@@ -3723,8 +3751,100 @@ struct ContentView: View {
             speedText: CardPlane.speedText(fromMps: aircraft.velocityMps),
             distText: CardPlane.distText(fromMeters: observed.slantDistanceMeters),
             isFirstOfType: isFirstOfType,
+            pressSize: pressSize,
             icao24: aircraft.icao24
         )
+    }
+
+    /// EARLY SHELL for a multi-catch (2026-11-13, Noah's field report: "a
+    /// TON of lag"). A press of several planes used to wait for the shutter,
+    /// one detector search per plane and one photo compose per plane before
+    /// anything appeared (about 1.2 s at the median on Release builds, several
+    /// seconds on a Debug build). Now the run presents at the tap, like the
+    /// single reveal's shell: each fresh plane starts from tap-time feed data
+    /// behind its own `RevealLoader`, and the pipeline fills the loaders when
+    /// it finishes. Already-caught planes are complete from the start.
+    ///
+    /// Returns the loaders keyed by icao24, or empty when the shell could not
+    /// be built for every plane (one fell out of the observed set, or an
+    /// existing row could not be read); the caller then keeps the settled
+    /// flow, which builds the reveal from finished rows.
+    ///
+    /// The duplicate verdict is taken at the tap; the pipeline re-checks it
+    /// at save time. They can only differ across a local midnight, and then
+    /// the page shows the tap-time verdict while the Hangar holds the truth.
+    private func presentMultiShell(
+        icaos: [String],
+        visibleByIcao: [String: ObservedAircraft],
+        tapAt: Date
+    ) -> [String: RevealLoader] {
+        let day = Streaks.dayKey(for: tapAt)
+        var fresh: [(icao: String, observed: ObservedAircraft, metadata: AircraftMetadata?)] = []
+        var dupPlanes: [CardPlane] = []
+        for icao in icaos {
+            guard let observed = visibleByIcao[icao] else { return [:] }
+            if Catch.isDuplicate(icao24: icao, callsign: observed.aircraft.callsign,
+                                 on: day, in: modelContext) {
+                guard let existing = fetchExistingCatch(icao: icao) else { return [:] }
+                dupPlanes.append(cardPlane(from: existing, observed: observed))
+            } else {
+                fresh.append((icao, observed, cachedMetadata(for: icao)))
+            }
+        }
+        // First-of-type as the server pays it: once per typecode the Hangar
+        // doesn't hold, even with two of it in the run.
+        let firstFlags = MultiCatchReveal.runFirstOfType(
+            typecodes: fresh.map {
+                Catch.preferredAirframeField(feed: $0.observed.aircraft.typecode,
+                                             metadata: $0.metadata?.typecode)
+            },
+            heldTypecodes: Set(catches.compactMap(\.typecode)))
+        var loaders: [String: RevealLoader] = [:]
+        var entries: [MultiCatchReveal.Entry] = []
+        for (plane, isFirst) in zip(fresh, firstFlags) {
+            let shell = shellCardPlane(observed: plane.observed, metadata: plane.metadata,
+                                       firstOfType: isFirst, pressSize: fresh.count)
+            let loader = RevealLoader(plane: shell)
+            loaders[plane.icao] = loader
+            entries.append(.init(plane: shell, isDuplicate: false, loader: loader))
+        }
+        entries.append(contentsOf: dupPlanes.map { .init(plane: $0, isDuplicate: true) })
+        guard entries.count >= 2, !loaders.isEmpty else { return [:] }
+
+        let newAirframes = fresh.filter {
+            !Catch.airframeCaught(icao24: $0.icao, in: modelContext)
+        }.count
+        pendingMultiReveal = PendingMultiReveal(
+            entries: entries,
+            lastEntryNumber: Set(catches.map(\.icao24)).count + newAirframes
+        )
+        // The viewfinder's latest frame fills every fresh page's photo slot
+        // until its composed photo lands (see the single shell above).
+        let waiting = Array(loaders.values)
+        Task.detached(priority: .userInitiated) { [visualConfirm] in
+            guard let frame = visualConfirm.latestFrameImage() else { return }
+            await MainActor.run { for loader in waiting { loader.provisionalPhoto = frame } }
+        }
+        return loaders
+    }
+
+    /// Hand the finished rows of a multi-catch to the shell that has been up
+    /// since the tap. One swap per plane keeps photo, route, first-of-type
+    /// and the multi-catch bonus consistent, as `presentReveal` builds them.
+    private func fillMultiShell(_ loaders: [String: RevealLoader],
+                                newCatches: [Catch],
+                                visibleByIcao: [String: ObservedAircraft]) {
+        let heldTypecodes = Set(catches
+            .filter { row in !newCatches.contains { $0 === row } }
+            .compactMap(\.typecode))
+        let firstOfType = MultiCatchReveal.runFirstOfType(
+            typecodes: newCatches.map(\.typecode), heldTypecodes: heldTypecodes)
+        for (row, isFirst) in zip(newCatches, firstOfType) {
+            guard let loader = loaders[row.icao24] else { continue }
+            loader.plane = cardPlane(from: row, observed: visibleByIcao[row.icao24],
+                                     firstOfType: isFirst)
+            loader.row = row
+        }
     }
 
     /// Metadata already on hand at tap time — legacy's pinned snapshot,
@@ -4161,45 +4281,120 @@ struct ContentView: View {
             .foregroundStyle(Brand.Color.textPrimary)
             // One readout per line, always: shrink a hair rather than wrap.
             .lineLimit(1)
-            .minimumScaleFactor(0.85)
-
-            // TOOLS section
-            Text("TOOLS")
-                .font(Brand.Font.mono(size: 10))
-                .foregroundStyle(Brand.Color.textTertiary)
-                .padding(.top, 8)
-            // Declutter (2026-09-05): rows that stopped testing anything
-            // real are gone — the on-device replay analyzer (the offline
-            // bench + FieldReplays own that now), the raw Gate-1 sky
-            // features (shipped 2026-07; `indoor_hint_shown` telemetry
-            // covers it), and the visual-confirm ON/OFF toggle (it only
-            // gated the legacy mode's live pre-press tracking and the
-            // `visual_confirm_enabled` property — under the frame mode it
-            // changed nothing observable while still flipping telemetry).
-            Group {
-                recordingRow
-                localGateRow
-                detectorGateRow
-                liveTrackingRow
-                #if DEBUG
-                catchModeRow
-                steeringDebugRow
-                #endif
-            }
-            .font(Brand.Font.mono(size: 12))
-            .foregroundStyle(Brand.Color.textPrimary)
+            .minimumScaleFactor(0.7)
         }
-        // Inner padding so content isn't jammed against the panel edge, plus a
-        // hairline border for definition — declutter pass (on-device feedback
-        // that the readout looked busy/ugly). Horizontal padding is tight on
-        // purpose (2026-09-05): the GPS readout has to fit on one line.
-        .padding(.vertical, 12)
-        .padding(.horizontal, 10)
-        .background(Brand.Color.bgPrimary.opacity(0.6), in: .rect(cornerRadius: Brand.Radius.card))
+    }
+
+    /// The wrench panel (rebuilt 2026-11-15, Noah: "basically unusable").
+    /// It had grown past the screen: the switches ran under the capture
+    /// button, the action buttons sat on top of the bottom bar and the
+    /// steering pill, and the streak buttons truncated to "S…". Now it is
+    /// ONE scrolling card that ends above the capture button, nearly opaque
+    /// so it reads over a bright camera frame, with every control inside it
+    /// under a plain section title.
+    private var debugPanel: some View {
+        ScrollView(.vertical) {
+            VStack(alignment: .leading, spacing: 18) {
+                // Readouts first, inset on the right so the account and
+                // wrench buttons (which float above the panel) cover nothing.
+                sensorReadout
+                    .padding(.trailing, TopStripLayout.controlDiameter + 8)
+                // Buttons before switches: they are short, and the
+                // switch descriptions fill a screen on their own.
+                debugSection("ACTIONS") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        recordingRow
+                            .font(Brand.Font.mono(size: 12))
+                            .foregroundStyle(Brand.Color.textPrimary)
+                        #if DEBUG
+                        debugActionGrid {
+                            debugAction("Fake a catch") { simulateCatch() }
+                            debugAction("Reset rating prompt") {
+                                ReviewPrompter.shared.debugClearStamp()
+                            }
+                            // The card's new-user peek (CardFlipTease) runs
+                            // again on the next cards.
+                            debugAction("Reset card peek") { CardFlipTeaseStore.debugReset() }
+                            // The post-reveal "Almost there" card, without
+                            // needing a catch that lands two short.
+                            debugAction("Show almost-there card") {
+                                unlockCenter.debugShowSampleNearMiss()
+                            }
+                        }
+                        #endif
+                    }
+                }
+                #if DEBUG
+                debugSection("STREAK") { streakDebugRow }
+                #endif
+                debugSection("SWITCHES") {
+                    VStack(alignment: .leading, spacing: 10) {
+                        localGateRow
+                        detectorGateRow
+                        liveTrackingRow
+                        #if DEBUG
+                        catchModeRow
+                        steeringDebugRow
+                        #endif
+                    }
+                    .font(Brand.Font.mono(size: 12))
+                    .foregroundStyle(Brand.Color.textPrimary)
+                }
+                aircraftList
+            }
+            .padding(14)
+        }
+        .scrollBounceBehavior(.basedOnSize)
+        .background(Brand.Color.bgPrimary.opacity(0.93), in: .rect(cornerRadius: Brand.Radius.card))
         .overlay(
             RoundedRectangle(cornerRadius: Brand.Radius.card)
-                .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
         )
+        .clipShape(.rect(cornerRadius: Brand.Radius.card))
+        .padding(.horizontal, 8)
+        .padding(.top, 4)
+        // Ends above the capture button and the bottom bar, which stay
+        // usable while the panel is open.
+        .padding(.bottom, Self.debugPanelBottomInset)
+    }
+
+    /// Space the panel leaves at the bottom of the safe area: the 72 pt
+    /// capture button, its inset, and a gap.
+    static let debugPanelBottomInset: CGFloat = 100
+
+    /// A titled group in the wrench panel.
+    private func debugSection<Content: View>(
+        _ title: String, @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(Brand.Font.mono(size: 10, weight: .bold))
+                .foregroundStyle(Brand.Color.textTertiary)
+            content()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Two equal columns of full-width buttons: every label is whole, and
+    /// every button is a comfortable target.
+    private func debugActionGrid<Content: View>(
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible())],
+                  spacing: 8, content: content)
+            .font(Brand.Font.mono(size: 11, weight: .bold))
+            .buttonStyle(.bordered)
+            .tint(Brand.Color.cyan)
+    }
+
+    /// One wrench-panel button, filling its grid column.
+    private func debugAction(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .frame(maxWidth: .infinity, minHeight: 28)
+        }
     }
 
     // MARK: - Bottom: nearby-aircraft list
@@ -4680,6 +4875,7 @@ struct ContentView: View {
         lockOn.unpin()
         visualConfirm.updateTarget(nil)
         assertedPlanes = [:]
+        pressHold.reset()
         Log.ui.notice("Catch mode → \(mode.label, privacy: .public)")
     }
 

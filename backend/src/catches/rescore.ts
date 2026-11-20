@@ -31,7 +31,7 @@
  *   (default targets only stale rows: unresolved OR older-regime.)
  */
 
-import { eq, inArray, isNull, lt, or } from "drizzle-orm";
+import { eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { type Database, closeDb, getDb } from "../db/client.js";
 import { catches } from "../db/schema.js";
 import { DrizzleCatchStore, type GuessVerdict, type ScoredCatch } from "../identity/store.js";
@@ -93,12 +93,14 @@ export async function rescoreCatches(
   const baseSelect = db
     .select({
       id: catches.id,
+      deviceId: catches.deviceId,
       icao24: catches.icao24,
       typecode: catches.typecode,
       rarity: catches.rarity,
       points: catches.points,
       scoringVersion: catches.scoringVersion,
       firstOfType: catches.firstOfType,
+      pressSize: catches.pressSize,
       guessKind: catches.guessKind,
       guessCorrect: catches.guessCorrect,
       caughtAt: catches.caughtAt,
@@ -121,6 +123,28 @@ export async function rescoreCatches(
     applied: !opts.dryRun,
   };
   if (rows.length === 0) return report;
+
+  // Press sizes are normally frozen (counted at insert, backfilled by
+  // migration 0013), but two kinds of row miss that count: a press uploaded
+  // between the migration and the deploy of the v10 server, and one whose
+  // insert-time `reconcilePress` failed. Re-count every press here and RAISE a
+  // stale size (never lower: a deleted sibling keeps the survivor's bonus), so
+  // the dry-run shows the delta and the apply writes the size with the points.
+  const counted = await db
+    .select({
+      deviceId: catches.deviceId,
+      caughtAt: catches.caughtAt,
+      n: sql<number>`count(distinct ${catches.icao24})::integer`,
+    })
+    .from(catches)
+    .groupBy(catches.deviceId, catches.caughtAt)
+    .having(sql`count(distinct ${catches.icao24}) >= 2`);
+  const pressKey = (deviceId: string, caughtAt: Date) => `${deviceId}:${caughtAt.getTime()}`;
+  const countedSize = new Map(counted.map((p) => [pressKey(p.deviceId, p.caughtAt), p.n]));
+  for (const row of rows) {
+    const n = countedSize.get(pressKey(row.deviceId, row.caughtAt));
+    if (n !== undefined && n > row.pressSize) row.pressSize = n;
+  }
 
   // Resolve+score each distinct (airframe, first-of-type, guess, era) variant ONCE.
   // The expensive part — the registry→typecode join — depends only on the
@@ -147,7 +171,10 @@ export async function rescoreCatches(
   const scoreKey = (row: RescoreRow) => {
     const guess = rowGuess(row);
     const guessPart = guess ? `${guess.kind}:${guess.correct ? 1 : 0}:${guessEra(row)}` : "-";
-    return `${row.icao24}:${row.firstOfType ? 1 : 0}:${guessPart}`;
+    // `press_size` is read like the flags (counted at insert, backfilled by
+    // migration 0013, raised above when a press was missed): two rows of one airframe score differently when one
+    // was a lone catch and the other half of a double.
+    return `${row.icao24}:${row.firstOfType ? 1 : 0}:${guessPart}:${row.pressSize}`;
   };
   const scoredByKey = new Map<string, ScoredCatch>();
   for (const row of rows) {
@@ -159,6 +186,7 @@ export async function rescoreCatches(
           firstOfType: row.firstOfType,
           guess: rowGuess(row),
           caughtAt: row.caughtAt,
+          pressSize: row.pressSize,
         }),
       );
     }
@@ -219,6 +247,7 @@ export async function rescoreCatches(
           rarity: score.rarity,
           points: score.points,
           scoringVersion: score.scoringVersion,
+          pressSize: score.pressSize,
         })
         .where(ids.length === 1 ? eq(catches.id, ids[0]) : inArray(catches.id, ids));
     }

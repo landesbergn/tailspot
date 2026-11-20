@@ -23,10 +23,12 @@
 //  the single reveal's ALREADY CAUGHT state and stay silent. "Skip to
 //  total" jumps straight to the summary from any plane.
 //
-//  NO COMBO MULTIPLIER (2026-10-23): the points shown are exactly what each
-//  catch earns on its own, base + FIRST OF TYPE via `ScoringBonuses`, the
-//  same source as the single reveal's ledger (the server never awarded a
-//  combo). Duplicates earn nothing.
+//  MULTI-CATCH BONUS (scoring v10, 2026-11-13): each FRESH plane of a press
+//  of two earns +25% of its own base, of three or more +50%, on top of base
+//  + FIRST OF TYPE, all via `ScoringBonuses` (pinned to the server's
+//  fractions by the parity tests). The old ×1.5–×3.0 combo was removed on
+//  2026-10-23 because the server never paid it; this one the server pays.
+//  Duplicates earn nothing and don't count toward the press size.
 //
 //  Single-catch reveals go straight to `CatchRevealView`; this view
 //  assumes `entries.count >= 2`.
@@ -37,10 +39,28 @@ import SwiftUI
 struct MultiCatchReveal: View {
     /// Pairing of a card payload with a duplicate flag. Duplicates play the
     /// single reveal's ALREADY CAUGHT state and earn nothing.
+    ///
+    /// `loader` is set on the early-shell path (2026-11-13): the run presents
+    /// at the tap with each fresh plane's tap-time shell, and the catch
+    /// pipeline swaps the finished plane (photo, route, first-of-type) into
+    /// the loader when it lands, exactly as the single reveal's shell does.
+    /// `plane` reads through it, so every page, the summary rows and the
+    /// ledger follow the swap. nil = the entry was complete at presentation.
     struct Entry: Identifiable, Equatable {
         let id = UUID()
-        let plane: CardPlane
+        private let initialPlane: CardPlane
         let isDuplicate: Bool
+        let loader: RevealLoader?
+
+        var plane: CardPlane { loader?.plane ?? initialPlane }
+
+        init(plane: CardPlane, isDuplicate: Bool, loader: RevealLoader? = nil) {
+            self.initialPlane = plane
+            self.isDuplicate = isDuplicate
+            self.loader = loader
+        }
+
+        static func == (lhs: Entry, rhs: Entry) -> Bool { lhs.id == rhs.id }
     }
 
     let entries: [Entry]
@@ -72,19 +92,35 @@ struct MultiCatchReveal: View {
 
     // MARK: - Points (the run's totals)
 
-    /// What the run is worth, counting only fresh tails. Each fresh card
-    /// earns exactly what it would on its own (base + first-of-type); there
-    /// is no multi-catch multiplier, because the server doesn't award one.
+    /// What the run is worth, counting only fresh tails: each fresh card's
+    /// base + first-of-type, plus the multi-catch bonus when the run has two
+    /// or more fresh planes.
     struct Tally: Equatable {
         var freshCount = 0
         var duplicateCount = 0
         var basePoints = 0
         var firstOfTypePoints = 0
-        var awarded: Int { basePoints + firstOfTypePoints }
+        var multiCatchPoints = 0
+        var awarded: Int { basePoints + firstOfTypePoints + multiCatchPoints }
+    }
+
+    /// The press size the server will count for this run: its fresh planes.
+    static func pressSize<C: Collection>(_ entries: C) -> Int where C.Element == Entry {
+        entries.filter { !$0.isDuplicate }.count
+    }
+
+    /// What one plane of the run earns (0 for a duplicate).
+    static func earned<C: Collection>(_ e: Entry, in entries: C) -> Int where C.Element == Entry {
+        guard !e.isDuplicate else { return 0 }
+        let base = e.plane.rarity.basePoints
+        return base
+            + (e.plane.isFirstOfType ? ScoringBonuses.firstOfTypeBonus(base: base) : 0)
+            + ScoringBonuses.multiCatchBonus(base: base, pressSize: pressSize(entries))
     }
 
     static func tally<C: Collection>(_ entries: C) -> Tally where C.Element == Entry {
         var t = Tally()
+        let size = pressSize(entries)
         for e in entries {
             if e.isDuplicate { t.duplicateCount += 1; continue }
             let base = e.plane.rarity.basePoints
@@ -93,6 +129,7 @@ struct MultiCatchReveal: View {
             if e.plane.isFirstOfType {
                 t.firstOfTypePoints += ScoringBonuses.firstOfTypeBonus(base: base)
             }
+            t.multiCatchPoints += ScoringBonuses.multiCatchBonus(base: base, pressSize: size)
         }
         return t
     }
@@ -141,6 +178,9 @@ struct MultiCatchReveal: View {
         var parts = ["\(t.freshCount) planes caught"]
         if t.duplicateCount > 0 { parts.append("\(t.duplicateCount) already in hangar") }
         if t.firstOfTypePoints > 0 { parts.append("first of type plus \(t.firstOfTypePoints)") }
+        if t.multiCatchPoints > 0 {
+            parts.append("\(ScoringBonuses.multiCatchLabel(pressSize: t.freshCount).lowercased()) plus \(t.multiCatchPoints)")
+        }
         parts.append("\(t.awarded) points awarded")
         return parts.joined(separator: ", ")
     }
@@ -195,6 +235,7 @@ struct MultiCatchReveal: View {
             // the last plane it is the real View in Hangar.
             onViewInHangar: sequence.isLast ? onViewInHangar : { goToSummary() },
             isDuplicate: entry.isDuplicate,
+            loader: entry.loader,
             sequence: sequence
         )
     }
@@ -344,6 +385,10 @@ struct MultiCatchReveal: View {
                 if tally.firstOfTypePoints > 0 {
                     ledgerRow("FIRST OF TYPE", "+\(tally.firstOfTypePoints)", RP.gold, 1, scale: scale)
                 }
+                if tally.multiCatchPoints > 0 {
+                    ledgerRow(ScoringBonuses.multiCatchLabel(pressSize: tally.freshCount),
+                              "+\(tally.multiCatchPoints)", RP.gold, 1, scale: scale)
+                }
                 if tally.duplicateCount > 0 {
                     ledgerRow("ALREADY CAUGHT", "×\(tally.duplicateCount)",
                               Brand.Color.duplicateRose, 1, scale: scale)
@@ -363,8 +408,7 @@ struct MultiCatchReveal: View {
     /// what it earned (or ALREADY CAUGHT).
     private func summaryRow(_ e: Entry, scale: CGFloat) -> some View {
         let p = e.plane
-        let earned = e.isDuplicate ? 0
-            : p.rarity.basePoints + (p.isFirstOfType ? ScoringBonuses.firstOfTypeBonus(base: p.rarity.basePoints) : 0)
+        let earned = Self.earned(e, in: entries)
         return HStack(spacing: 12 * scale) {
             thumb(p, scale: scale)
                 .frame(width: 44 * scale, height: 44 * scale)

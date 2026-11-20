@@ -5,6 +5,12 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-11-20 — 1.2.7 train opened with the multi-catch bonus (branch `claude/catch-multiplier-scoring-a94f12`)
+
+- 1.2.6 is live on the App Store (Noah), so `MARKETING_VERSION` goes 1.2.6 → 1.2.7 in both app-target config blocks.
+- The multi-catch bonus ([PR #428](https://github.com/landesbergn/tailspot/pull/428), entry of 2026-11-13) passed Noah's field test on 2026-11-19 and merges into `main` as the first change of the train. A TestFlight build follows from `main`.
+- Not done: the server half (DB snapshot, migration 0013, API deploy, rescore dry-run, rescore). Each step waits for Noah's go. Until then the app shows the bonus and the leaderboard does not pay it.
+
 ## 2026-11-19 — 1.2.6 submitted to App Review
 
 - Noah submitted version 1.2.6 with build 124 (ce31085). State: waiting for review; release type after-approval, so it goes live when approved; phased release off.
@@ -17,6 +23,7 @@ Git history + PLAN.md §9 remain the authoritative record.
 - New slide 5 shows the Trophies tab: an "On approach" chase card and three level rows with the ring badge. Noah picked it over an unlock-moment version.
 - New folder `marketing/releases/v1.2.6/` with the deck source and all seven slides at 1206 × 2622 and 1320 × 2868. The other six slides match 1.2.5 pixel for pixel.
 - Uploaded to App Store Connect on 2026-11-19: slide 5 replaced in both screenshot sets of version 1.2.6. No app change.
+
 ## 2026-11-18 — TestFlight build 124 for 1.2.6 (branch `claude/1-2-6-changelog-ed4cf0`)
 
 - Build 124 cut from `main` at ce31085 and succeeded. It is build 123 plus the five set slots ([PR #433](https://github.com/landesbergn/tailspot/pull/433)), and is the build meant for the App Store.
@@ -91,6 +98,20 @@ Git history + PLAN.md §9 remain the authoritative record.
 - Removed the doc-staleness Stop hook (`bin/doc-staleness-check`). It only fired on `main` with unpushed commits, which branch protection rules out, so it never ran.
 - New `.claude/rules/` holds path-scoped rules (analytics identity, the `Catch` model contract, ADS-B errors) that load only when Claude touches matching files. `.gitignore` now keeps `.claude/` local except `rules/`.
 - Test-timing measurement steps moved to CONTRIBUTING.md.
+
+## 2026-11-13 — Multi-catch is a real thing: a paid bonus, a steady button, no wait (branch `claude/catch-multiplier-scoring-a94f12`)
+
+- Noah: multi-catch "should be an actual thing". The ×1.5–×3 combo was removed on 2026-10-23 because the server never paid it, the button flickered between ×2 and a single catch, and the reveal took seconds to open.
+- **Scoring v10 (Noah's numbers).** Each plane in a press of two earns +25% of its own base; each in a press of three or more earns +50%. Additive, like first-of-type and the guess bonus, so they stack without compounding. A rare caught in a double is 50 + 13.
+- **The server decides, with no new wire field.** Every row of one press already carries the same `caughtAt`, so the server counts the distinct airframes a device caught at that instant (`press_size`, migration 0013). When a second plane of a press arrives, `reconcilePress` re-scores the first. Builds already on phones get the bonus without an update. Only fresh planes count: an already-caught plane makes no row.
+- **Past multi-catches are paid too.** Migration 0013 backfills `press_size` for every old press; the v9→v10 `npm run rescore` then adds the bonus. That is the combo the reveal showed from 2026-05-21 to 2026-10-23.
+- **App.** `Catch.pressSize` (optional, additive) is set at catch time and backfilled for old and restored rows by the same rule. The reveal page, the multi-catch summary, the Hangar row, the detail card, the share card and the weekly recap all show a "DOUBLE CATCH" / "TRIPLE CATCH" line through `ScoringBonuses`, pinned to the server's fractions by `scoring-bonuses.json`.
+- **Steady button (`PressHold`).** A plane the rules chose stays in the press for 0.6 s after they drop it, while it is still on screen. Joining is immediate, a plane that leaves the frame goes at once, and the press never grows past its cap. Both catch rules; who qualifies is unchanged, so the A/B is not disturbed.
+- **No wait.** A multi-catch now opens its reveal at the tap, as single catches have since 2026-08-13: each fresh plane starts from live feed data and the viewfinder frame, and its photo and route arrive when the pipeline finishes. PostHog (60 days, Release builds): the old flow took 1.2 s at the median and 1.8 s at p90 under the new catch rule, mostly one detector search per plane. `catch_pipeline_timing` reports the new path as `mode: multi_shell`.
+- Not changed: who is in a press under either rule (the A/B reads 2026-12-21), and the pipeline's own speed (each plane's detector search still decodes the photo again).
+- Code review fixes (2026-11-15, [PR #428](https://github.com/landesbergn/tailspot/pull/428)): the rescore re-counts presses and raises a stale `press_size` (covers a press uploaded between migration 0013 and the deploy, and a failed insert-time count); `reconcilePress` and `recreditGuess` each write only if the row is as they read it; `CatchDeletion` lowers the press size of the other planes when a plane is deleted before it uploads; `CatchBackfill.pressKey` matches presses to the millisecond.
+- Wrench panel rebuilt (2026-11-15, Noah: "basically unusable"): it had grown past the screen, with switches under the capture button, buttons on top of the bottom bar, and streak buttons truncated to "S…". It is now one scrolling, near-opaque card that ends above the capture button: readouts, then ACTIONS and STREAK as two-column grids with whole labels, then SWITCHES, then the nearby list. Debug builds accept `-tailspotShowDebugPanel` to open it at launch.
+- **Needs Noah's go-ahead, in this order:** snapshot the DB, apply migration 0013 to prod, deploy the API, then dry-run the rescore and review the delta and any changed weekly or monthly winner before applying it.
 
 ## 2026-11-12 — Placeholder callsigns show the tail number (branch `claude/catch-000000-issue-5eeec5`)
 

@@ -59,7 +59,9 @@ struct ScoringBonusesParityTests {
         // every iOS constant matches it. The backend's points.parity.test.ts
         // pins its literals to the SAME file, so a re-balance that edits only
         // one side fails a parity test somewhere.
-        #expect(canonical.count == 5)
+        #expect(canonical.count == 7)
+        #expect(canonical["multiCatchDouble"] == ScoringBonuses.multiCatchDouble)
+        #expect(canonical["multiCatchTriple"] == ScoringBonuses.multiCatchTriple)
         #expect(canonical["firstOfType"] == ScoringBonuses.firstOfType)
         #expect(canonical["routeGuess"] == ScoringBonuses.routeGuess)
         #expect(canonical["routeGuessLegacy"] == ScoringBonuses.routeGuessLegacy)
@@ -82,6 +84,12 @@ struct ScoringBonusesParityTests {
         #expect(bases.map { ScoringBonuses.guessBonus(base: $0, kind: .route, caughtAt: preCutover) } == [1, 2, 5, 10, 50])
         #expect(bases.map { ScoringBonuses.guessBonus(base: $0, kind: .type) } == [3, 5, 13, 25, 125])
         #expect(bases.map { ScoringBonuses.guessBonus(base: $0, kind: .type, caughtAt: preCutover) } == [3, 5, 13, 25, 125])
+        // Multi-catch (scoring v10): nothing alone, +25% for a double, +50%
+        // for a triple or more.
+        #expect(bases.map { ScoringBonuses.multiCatchBonus(base: $0, pressSize: 1) } == [0, 0, 0, 0, 0])
+        #expect(bases.map { ScoringBonuses.multiCatchBonus(base: $0, pressSize: 2) } == [3, 5, 13, 25, 125])
+        #expect(bases.map { ScoringBonuses.multiCatchBonus(base: $0, pressSize: 3) } == [5, 10, 25, 50, 250])
+        #expect(bases.map { ScoringBonuses.multiCatchBonus(base: $0, pressSize: 5) } == [5, 10, 25, 50, 250])
     }
 
     @Test func displayPointsComposesBaseAndBonuses() {
@@ -99,6 +107,10 @@ struct ScoringBonusesParityTests {
         // First only, epic: 100 + 50.
         #expect(ScoringBonuses.displayPoints(
             base: 100, isFirstOfType: true, guessKind: nil, caughtAt: now) == (150, 50))
+        // A double stacks on the rest: epic first-of-type in a press of two,
+        // 100 + 50 + 25. The default press size is a lone catch.
+        #expect(ScoringBonuses.displayPoints(
+            base: 100, isFirstOfType: true, guessKind: nil, caughtAt: now, pressSize: 2) == (175, 75))
         // A pre-cutover route call keeps its legacy +10% era forever.
         let legacy = ScoringBonuses.routeGuessCutover.addingTimeInterval(-60)
         #expect(ScoringBonuses.displayPoints(

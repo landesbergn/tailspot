@@ -110,12 +110,15 @@ describe("GET /v1/leaderboard", () => {
     expect(res.statusCode).toBe(200);
   }
 
+  let catchSeq = 0;
   async function postCatch(token: string, icao24: string) {
     const res = await app.inject({
       method: "POST",
       url: "/v1/catches",
       headers: { authorization: `Bearer ${token}` },
-      payload: catchBody(icao24, nextUuid()),
+      // Each catch a second apart: several airframes at ONE instant are a
+      // single shutter press and earn the multi-catch bonus (scoring v10).
+      payload: { ...catchBody(icao24, nextUuid()), caughtAt: NOW - ++catchSeq },
     });
     expect([200, 201]).toContain(res.statusCode);
   }

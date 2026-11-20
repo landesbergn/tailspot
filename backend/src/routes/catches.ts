@@ -15,7 +15,7 @@
  *   POST /v1/catches   (auth required)
  *     body { catchUuid, icao24, callsign|null, caughtAt, observer{…}, aircraft{…},
  *            guess?: { kind: "route"|"type", value: string } }
- *     → 201 { catchId, points, rarity, typecode, firstOfType, guessCorrect, duplicate:false }
+ *     → 201 { catchId, points, rarity, typecode, firstOfType, guessCorrect, pressSize, duplicate:false }
  *       200 { …, duplicate:true }   when catchUuid was already ingested (replay)
  *       401 bad/absent token
  *       422 malformed body
@@ -633,6 +633,9 @@ export function registerCatchesRoute(app: FastifyInstance, opts: CatchesRouteOpt
       typecode: result.typecode,
       firstOfType: result.firstOfType,
       guessCorrect: result.guessCorrect,
+      // Scoring v10. `points` above already includes the multi-catch bonus
+      // for the press as it stands now; the first row of a press reports 1.
+      pressSize: result.pressSize,
       duplicate,
     });
   });
