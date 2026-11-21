@@ -46,10 +46,11 @@ export const MIN_ENTRIES_WITHOUT_SNAPSHOT = 1000;
 
 /**
  * The largest upstream body a refresh will read. The real file is about
- * 2.4 MB; this leaves room for years of growth while keeping a wrong or
- * hostile response from filling a 256 MB machine.
+ * 2.4 MB and parses in about 45 ms; this leaves room for years of growth
+ * while keeping a wrong or hostile response from filling a 256 MB machine or
+ * holding the event loop (the parse is synchronous) for long.
  */
-export const MAX_UPSTREAM_CSV_BYTES = 20 * 1024 * 1024;
+export const MAX_UPSTREAM_CSV_BYTES = 8 * 1024 * 1024;
 
 const ICAO24_RE = /^[0-9a-f]{6}$/;
 
@@ -333,7 +334,7 @@ export function makePlaneAlertCsvFetcher(
   };
 }
 
-/** The production fetcher: one GET to GitHub's raw host, capped at 20 MB. */
+/** The production fetcher: one GET to GitHub's raw host, capped at 8 MB. */
 export const fetchPlaneAlertCsv: NotableCsvFetcher = makePlaneAlertCsvFetcher();
 
 /**

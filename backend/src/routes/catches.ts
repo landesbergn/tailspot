@@ -88,7 +88,7 @@ import { resolveDevice } from "../identity/auth.js";
 import { ipKey } from "../identity/clientIp.js";
 import type { RateLimiter } from "../identity/rateLimiter.js";
 import type { CatchStore, IdentityStore } from "../identity/store.js";
-import type { NotableLookup } from "../notable/mapping.js";
+import { type NotableLookup, notableDirectoryHasData } from "../notable/mapping.js";
 import type { RouteResolver } from "../providers/adsblolRoutes.js";
 
 export interface CatchesRouteOptions {
@@ -254,8 +254,11 @@ export function registerCatchesRoute(app: FastifyInstance, opts: CatchesRouteOpt
 
     const page = await catchStore.listCatches(device.id, limit, offset);
     // Stamp `notable` on EVERY row from the directory (nothing is stored):
-    // the object, or an explicit null. The key is never absent.
+    // the object, or an explicit null. The key is absent only when the
+    // directory holds no data at all, so the app does not mistake "the
+    // server has no list right now" for "none of these is notable".
     const directory = opts.notable;
+    if (!notableDirectoryHasData(directory)) return reply.code(200).send(page);
     return reply.code(200).send({
       total: page.total,
       catches: page.catches.map((c) => ({
@@ -663,12 +666,19 @@ export function registerCatchesRoute(app: FastifyInstance, opts: CatchesRouteOpt
 
     // Response NEVER varies on the verdict (no oracle). The only difference
     // between a fresh insert and a replay is the status code + `duplicate` flag.
-    // `notable` is always sent (object or null). A fresh insert reports the
+    // `notable` is sent (object or null) whenever the directory holds data. A fresh insert reports the
     // decision of the scoring behind `result.points`; a replay's points were
     // scored in the past and nothing about notability is stored, so it gets
     // the directory's current answer.
-    const notable =
-      result.notable !== undefined ? result.notable : (opts.notable?.lookup(icao24) ?? null);
+    // With no directory data at all the key is omitted (see the GET route).
+    // A scorer that said "notable" is always believed.
+    const notable = result.notable
+      ? result.notable
+      : !notableDirectoryHasData(opts.notable)
+        ? undefined
+        : result.notable !== undefined
+          ? result.notable
+          : (opts.notable?.lookup(icao24) ?? null);
     return reply.code(duplicate ? 200 : 201).send({
       catchId: result.catchId,
       points: result.points,
@@ -680,7 +690,8 @@ export function registerCatchesRoute(app: FastifyInstance, opts: CatchesRouteOpt
       // for the press as it stands now; the first row of a press reports 1.
       pressSize: result.pressSize,
       // Scoring v11. The object for a notable airframe (`points` above already
-      // includes its bonus), null otherwise. Never omitted.
+      // includes its bonus), null otherwise. Omitted only when the directory
+      // holds no data.
       notable,
       duplicate,
     });

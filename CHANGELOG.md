@@ -21,7 +21,7 @@ Git history + PLAN.md §9 remain the authoritative record.
 - Settings credits gain "Notable aircraft data: plane-alert-db contributors (ODbL)"; `backend/data/NOTICE.md` carries the attribution.
 - Not verified: a real device, a live server, the Settings credit row render, and the Dockerfile `COPY` line for the snapshot (no Docker build was run).
 - Tests: backend 792 passed; iOS 2,410 passed on the iOS 26.5 iPhone Air simulator (one earlier full run had a single failure in `TrophyAchievementDatesTests/interruptedBackfillIsResumedOnAMemoHit`, which then passed 5 of 5 alone and in the next full run; unexplained).
-- Code review fixes (2026-11-21): catch responses always carry `notable` (object or `null`), so the app can tell an older server from "not notable" and clears a star the server did not pay for; the upload response's flag comes from the scorer's own decision; a refresh is rejected if any kind halves; the upstream body is capped at 20 MB; names are cleaned of control and format characters. Review doc: `docs/reviews/2026-11-21-notable-planes.html`.
+- Code review fixes (2026-11-21): catch responses always carry `notable` (object or `null`), so the app can tell an older server from "not notable" and clears a star the server did not pay for; the upload response's flag comes from the scorer's own decision; a refresh is rejected if any kind halves; the upstream body is capped at 8 MB; names are cleaned of control and format characters. Review doc: `docs/reviews/2026-11-21-notable-planes.html`.
 
 ## 2026-11-21 — Multi-catch bonus live on the server (API v66, rescore applied)
 

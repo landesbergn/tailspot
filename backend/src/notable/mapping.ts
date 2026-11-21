@@ -52,6 +52,22 @@ export interface Notable {
 /** The read side every consumer depends on (routes, the scorer, tests' fakes). */
 export interface NotableLookup {
   lookup(icao24: string): Notable | undefined;
+  /**
+   * How many airframes the directory holds, when it can say. Zero means the
+   * directory has no data at all (the snapshot failed to load and no refresh
+   * has landed), which is different from "this plane is not notable".
+   */
+  readonly size?: number;
+}
+
+/**
+ * Whether a directory can vouch for "not notable". An absent or EMPTY
+ * directory cannot: the catch routes then omit `notable` altogether, so the
+ * app treats the server as not knowing (it neither clears a star nor marks
+ * its backfill of past catches done).
+ */
+export function notableDirectoryHasData(directory: NotableLookup | undefined): boolean {
+  return directory !== undefined && (directory.size === undefined || directory.size > 0);
 }
 
 /**

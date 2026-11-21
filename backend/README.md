@@ -164,7 +164,7 @@ notable" differently, on purpose:
 | `POST /v1/catches`, the response | the object | `"notable": null` |
 | `GET /v1/catches`, each item | the object | `"notable": null` |
 
-- On the catch routes the key is **always present**. The app reads a missing
+- On the catch routes the key is **always present** while the directory holds data (with no data at all, for example a snapshot that failed to load, it is omitted, because the server cannot vouch for "not notable"). The app reads a missing
   key as "this server predates notable planes" and an explicit `null` as "the
   server checked, and it isn't one", so never drop it. Builds that predate the
   field ignore it either way.
@@ -221,7 +221,7 @@ they live:
    missing or corrupt the server logs an error and starts with nothing notable.
 2. Thirty seconds after boot, and every 24 hours, each machine fetches the
    upstream CSV from `raw.githubusercontent.com` (20 s timeout), maps it and
-   swaps the whole directory in memory. The body is capped at 20 MB (the file
+   swaps the whole directory in memory. The body is capped at 8 MB (the file
    is about 2.4 MB): a larger `content-length` is refused outright, and the
    body is otherwise read as a stream against a running byte count and
    aborted when it passes the cap, so it is never buffered unbounded.

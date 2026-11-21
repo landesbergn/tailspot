@@ -437,9 +437,12 @@ describe("POST /v1/catches: points and `notable` come from ONE decision", () => 
       // Bonus paid AND flagged: both from the scored result.
       expect(fresh.json()).toMatchObject({ points: 100, notable: JET_NOTABLE });
 
-      // A replay scores nothing: stored points, and the directory's answer now.
+      // A replay scores nothing: stored points, and the directory's answer
+      // now. The route's directory here is EMPTY, which cannot vouch for
+      // "not notable", so the key is omitted.
       const replay = await post(catchBody(JET, uuid(1)));
-      expect(replay.json()).toMatchObject({ points: 100, notable: null, duplicate: true });
+      expect(replay.json()).toMatchObject({ points: 100, duplicate: true });
+      expect(replay.body).not.toContain('"notable"');
     } finally {
       await app.close();
     }
@@ -463,7 +466,7 @@ describe("POST /v1/catches: points and `notable` come from ONE decision", () => 
 });
 
 describe("catch routes with an empty directory", () => {
-  it("send `notable: null` everywhere", async () => {
+  it("omit `notable` everywhere: no data is not the same as not notable", async () => {
     const db = await makeTestDb();
     await seedAirframes(db);
     const app = await buildApp({
@@ -483,11 +486,10 @@ describe("catch routes with an empty directory", () => {
         payload: catchBody(JET, uuid(1)),
       });
       expect(posted.json().points).toBe(75);
-      expect(posted.json().notable).toBeNull();
-      expect(posted.body).toContain('"notable":null');
+      expect(posted.body).not.toContain('"notable"');
       const listed = await app.inject({ method: "GET", url: "/v1/catches", headers });
-      expect(listed.json().catches[0].notable).toBeNull();
-      expect(listed.body).toContain('"notable":null');
+      expect(listed.json().catches).toHaveLength(1);
+      expect(listed.body).not.toContain('"notable"');
     } finally {
       await app.close();
     }

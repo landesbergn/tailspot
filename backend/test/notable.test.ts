@@ -666,13 +666,14 @@ describe("the upstream fetcher: body cap", () => {
   });
 
   it("refuses on content-length alone, before reading a byte", async () => {
-    const { state, res } = streamed(1000, 1024, { "content-length": "20971521" });
+    const over = MAX_UPSTREAM_CSV_BYTES + 1;
+    const { state, res } = streamed(1000, 1024, { "content-length": String(over) });
     await expect(readCappedText(res, MAX_UPSTREAM_CSV_BYTES)).rejects.toThrow(
-      "response too large: content-length 20971521 exceeds 20971520 bytes",
+      `response too large: content-length ${over} exceeds ${MAX_UPSTREAM_CSV_BYTES} bytes`,
     );
     expect(state.pulled).toBeLessThanOrEqual(1); // at most the stream's own prefetch
     expect(state.cancelled).toBe(true);
-    expect(MAX_UPSTREAM_CSV_BYTES).toBe(20 * 1024 * 1024);
+    expect(MAX_UPSTREAM_CSV_BYTES).toBe(8 * 1024 * 1024);
   });
 
   it("aborts a stream that runs past the cap, whatever content-length claimed", async () => {
@@ -745,12 +746,9 @@ describe("the real upstream shape", () => {
         { kind: "government", label: "Head of state and government", name: "US Government" },
       ],
     ]);
-    // And the committed snapshot agrees about that airframe.
-    expect(loadNotableSnapshot().get("adfdf8")).toEqual({
-      kind: "government",
-      label: "Head of state and government",
-      name: "US Government",
-    });
+    // The committed snapshot is real data that changes when regenerated, so
+    // only its shape is checked here, never a particular airframe.
+    expect(loadNotableSnapshot().size).toBeGreaterThan(1000);
   });
 });
 
