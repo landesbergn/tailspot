@@ -88,6 +88,9 @@ struct CardPlane: Equatable {
     /// lone catch). Drives the "DOUBLE CATCH +N" ledger line via
     /// `ScoringBonuses.multiCatchBonus`. Display-only, like `isFirstOfType`.
     let pressSize: Int
+    /// The server's notable-airframe flag, when this plane carries one.
+    /// Drives the gold notable plate and the "NOTABLE PLANE +N" ledger line.
+    let notable: NotablePlane?
     /// The airframe's hex id, when the builder knows it. The share copy's
     /// fallback for a callsign-less catch ("Caught A1B2C3 · Cessna 172"),
     /// so every share path names the plane the way the Hangar detail does.
@@ -112,6 +115,7 @@ struct CardPlane: Equatable {
         guessKind: GuessKind? = nil,
         guessBonusPoints: Int = 0,
         pressSize: Int = 1,
+        notable: NotablePlane? = nil,
         icao24: String? = nil
     ) {
         self.callsign = callsign
@@ -132,6 +136,7 @@ struct CardPlane: Equatable {
         self.guessKind = guessKind
         self.guessBonusPoints = guessBonusPoints
         self.pressSize = pressSize
+        self.notable = notable
         self.icao24 = icao24
     }
 }

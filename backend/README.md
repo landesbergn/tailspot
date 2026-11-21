@@ -87,7 +87,12 @@ degrees and returns a normalized, SI-unit snapshot of aircraft inside it:
       "velocityMps": 150.1,        // ground speed; null if unknown
       "trackDeg": 311.94,          // degrees true; null if unknown
       "onGround": false,
-      "positionTimestamp": 1781116525  // unix seconds of last position update; null if unknown
+      "positionTimestamp": 1781116525, // unix seconds of last position update; null if unknown
+      "notable": {                 // ONLY on a notable airframe (see "Notable planes"); additive
+        "kind": "celebrity",       // 2026-11-21, the key is absent for every other plane
+        "label": "Celebrity",
+        "name": "George Lucas"     // omitted when the source names nobody
+      }
     }
   ]
 }
@@ -128,6 +133,141 @@ Behind the route:
 Every JSON response over 1 KB is gzipped when the client sends
 `Accept-Encoding: gzip` (URLSession always does). The aircraft list shrinks
 about 5×.
+
+### Notable planes (`notable` on `/v1/aircraft` and `/v1/catches`)
+
+Some individual airframes are worth more than their type: a head-of-state
+transport, a celebrity's or a company's jet, a team plane, a warbird, a
+firefighting tanker. The API recognises them by ICAO hex and says so with one
+object, the same shape everywhere it appears:
+
+```jsonc
+"notable": { "kind": "celebrity", "label": "Celebrity", "name": "George Lucas" }
+"notable": { "kind": "special", "label": "Historic and special" }   // no name known
+```
+
+| `kind` | `label` (fixed) | What it covers |
+|---|---|---|
+| `government` | Head of state and government | Government, head-of-state and royal flights |
+| `celebrity` | Celebrity | Named individuals' aircraft |
+| `business` | Business jet | Corporate jets, business-jet operators, vanity registrations, and the jets of business magnates and their companies (upstream's `Oligarch`) |
+| `team` | Team plane | Sports team and club aircraft |
+| `special` | Historic and special | Warbirds and vintage types, display teams, one-offs (Beluga, Dreamlifter, NASA), airships and balloons, heavy-lift helicopters |
+| `working` | Special mission | Coast guard, aerial firefighting, survey, surveillance, contract air services, UN, Civil Air Patrol |
+
+Where it appears. The two catch routes and the aircraft feed treat "not
+notable" differently, on purpose:
+
+| Route | Notable plane | Ordinary plane |
+|---|---|---|
+| `GET /v1/aircraft`, each aircraft | the object | key **omitted** |
+| `POST /v1/catches`, the response | the object | `"notable": null` |
+| `GET /v1/catches`, each item | the object | `"notable": null` |
+
+- On the catch routes the key is **always present**. The app reads a missing
+  key as "this server predates notable planes" and an explicit `null` as "the
+  server checked, and it isn't one", so never drop it. Builds that predate the
+  field ignore it either way.
+- On `/v1/aircraft` the key is omitted for ordinary planes (nearly all of a
+  list of hundreds) and stamped on every serve, including tile-cache hits.
+
+```jsonc
+// POST /v1/catches, an ordinary plane
+{ "catchId": "…", "points": 75, "rarity": "rare", "typecode": "B738", "firstOfType": true,
+  "guessCorrect": false, "pressSize": 1, "notable": null, "duplicate": false }
+```
+
+Nothing about notability is stored on a catch row, so where `notable` comes
+from depends on the path:
+
+- **Fresh insert** (`201`): the decision of the scoring that produced the
+  returned `points`, the same single directory lookup. A response can never
+  show the bonus without the object or the object without the bonus, even if
+  the directory is refreshed mid-request.
+- **Replay** (`200`, `duplicate: true`): the points stored when the catch was
+  first scored, plus what the directory says now.
+- **`GET /v1/catches`**: likewise stored points plus the directory's current
+  answer. See "Rescore" below for when those two can differ.
+
+**Scoring (version 11).** A notable catch earns +50% of its base, additive
+with first-of-type, the guess bonuses and the multi-catch bonus
+(`notableBonus` in `src/catches/points.ts`; the fraction is `notable` in
+`scoring-bonuses.json`).
+
+**Source and licence.** [plane-alert-db](https://github.com/sdr-enthusiasts/plane-alert-db),
+a community-maintained CSV of about 17,000 airframes, under the Open Database
+License 1.0. Attribution is in `data/NOTICE.md`. About 5,100 of its rows pass
+our rules. `src/notable/mapping.ts` holds those rules and is the only place
+they live:
+
+- Each upstream `Category` maps to one kind through an allow-list. **A
+  category that is not on the list is excluded**, so a category upstream adds
+  later changes nothing until someone maps it.
+- Military and police rows (`#CMPG` of `Mil` or `Pol`) are dropped, except in
+  the government categories, `Historic` and `Aerobatic Teams`.
+- `name` is the upstream Operator, omitted for placeholders such as
+  "Private". It comes from a file anyone can send a pull request to, so it is
+  cleaned before it is served: control characters, bidirectional overrides
+  (U+202A–202E, U+2066–2069) and zero-width characters are stripped,
+  whitespace is collapsed and trimmed, and the result is capped at 60 code
+  points (never cutting a surrogate pair). The upstream tag columns and the
+  raw category never leave the server: they are the maintainers' in-jokes and
+  editorial labels.
+
+**No maintenance.** There is no table, no migration and no ingest step:
+
+1. At boot the server loads the committed snapshot,
+   `data/notable-airframes.json` (already filtered and mapped). If the file is
+   missing or corrupt the server logs an error and starts with nothing notable.
+2. Thirty seconds after boot, and every 24 hours, each machine fetches the
+   upstream CSV from `raw.githubusercontent.com` (20 s timeout), maps it and
+   swaps the whole directory in memory. The body is capped at 20 MB (the file
+   is about 2.4 MB): a larger `content-length` is refused outright, and the
+   body is otherwise read as a stream against a running byte count and
+   aborted when it passes the cap, so it is never buffered unbounded.
+3. A refresh is **rejected** when it looks wrong, and the data already in
+   memory keeps serving. Both floors are measured against the committed
+   snapshot, not against the previous refresh:
+   - fewer than half the snapshot's entries in total, which is what a
+     truncated download, an error page or an upstream reorganisation looks
+     like; or
+   - any one kind below half of that kind's count in the snapshot. The total
+     alone would pass an upstream category rename that empties a small kind
+     (all 22 team planes, say) while the other five thousand rows look fine.
+4. Every outcome is logged with its per-kind counts: `notable planes
+   refreshed from plane-alert-db` at info with `kinds`, or a warning for
+   `failed` (fetch error, timeout, body over the cap) or `rejected` (with
+   `reason`, `kinds` and the `minimumKinds` floors, so the log names the kind
+   that fell short).
+
+`NOTABLE_REFRESH=off` turns the refresh off and pins the server to the
+snapshot. The refresh never runs under test.
+
+**Regenerating the snapshot.** Only needed when the rules in `mapping.ts`
+change (the running server refreshes itself):
+
+```sh
+npm run notable:snapshot                       # fetch upstream, rewrite data/notable-airframes.json
+npm run notable:snapshot -- --input file.csv   # from a saved copy
+```
+
+Commit the diff. The Docker image copies `data/notable-airframes.json`, so a
+new snapshot reaches production with the next deploy.
+
+**Rescore.** Nothing about notability is stored on a catch: the scorer asks
+the directory by icao24 each time. So `npm run rescore` loads the snapshot and
+refreshes it once from upstream before scoring, to use the same data as the
+server (it prints which it used; `NOTABLE_REFRESH=off` skips the fetch). Two
+consequences:
+
+- **Deploying scoring version 11 needs `npm run rescore` afterwards**, to pay
+  the bonus on past catches of notable airframes. Run `-- --dry-run` first and
+  read the delta.
+- The default rescore only revisits unresolved or older-version rows. When
+  upstream later adds an airframe someone already caught, that old catch shows
+  `notable` in `GET /v1/catches` straight away but keeps its old points until
+  a `npm run rescore -- --all`. The same full pass takes the bonus back from
+  catches of an airframe upstream has since removed.
 
 ### `GET /v1/metadata/{icao24}` (WP 1.4)
 
@@ -413,6 +553,7 @@ stub session.
 | `STALE_MAX_SECONDS` | `60` | Max age of a last-good snapshot served on upstream failure. |
 | `CACHE_TILE_SIZE_DEG` | `0.25` | Grid size for bbox→tile quantization. |
 | `UPSTREAM_RPS` | `0.8` | Position-feed requests per second this process may send (adsb.fi allows 1/s per IP). Per machine: two running machines share the egress IP. |
+| `NOTABLE_REFRESH` | — (on) | `off` stops the daily refresh of the notable-planes directory from plane-alert-db; the server then serves the committed snapshot only. See "Notable planes". |
 | `SITE_PROBE_URLS` | tailspot.app home + AASA file | Comma-separated URLs the API probes every 60 s for the website-down alert. `off` disables. |
 | `DATABASE_URL` | — | Postgres connection string. Required for `/v1/metadata` and the ingest jobs; read lazily (the position-only endpoints don't need it). |
 | `STATS_ALLOWED_ORIGINS` | — | Comma-separated extra browser origins allowed to read `/v1/stats` (tailspot.app, www, and the preview site are always allowed). |
@@ -788,6 +929,11 @@ Primary region: `sjc` (San Jose, CA). See `fly.toml` for machine/VM config and
 health-check settings. Secrets (Postgres URL, adsb.lol key, etc.) are set via
 `fly secrets set KEY=value` — never committed to the repo. `DATABASE_URL` is the
 Fly managed-Postgres connection string.
+
+A deploy that raises `CURRENT_SCORING_VERSION` (`src/catches/points.ts`) is
+not finished until the rescore has run: `npm run rescore -- --dry-run`, read
+the delta, then `npm run rescore`. Version 11 (notable planes) is one of
+these, and needs no migration.
 
 After provisioning Postgres and setting `DATABASE_URL`, apply migrations and seed
 the metadata tables once (then on each refresh):

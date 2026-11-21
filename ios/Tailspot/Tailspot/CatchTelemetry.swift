@@ -175,7 +175,8 @@ nonisolated enum CatchTelemetry {
         originIcao: String? = nil,
         destIcao: String? = nil,
         catchMode: CatchMode? = nil,
-        catchUuid: String? = nil
+        catchUuid: String? = nil,
+        notableKind: String? = nil
     ) -> [String: AnalyticsValue] {
         var props: [String: AnalyticsValue] = [
             "icao24": .string(icao24),
@@ -229,6 +230,10 @@ nonisolated enum CatchTelemetry {
         // every build before the flag (2026-10-25) means the SHIPPED rule —
         // all pre-flag App Store traffic is legacy, never "frame".
         if let catchMode { props["catch_mode"] = .string(catchMode.rawValue) }
+        // The server's notable-airframe category ("team", "government", ...)
+        // when the caught plane carried the flag at the press. Absent for an
+        // ordinary plane.
+        addNonBlank("notable_kind", notableKind, to: &props)
         return props
     }
 
@@ -539,7 +544,8 @@ nonisolated enum CatchTelemetry {
             destIcao: row.destIcao,
             catchMode: catchMode,
             // Minted by runCatch before the save.
-            catchUuid: row.serverUuid
+            catchUuid: row.serverUuid,
+            notableKind: row.notableInfo?.kind
         ))
     }
 

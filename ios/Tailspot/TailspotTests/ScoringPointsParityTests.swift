@@ -59,7 +59,8 @@ struct ScoringBonusesParityTests {
         // every iOS constant matches it. The backend's points.parity.test.ts
         // pins its literals to the SAME file, so a re-balance that edits only
         // one side fails a parity test somewhere.
-        #expect(canonical.count == 7)
+        #expect(canonical.count == 8)
+        #expect(canonical["notable"] == ScoringBonuses.notable)
         #expect(canonical["multiCatchDouble"] == ScoringBonuses.multiCatchDouble)
         #expect(canonical["multiCatchTriple"] == ScoringBonuses.multiCatchTriple)
         #expect(canonical["firstOfType"] == ScoringBonuses.firstOfType)
@@ -90,6 +91,8 @@ struct ScoringBonusesParityTests {
         #expect(bases.map { ScoringBonuses.multiCatchBonus(base: $0, pressSize: 2) } == [3, 5, 13, 25, 125])
         #expect(bases.map { ScoringBonuses.multiCatchBonus(base: $0, pressSize: 3) } == [5, 10, 25, 50, 250])
         #expect(bases.map { ScoringBonuses.multiCatchBonus(base: $0, pressSize: 5) } == [5, 10, 25, 50, 250])
+        // Notable airframe (scoring v11): +50% of base.
+        #expect(bases.map { ScoringBonuses.notableBonus(base: $0) } == [5, 10, 25, 50, 250])
     }
 
     @Test func displayPointsComposesBaseAndBonuses() {

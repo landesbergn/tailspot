@@ -89,6 +89,7 @@ enum HangarRestore {
         // the server echoes false for guess-less rows, which must stay nil
         // locally (nil = "no bonus round", not "guessed wrong").
         restored.guessCorrect = row.guessKind != nil ? row.guessCorrect : nil
+        restored.setNotable(row.notable.plane)
         return restored
     }
 

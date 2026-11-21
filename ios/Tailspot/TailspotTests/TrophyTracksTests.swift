@@ -157,7 +157,9 @@ struct TrophyTracksTests {
         }
         let ids = roster.map(\.id)
         #expect(Set(ids).count == ids.count)
-        #expect(Trophies.handRoster.count == Self.preexisting.count + 13)
+        // 13 levels from the rebuild, plus the three notable-plane trophies
+        // (2026-11: notable, notable2, notablekinds).
+        #expect(Trophies.handRoster.count == Self.preexisting.count + 16)
     }
 
     @Test func newLevelsHaveTheBriefedThresholds() {

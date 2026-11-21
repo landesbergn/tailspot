@@ -248,6 +248,12 @@ nonisolated struct UploadCatchResponse: Decodable {
     /// false for guess-less catches, which is fine: the local ledger reads
     /// the frozen `Catch.guessCorrect`, not this).
     let guessCorrect: Bool?
+    /// The server's notable-airframe verdict for the caught plane (scoring
+    /// v11: `points` already includes its +50% of base). Three states (see
+    /// `NotableVerdict`): an object, an explicit null ("not notable, no
+    /// bonus paid"), or no key at all (a backend that predates the
+    /// feature). The uploader reconciles the row's notable fields to it.
+    var notable: NotableVerdict = .unknown
 }
 
 /// One catch record from GET /v1/catches — the server's copy of a catch this
@@ -279,6 +285,11 @@ nonisolated struct RestoredCatchRow: Decodable {
     let registration: String?
     let manufacturer: String?
     let model: String?
+    /// The notable-airframe verdict, three states like the upload response
+    /// (`NotableVerdict`): object, explicit null, or no key on a backend
+    /// that predates the feature. Read by the Hangar restore and by
+    /// `NotableBackfill`.
+    var notable: NotableVerdict = .unknown
 }
 
 /// Response from GET /v1/catches.

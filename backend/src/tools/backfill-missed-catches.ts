@@ -52,6 +52,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { type Database, closeDb, getDb } from "../db/client.js";
 import { catches, devices } from "../db/schema.js";
 import { DrizzleCatchStore } from "../identity/store.js";
+import { NotableDirectory } from "../notable/directory.js";
 
 /** The device being credited, and the handle that must match before we write. */
 const DEVICE_ID = "efb375ca-bd56-53af-9437-337feb1ec197";
@@ -241,7 +242,9 @@ export async function backfillMissedCatches(
   db: Database,
   opts: { apply?: boolean } = {},
 ): Promise<{ planned: PlannedRow[]; written: number }> {
-  const store = new DrizzleCatchStore(db);
+  // The notable directory rides along so a backfilled catch of a notable
+  // airframe is scored like any other (scoring v11).
+  const store = new DrizzleCatchStore(db, NotableDirectory.fromSnapshot());
 
   await assertDevice(db);
   const before = await totalPoints(db);

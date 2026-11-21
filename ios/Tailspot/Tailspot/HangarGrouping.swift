@@ -48,6 +48,13 @@ struct HangarRow: Identifiable, Hashable {
 
     /// Snapshotted aircraft type from the most-recent catch.
     var aircraftType: AircraftType { mostRecent.resolvedType }
+
+    /// The airframe's notable flag (NotablePlane.swift), from the newest
+    /// catch that carries one. The flag belongs to the airframe, so one
+    /// flagged catch marks the whole row.
+    var notableInfo: NotablePlane? {
+        mostRecent.notableInfo ?? allCatches.lazy.compactMap(\.notableInfo).first
+    }
 }
 
 /// A single bucket of dedup'd catch rows sharing a group key.
@@ -128,12 +135,25 @@ enum HangarGrouping {
     struct SearchEntry {
         let text: String
         let rarity: Rarity
+        /// The row is a notable airframe (the server's flag).
+        var isNotablePlane: Bool = false
+    }
+
+    /// The search word that means "notable airframes only", like a tier
+    /// name. Also what the Catches list's Notable toggle filters by.
+    static let notableTerm = "notable"
+
+    /// Rows that are notable airframes, order kept. Backs the Catches
+    /// list's Notable toggle.
+    static func notableOnly(_ rows: [HangarRow], index: [SearchEntry]) -> [HangarRow] {
+        zip(rows, index).compactMap { row, entry in entry.isNotablePlane ? row : nil }
     }
 
     /// Filters rows to those matching `query`, keeping order. Each
     /// whitespace-separated term must match. A term that is exactly a
     /// tier name ("rare", "epic") matches rows of that tier and nothing
-    /// else, so "common" doesn't also pull in UNCOMMON. Any other term is
+    /// else, so "common" doesn't also pull in UNCOMMON. The word "notable"
+    /// works the same way for notable airframes. Any other term is
     /// a substring match on the card's identity and flight text
     /// (callsign, registration, hex id, airline, make/model, typecode,
     /// place, route codes) for the row's most recent catch, the one the
@@ -149,6 +169,9 @@ enum HangarGrouping {
         let matchers: [(SearchEntry) -> Bool] = terms.map { term in
             if let tier = Rarity(rawValue: term) {
                 return { $0.rarity == tier }
+            }
+            if term == notableTerm {
+                return { $0.isNotablePlane }
             }
             return { $0.text.contains(term) }
         }
@@ -166,6 +189,7 @@ enum HangarGrouping {
     static func searchIndex(for rows: [HangarRow]) -> [SearchEntry] {
         rows.map { row in
             let c = row.mostRecent
+            let notable = row.notableInfo
             let fields: [String?] = [
                 c.callsign,
                 c.registration,
@@ -177,10 +201,14 @@ enum HangarGrouping {
                 c.typecode,
                 c.placeName,
                 c.originIata, c.originIcao, c.destIata, c.destIcao,
+                // A notable airframe is findable by who it is and by its
+                // category ("warriors", "team plane").
+                notable?.name, notable?.label, notable?.kind,
             ]
             return SearchEntry(
                 text: fold(fields.compactMap { $0 }.joined(separator: " ")),
-                rarity: row.rarity
+                rarity: row.rarity,
+                isNotablePlane: notable != nil
             )
         }
     }

@@ -219,7 +219,8 @@ struct CatchDetailView: View {
             typeInfo: typeInfo,
             history: typeHistory,
             summary: summary,
-            summaryLoading: summaryLoading
+            summaryLoading: summaryLoading,
+            notable: shown.notableInfo
         )
     }
 
@@ -286,6 +287,7 @@ struct CatchDetailView: View {
             destName: shown.destName,
             isFirstOfType: wasFirstOfType,
             pressSize: shown.pressSize ?? 1,
+            notable: shown.notableInfo,
             icao24: shown.icao24
         )
     }

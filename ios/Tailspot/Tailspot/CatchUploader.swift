@@ -205,6 +205,16 @@ class CatchUploader {
         guessHolds.isHeld(row.serverUuid, now: now)
     }
 
+    /// Bring a row's notable flag in line with the upload response. The
+    /// server is the authority whenever it speaks: an object sets or
+    /// corrects the flag, and an explicit null clears it (the server did not
+    /// pay the bonus, so the row must not show one). A response with no
+    /// `notable` key comes from a backend that predates the feature and
+    /// leaves what the live feed said at the press alone.
+    static func reconcileNotable(_ row: Catch, with response: UploadCatchResponse) {
+        row.applyNotable(response.notable)
+    }
+
     private let client: TailspotAccountClient
 
     init(client: TailspotAccountClient = TailspotAccountClient()) {
@@ -331,6 +341,7 @@ class CatchUploader {
                     // Mark uploaded regardless of duplicate status — both mean
                     // the server has accepted this catch.
                     catchRow.uploadedAt = Date()
+                    Self.reconcileNotable(catchRow, with: response)
                     successCount += 1
                     Log.ui.info(
                         "CatchUploader: uploaded \(catchRow.icao24, privacy: .public) pts=\(response.points, privacy: .public) dup=\(response.duplicate, privacy: .public)"

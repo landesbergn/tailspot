@@ -1002,7 +1002,12 @@ struct CatchRevealView: View {
     /// any pre-frozen bonus. The LIVE route bonus is deliberately excluded: it
     /// counts up separately (on `bonusStart`) once the player answers correctly.
     private var revealTargetTotal: Int {
-        isDuplicate ? 0 : base + firstOfTypeBonus + frozenGuessBonus + multiCatchBonus
+        isDuplicate ? 0 : base + firstOfTypeBonus + frozenGuessBonus + multiCatchBonus + notableBonus
+    }
+    /// The notable-airframe bonus (scoring v11): +50% of base when the
+    /// server flags this plane. 0 for an ordinary plane or a duplicate.
+    private var notableBonus: Int {
+        livePlane.notable != nil && !isDuplicate ? ScoringBonuses.notableBonus(base: base) : 0
     }
     /// The multi-catch bonus this plane earns as one of a press of two or
     /// more fresh planes (scoring v10). 0 for a lone catch or a duplicate.
@@ -1170,7 +1175,8 @@ struct CatchRevealView: View {
             typeInfo: backTypeInfo,
             history: backHistory,
             summary: backSummary,
-            summaryLoading: backSummaryLoading
+            summaryLoading: backSummaryLoading,
+            notable: livePlane.notable
         )
     }
 
@@ -1496,6 +1502,7 @@ struct CatchRevealView: View {
         if multiCatchBonus > 0 {
             parts.append(ScoringBonuses.multiCatchLabel(pressSize: livePlane.pressSize).lowercased())
         }
+        if let notable = livePlane.notable { parts.append(notable.accessibilityText) }
         parts.append("\(revealTargetTotal) points")
         if let days = liveStreakDays { parts.append("\(days) day streak") }
         return parts.joined(separator: ", ")
@@ -1826,6 +1833,13 @@ struct CatchRevealView: View {
                         shareButton(scale: scale, visible: shareVisible)
                     }
 
+                    // The notable plate: who this plane is, revealed with
+                    // the identity line (the AR label only showed a star).
+                    if let notable = livePlane.notable {
+                        NotablePlate(notable: notable, scale: scale)
+                            .opacity(ss(0.6, 0.74, t))
+                    }
+
                     Rectangle().fill(RP.rule).frame(width: CGFloat(avail) * line, height: 1)
 
                     dataSection(t: t, scale: scale, accent: accent, render: render)
@@ -1850,6 +1864,9 @@ struct CatchRevealView: View {
                             if multiCatchBonus > 0 {
                                 ledgerRow(ScoringBonuses.multiCatchLabel(pressSize: livePlane.pressSize),
                                           "+\(multiCatchBonus)", RP.gold, ss(0.83, 0.91, t), scale: scale)
+                            }
+                            if notableBonus > 0 {
+                                ledgerRow("NOTABLE PLANE", "+\(notableBonus)", RP.gold, ss(0.83, 0.91, t), scale: scale)
                             }
                             // Route-guess bonus. In the live in-card round it
                             // appears ONLY on a correct call and fades in with

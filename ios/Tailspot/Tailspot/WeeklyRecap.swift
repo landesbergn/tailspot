@@ -176,7 +176,8 @@ struct WeeklyRecap {
             isFirstOfType: isFirstOfType,
             guessKind: guessKind,
             caughtAt: c.caughtAt,
-            pressSize: c.pressSize ?? 1
+            pressSize: c.pressSize ?? 1,
+            isNotablePlane: c.notableInfo != nil
         ).total
     }
 

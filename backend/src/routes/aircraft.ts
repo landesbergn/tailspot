@@ -1,9 +1,15 @@
 import type { FastifyInstance } from "fastify";
 import { ipKey } from "../identity/clientIp.js";
 import type { RateLimiter } from "../identity/rateLimiter.js";
+import type { NotableLookup } from "../notable/mapping.js";
 import type { RouteEnricher } from "../providers/adsblolRoutes.js";
 import { validateBbox } from "../providers/geo.js";
-import type { Bbox, PositionProvider, ProviderSnapshot } from "../providers/types.js";
+import type {
+  Bbox,
+  NormalizedAircraft,
+  PositionProvider,
+  ProviderSnapshot,
+} from "../providers/types.js";
 import {
   NoFreshDataError,
   TileCache,
@@ -20,6 +26,9 @@ import {
  * contract (frozen — the iOS client is built against it):
  *
  *   200 { fetchedAt, aircraft: [...], provider }   // fetchedAt = upstream snapshot time
+ *                                        // each aircraft may carry `notable`
+ *                                        // { kind, label, name? } — additive
+ *                                        // 2026-11-21, absent when not notable
  *                                        // provider = "adsbfi" | "adsblol" — the
  *                                        // feed that produced it; additive 2026-10-20,
  *                                        // old clients ignore the key
@@ -56,6 +65,13 @@ export interface AircraftRouteOptions {
    */
   routeEnricher?: RouteEnricher;
   /**
+   * The notable-planes directory (src/notable/). When supplied, each served
+   * aircraft whose icao24 is in it carries a `notable` object (additive: old
+   * clients ignore the key, and it is absent for every other plane). Omitted →
+   * no `notable` field at all.
+   */
+  notable?: NotableLookup;
+  /**
    * Per-IP limiter. This is the hottest endpoint in the product — every phone
    * polls it on a timer — and until 2026-09-06 it was completely unmetered, so
    * a single loop could pin the machine and (worse) push our upstream quota.
@@ -75,6 +91,20 @@ function parseCoord(v: unknown): number | undefined {
     return Number.isFinite(n) ? n : undefined;
   }
   return undefined;
+}
+
+/**
+ * Set or clear `notable` on each aircraft, in place (the same objects live in
+ * the tile cache, like the route enricher's). Clearing matters: a plane the
+ * directory dropped on refresh must not keep a stale object from an earlier
+ * serve.
+ */
+export function attachNotable(aircraft: NormalizedAircraft[], directory: NotableLookup): void {
+  for (const ac of aircraft) {
+    const notable = directory.lookup(ac.icao24);
+    if (notable) ac.notable = notable;
+    else if (ac.notable !== undefined) ac.notable = undefined;
+  }
 }
 
 /**
@@ -120,6 +150,10 @@ export function registerAircraftRoute(app: FastifyInstance, opts: AircraftRouteO
       // background lookup for the rest. Mutates the snapshot's aircraft in place
       // so a tile-cache hit also carries routes once the route cache is warm.
       opts.routeEnricher?.enrich(snapshot.aircraft);
+      // Notable planes: stamped on EVERY serve, cache hit or not, so the field
+      // never depends on which request filled the tile, and a directory
+      // refresh shows up (or clears) on the next poll. A Map read per plane.
+      if (opts.notable) attachNotable(snapshot.aircraft, opts.notable);
       // fetchedAt is the upstream snapshot time (possibly stale on fallback) —
       // never the serve time. Clients reason about freshness from it.
       // `provider` names the feed that produced the snapshot (stale serves

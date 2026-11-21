@@ -190,6 +190,12 @@ nonisolated enum TrophyTracks {
             remainingCopy: { "\(grouped($0)) more heritage aircraft to go" },
             variety: true),
         TrophyTrack(
+            id: "notables", name: "Notables", symbol: "star.circle",
+            levelIDs: ["notable", "notable2"],
+            goalCopy: { $0 == 1 ? "Catch a notable plane" : "Catch \(grouped($0)) different notable planes" },
+            remainingCopy: { "\(count($0, "more notable plane", "more notable planes")) to go" },
+            variety: true),
+        TrophyTrack(
             id: "places", name: "Places", symbol: "mappin.and.ellipse",
             levelIDs: ["places", "places2", "places3"],
             goalCopy: { "Spot from \(grouped($0)) locations" },
@@ -278,6 +284,7 @@ nonisolated enum TrophyTracks {
         "doubleheader": "rectangle.on.rectangle",
         "hotstreak": "bolt",
         "dynasty": "medal",
+        "notablekinds": "4.circle",
         "groundstop": "xmark.octagon",
     ]
 

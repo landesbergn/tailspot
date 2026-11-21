@@ -811,6 +811,7 @@ struct ContentView: View {
             // modifier: `body` is at the type-check budget.
             CatchBackfill.backfillPressSizes(catches, in: modelContext)
             await missedCatchRepair.runIfNeeded(context: modelContext)
+            await runNotableBackfill()
         }
         // When any primary sheet closes, re-diff the trophies. Hangar: a
         // country backfill done inside CatchDetailView can cross Mr.
@@ -2982,6 +2983,9 @@ struct ContentView: View {
                 // Minted before the save so `catch_performed` and every later
                 // event about this catch carry the same persisted `catch_uuid`.
                 row.ensureServerUuid()
+                // The server's notable flag, as the live feed carried it at
+                // the press. The upload response reconciles it later.
+                row.setNotable(observed?.aircraft.notable)
                 modelContext.insert(row)
                 newCatches.append(row)
             }
@@ -3682,6 +3686,9 @@ struct ContentView: View {
             guessKind: guessKind,
             guessBonusPoints: guessBonusPoints,
             pressSize: row.pressSize ?? 1,
+            // A row from before the flag existed still shows the plate when
+            // the live feed says the plane is notable (a re-catch).
+            notable: row.notableInfo ?? observed?.aircraft.notable,
             icao24: row.icao24
         )
     }
@@ -3752,6 +3759,7 @@ struct ContentView: View {
             distText: CardPlane.distText(fromMeters: observed.slantDistanceMeters),
             isFirstOfType: isFirstOfType,
             pressSize: pressSize,
+            notable: aircraft.notable,
             icao24: aircraft.icao24
         )
     }
@@ -4879,6 +4887,17 @@ struct ContentView: View {
         Log.ui.notice("Catch mode → \(mode.label, privacy: .public)")
     }
 
+    /// One-time reconcile of the notable-airframe flag on catches made
+    /// before the app knew about it (NotableBackfill.swift). It only writes
+    /// the three notable fields. When it changes a row, re-diff the trophies
+    /// so the Notables ones unlock now rather than on the next catch.
+    private func runNotableBackfill() async {
+        let changed = await NotableBackfillRunner().runIfNeeded(context: modelContext)
+        if (changed ?? 0) > 0 {
+            unlockCenter.enqueueNewUnlocks(from: catches)
+        }
+    }
+
     /// Spoken summary for a plane's AR label: callsign, airframe model
     /// when the metadata cache has it, rarity tier, and slant distance.
     private func planeAccessibilityLabel(
@@ -4903,6 +4922,8 @@ struct ContentView: View {
         var parts = [callsign]
         if let model = metadata?.model?.nonEmpty { parts.append(model) }
         parts.append(rarity.label.capitalized)
+        // Only that it is notable, like the gold star: never who it is.
+        if obs.aircraft.notable != nil { parts.append("Notable plane") }
         parts.append("\(distance) \(unit.spokenName) away")
         return parts.joined(separator: ", ")
     }
@@ -5587,7 +5608,13 @@ nonisolated func resolveAROverlayRarity(
 /// `.allowsHitTesting(false)` so taps fall through to the underlying
 /// gesture layer in ContentView (which handles pin/unpin). The
 /// dim/bright pin contrast is the only signal that a tap landed.
-private struct PlaneLabel: View {
+///
+/// A plane the server flags as notable (NotablePlane.swift) gets a small
+/// gold star at the front of its pill, and nothing else: no name and no
+/// category before the catch. Who it is stays the reveal's surprise.
+///
+/// Internal (not private) only so the label snapshot tests can render it.
+struct PlaneLabel: View {
     /// Label states under frame-is-the-catch (D3·2):
     ///   `chosen` — in the press: full-bright brackets, expanded label
     ///              with points. What you see full-bright is exactly
@@ -5646,6 +5673,11 @@ private struct PlaneLabel: View {
                 lineWidth: bracketLineWidth
             )
             HStack(spacing: 4) {
+                if aircraft.aircraft.notable != nil {
+                    Image(systemName: "star.fill")
+                        .font(.system(size: isChosen ? 9 : 8, weight: .bold))
+                        .foregroundStyle(Brand.Color.ledgerGold)
+                }
                 Text(callsign)
                     .font(Brand.Font.mono(size: isChosen ? 11 : 9, weight: .bold))
                     .foregroundStyle(Brand.Color.cyan)

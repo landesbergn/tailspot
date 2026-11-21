@@ -20,12 +20,21 @@
  *   - IDEMPOTENT — a second run over settled data changes nothing.
  *   - DRY-RUNNABLE — `{ dryRun: true }` computes the full delta and writes nothing,
  *     so a public-leaderboard re-score's blast radius is reviewable before it lands.
- *   - BATCHED — resolves each (icao24, first-of-type, guess, guess-era)
- *     variant once, writes once per variant (the first-of-type and
+ *   - BATCHED — resolves each (icao24, first-of-type, guess, guess-era,
+ *     press-size) variant once, writes once per variant (the first-of-type and
  *     correct-guess bonuses float with the re-derived base, so two catches of
  *     one airframe can land on different points; the guess ERA — the row's
  *     caughtAt vs. the 2026-08-13 route re-balance cutover — keeps
- *     pre-cutover route guesses at their legacy +10% forever).
+ *     pre-cutover route guesses at their legacy +10% forever). The
+ *     notable-plane bonus (scoring v11) needs no key of its own: it depends
+ *     only on the icao24, which every variant key already starts with.
+ *
+ * NOTABLE PLANES. The scorer asks the notable directory (src/notable/) about
+ * each icao24. The running server holds the committed snapshot refreshed from
+ * upstream once a day, so the script does the same: it loads the snapshot and
+ * refreshes it once before scoring (skipped when `NOTABLE_REFRESH=off`; a
+ * failed refresh falls back to the snapshot and says so). Scoring against
+ * different data than the server would take back, or hand out, bonuses.
  *
  * Run as a script:  npm run rescore -- [--all] [--dry-run]
  *   (default targets only stale rows: unresolved OR older-regime.)
@@ -35,6 +44,12 @@ import { eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { type Database, closeDb, getDb } from "../db/client.js";
 import { catches } from "../db/schema.js";
 import { DrizzleCatchStore, type GuessVerdict, type ScoredCatch } from "../identity/store.js";
+import {
+  NotableDirectory,
+  fetchPlaneAlertCsv,
+  notableRefreshEnabled,
+} from "../notable/directory.js";
+import type { NotableLookup } from "../notable/mapping.js";
 import { CURRENT_SCORING_VERSION, ROUTE_GUESS_REBALANCE_CUTOVER, isGuessKind } from "./points.js";
 
 export interface RescoreOptions {
@@ -42,6 +57,12 @@ export interface RescoreOptions {
   all?: boolean;
   /** Compute the delta and report it, but write NOTHING. Default false. */
   dryRun?: boolean;
+  /**
+   * The notable directory the scorer consults (scoring v11). Omitted → no
+   * catch is notable, so a caller that omits it on a database the server has
+   * already scored would strip every notable bonus. The CLI always passes one.
+   */
+  notable?: NotableLookup;
 }
 
 /** One rarity movement, aggregated across the catches that made it. */
@@ -85,7 +106,7 @@ export async function rescoreCatches(
   db: Database,
   opts: RescoreOptions = {},
 ): Promise<RescoreReport> {
-  const store = new DrizzleCatchStore(db);
+  const store = new DrizzleCatchStore(db, opts.notable);
 
   // Target rows. Default = stale: unresolved (`rarity IS NULL`, may now resolve)
   // OR scored under an older regime (`scoringVersion < CURRENT`). `--all` forces
@@ -288,9 +309,24 @@ function formatReport(report: RescoreReport, opts: RescoreOptions): string {
 /** Script entrypoint:  node dist/catches/rescore.js [--all] [--dry-run] */
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
+  // Same notable data as the running server: the snapshot, refreshed once.
+  const notable = NotableDirectory.fromSnapshot({
+    onError: (err) => console.error("notable snapshot failed to load; starting empty", err),
+  });
+  if (notableRefreshEnabled()) {
+    const outcome = await notable.refresh(fetchPlaneAlertCsv);
+    console.log(
+      outcome.status === "updated"
+        ? `notable planes: refreshed from upstream (${outcome.entries} airframes)`
+        : `notable planes: refresh ${outcome.status} (${JSON.stringify(outcome)}); using the committed snapshot (${notable.size} airframes)`,
+    );
+  } else {
+    console.log(`notable planes: committed snapshot only (${notable.size} airframes)`);
+  }
   const opts: RescoreOptions = {
     all: args.includes("--all"),
     dryRun: args.includes("--dry-run"),
+    notable,
   };
   const db = getDb();
   try {

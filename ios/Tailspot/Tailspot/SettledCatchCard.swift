@@ -56,6 +56,9 @@ struct SettledCatchCard: View {
     private var multiCatchBonus: Int {
         ScoringBonuses.multiCatchBonus(base: base, pressSize: plane.pressSize)
     }
+    private var notableBonus: Int {
+        plane.notable != nil ? ScoringBonuses.notableBonus(base: base) : 0
+    }
 
     @Environment(\.cardSwipeGuard) private var swipeGuard
 
@@ -139,6 +142,10 @@ struct SettledCatchCard: View {
                     }
                 }
 
+                if let notable = plane.notable {
+                    NotablePlate(notable: notable, scale: scale)
+                }
+
                 Rectangle().fill(RP.rule).frame(height: 1)
 
                 dataSection(scale: scale, accent: accent)
@@ -153,8 +160,11 @@ struct SettledCatchCard: View {
                         ledgerRow(ScoringBonuses.multiCatchLabel(pressSize: plane.pressSize),
                                   "+\(multiCatchBonus)", RP.gold, 1, scale: scale)
                     }
+                    if notableBonus > 0 {
+                        ledgerRow("NOTABLE PLANE", "+\(notableBonus)", RP.gold, 1, scale: scale)
+                    }
                     Rectangle().fill(RP.rule).frame(height: 1)
-                    ledgerRow("TOTAL", "+\(base + bonus + multiCatchBonus)", accent, 1, scale: scale, big: true)
+                    ledgerRow("TOTAL", "+\(base + bonus + multiCatchBonus + notableBonus)", accent, 1, scale: scale, big: true)
                 }
             }
             .padding(.horizontal, hPad)

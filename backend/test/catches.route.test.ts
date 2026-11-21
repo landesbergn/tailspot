@@ -125,6 +125,7 @@ describe("POST /v1/catches", () => {
       firstOfType: true,
       guessCorrect: false, // no guess sent → additive key present, false
       pressSize: 1, // a lone catch (scoring v10)
+      notable: null, // always present; null for an ordinary airframe (scoring v11)
       duplicate: false,
     });
   });
@@ -192,6 +193,7 @@ describe("POST /v1/catches", () => {
       firstOfType: true,
       guessCorrect: false,
       pressSize: 1,
+      notable: null,
       duplicate: false,
     });
 

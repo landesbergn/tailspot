@@ -292,7 +292,9 @@ struct CatchShareCompactCard: View {
     private var points: Int {
         let base = plane.rarity.basePoints
         let bonus = plane.isFirstOfType ? ScoringBonuses.firstOfTypeBonus(base: base) : 0
-        return base + bonus + ScoringBonuses.multiCatchBonus(base: base, pressSize: plane.pressSize)
+        let notable = plane.notable != nil ? ScoringBonuses.notableBonus(base: base) : 0
+        return base + bonus + notable
+            + ScoringBonuses.multiCatchBonus(base: base, pressSize: plane.pressSize)
     }
 
     var body: some View {
@@ -329,6 +331,11 @@ struct CatchShareCompactCard: View {
                             .foregroundColor(RP.muted)
                     }
                     .fixedSize()
+                }
+
+                // The notable plate; the hero above gives up the height.
+                if let notable = plane.notable {
+                    NotablePlate(notable: notable, scale: scale)
                 }
 
                 Rectangle().fill(RP.rule).frame(height: 1)

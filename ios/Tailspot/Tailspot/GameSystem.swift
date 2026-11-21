@@ -141,6 +141,14 @@ nonisolated enum ScoringBonuses {
     static let multiCatchDouble = 0.25
     static let multiCatchTriple = 0.5
 
+    /// Notable airframe (scoring v11, 2026-11): +50% of base for a plane the
+    /// server flags as notable. Additive, like first-of-type.
+    static let notable = 0.5
+
+    static func notableBonus(base: Int) -> Int {
+        Int((Double(base) * notable).rounded())
+    }
+
     /// The multi-catch bonus for one plane of a press. `pressSize` counts
     /// the FRESH planes of the press (an already-caught plane makes no row,
     /// so the server never counts it); below 2 there is no bonus.
@@ -185,12 +193,14 @@ nonisolated enum ScoringBonuses {
     /// micro-ledger. Pass `guessKind` only for a CORRECT guess (wrong /
     /// skipped / no round → nil → no bonus), the catch's own `caughtAt` so
     /// the route fraction lands in the right era, and the row's stored
-    /// `pressSize` so a multi-catch shows its bonus.
+    /// `pressSize` so a multi-catch shows its bonus, and `isNotablePlane`
+    /// for a row carrying the server's notable flag.
     static func displayPoints(
         base: Int, isFirstOfType: Bool, guessKind: GuessKind?, caughtAt: Date,
-        pressSize: Int = 1
+        pressSize: Int = 1, isNotablePlane: Bool = false
     ) -> (total: Int, bonus: Int) {
         var bonus = multiCatchBonus(base: base, pressSize: pressSize)
+        if isNotablePlane { bonus += notableBonus(base: base) }
         if isFirstOfType { bonus += firstOfTypeBonus(base: base) }
         if let kind = guessKind { bonus += guessBonus(base: base, kind: kind, caughtAt: caughtAt) }
         return (base + bonus, bonus)

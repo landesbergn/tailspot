@@ -201,6 +201,18 @@ final class Catch {
     /// stamped with the same instant), the same rule the server uses. Not
     /// on the init. Optional + nil-default for lightweight migration.
     var pressSize: Int?
+    /// The server's notable-airframe flag for this plane (NotablePlane.swift):
+    /// `notableKind` is the machine category ("team", "government", ...; an
+    /// open string), `notableLabel` the user-facing category ("Team plane"),
+    /// `notableName` who it is, when known. All nil = not notable. Filled at
+    /// catch time from the live feed, then reconciled to the server's
+    /// verdict by the upload response and, for older rows, `NotableBackfill`
+    /// (`applyNotable`: an object sets, an explicit null clears, a missing
+    /// key leaves the row alone). Read through `notableInfo`. Not on the init. Added
+    /// 2026-11, optional + nil-default for lightweight migration.
+    var notableKind: String?
+    var notableLabel: String?
+    var notableName: String?
 
     init(
         icao24: String,
@@ -270,6 +282,36 @@ final class Catch {
         )
         self.rarity = (rarity ?? autoRarity).rawValue
         self.aircraftType = (aircraftType ?? autoType).rawValue
+    }
+
+    /// The notable flag as one value, or nil for an ordinary plane.
+    var notableInfo: NotablePlane? {
+        NotablePlane(kind: notableKind, label: notableLabel, name: notableName)
+    }
+
+    /// Write (or clear, with nil) the notable flag. Returns true when the
+    /// row changed, so callers save only when there is something to save.
+    @discardableResult
+    func setNotable(_ info: NotablePlane?) -> Bool {
+        guard info != notableInfo else { return false }
+        notableKind = info?.kind
+        notableLabel = info?.label
+        notableName = info?.name
+        return true
+    }
+
+    /// Apply what the server said about this catch (upload response or a
+    /// `GET /v1/catches` row): an object sets or corrects the flag, an
+    /// explicit null clears it, and silence (`.unknown`, an older server)
+    /// leaves the row alone. Only the three notable fields ever change.
+    /// Returns true when the row changed.
+    @discardableResult
+    func applyNotable(_ verdict: NotableVerdict) -> Bool {
+        switch verdict {
+        case .unknown: return false
+        case .notNotable: return setNotable(nil)
+        case .notable(let plane): return setNotable(plane)
+        }
     }
 
     /// The airport code to DISPLAY for the origin: the IATA code when we

@@ -5,6 +5,24 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-11-21 — Notable planes: a gold star, a name at the reveal and +50% (scoring v11) (branch `claude/notable-planes-feature-a4225e`)
+
+- Some individual airframes are worth more than their type: a head of state's transport, a team plane, a celebrity or company jet, a warbird, a firefighting tanker. The server now recognises them by ICAO hex and the app marks them. Built on the branch; not merged, not deployed, not shipped.
+- Noah's calls: scope is "names plus working aircraft"; the live label shows a gold star and hides who it is until the catch; the bonus is +50% of base; private individuals' jets are named as the source lists them.
+- Source: [plane-alert-db](https://github.com/sdr-enthusiasts/plane-alert-db), a community list under ODbL 1.0. The server fetches it 30 seconds after boot and every 24 hours, and falls back to a committed snapshot, `backend/data/notable-airframes.json`: 5,138 airframes (working 2,002; special 1,512; business 905; government 616; celebrity 81; team 22). A refresh that yields fewer than half the snapshot's entries is rejected. `NOTABLE_REFRESH=off` pins the server to the snapshot.
+- Mapping rules live only in `backend/src/notable/mapping.ts`. Each upstream category maps to one of six kinds through an allow-list, so a category upstream adds later is excluded until someone maps it. Routine military, police and air-ambulance airframes are out. Upstream's tag columns and category names never leave the server.
+- API, additive: an optional `notable` object (`kind`, `label`, optional `name`) on each `GET /v1/aircraft` plane, in the `POST /v1/catches` response and on each `GET /v1/catches` row. The key is absent for an ordinary plane, so older builds are unaffected.
+- Scoring v11: a notable catch earns +50% of its base, additive with first-of-type, the guess bonuses and the multi-catch bonus. Notability is looked up by icao24 at score time, so there is no new column and no migration. The v10→v11 rescore pays the bonus on past catches.
+- App: gold star on the live label; a gold plate ("NOTABLE · TEAM PLANE" and the name) and a gold NOTABLE PLANE ledger row on the reveal, the settled card and the share cards; one NOTABLE line on the card back; a star and a gold name line on the Hangar row; a Notable chip in the Catches search field, shown once the Hangar holds a notable plane. The names are searchable, and the word "notable" works like a tier name.
+- Trophies: a Notables track with two levels, Star Sighting (1 notable plane) and Who's Who (10 different ones), and a feat, Four of a Kind (notable planes of 4 different kinds).
+- Past catches: three optional fields on `Catch` (`notableKind`, `notableLabel`, `notableName`; additive). A one-time backfill lists the device's server catches and copies the flag onto matching Hangar rows. It only touches those three fields, and it marks itself done only once the server has shown it knows about notable planes.
+- Deploy order, each server step on Noah's go: server, `npm run rescore -- --dry-run`, review, `npm run rescore`, then the client. The server goes first so points and stars agree. A client that meets an older server leaves its backfill pending and retries on the next launch.
+- Reach is small: of 13,433 airframes caught since 2026-06-26, about 141 are in scope, covering about 205 of 28,324 catches (0.7%). Both figures were measured before the last mapping changes, so they are approximate.
+- Settings credits gain "Notable aircraft data: plane-alert-db contributors (ODbL)"; `backend/data/NOTICE.md` carries the attribution.
+- Not verified: a real device, a live server, the Settings credit row render, and the Dockerfile `COPY` line for the snapshot (no Docker build was run).
+- Tests: backend 792 passed; iOS 2,410 passed on the iOS 26.5 iPhone Air simulator (one earlier full run had a single failure in `TrophyAchievementDatesTests/interruptedBackfillIsResumedOnAMemoHit`, which then passed 5 of 5 alone and in the next full run; unexplained).
+- Code review fixes (2026-11-21): catch responses always carry `notable` (object or `null`), so the app can tell an older server from "not notable" and clears a star the server did not pay for; the upload response's flag comes from the scorer's own decision; a refresh is rejected if any kind halves; the upstream body is capped at 20 MB; names are cleaned of control and format characters. Review doc: `docs/reviews/2026-11-21-notable-planes.html`.
+
 ## 2026-11-21 — Multi-catch bonus live on the server (API v66, rescore applied)
 
 - Noah gave the go for the server steps and, after reviewing the dry run and examples, for the rescore.

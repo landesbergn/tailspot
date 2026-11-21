@@ -31,6 +31,7 @@ import {
   guessBonus,
   isGuessKind,
   multiCatchBonus,
+  notableBonus,
   pointsForRarity,
 } from "../catches/points.js";
 import type { Database } from "../db/client.js";
@@ -45,6 +46,7 @@ import {
   typecodes,
   weeklyChampions,
 } from "../db/schema.js";
+import type { Notable, NotableLookup } from "../notable/mapping.js";
 import {
   addDaysUtc,
   monthStartUtc,
@@ -295,6 +297,14 @@ export interface ScoredCatch {
    * and surfaced in the catch response.
    */
   guessCorrect: boolean;
+  /**
+   * The directory's answer for this airframe AT THE MOMENT `points` was
+   * computed: the notable object when the notable-plane bonus is baked into
+   * `points`, null when it is not. One lookup decides both, so a caller that
+   * reports `points` and `notable` from the same ScoredCatch can never show
+   * a bonus without the flag or the flag without the bonus. Not persisted.
+   */
+  notable: Notable | null;
 }
 
 /**
@@ -356,6 +366,12 @@ export interface NewCatch {
   aircraftAltitudeMeters: number | null;
   aircraftPositionTimestamp: Date | null;
   validation: unknown;
+  /**
+   * The `notable` of the ScoredCatch that produced `points` above. NOT
+   * persisted: it only rides through so a fresh insert can hand back the same
+   * decision its points were scored with (see `StoredCatchResult.notable`).
+   */
+  notable?: Notable | null;
 }
 
 /** What the route echoes back after a catch is stored (or replayed). */
@@ -372,6 +388,15 @@ export interface StoredCatchResult {
    *  lone catch). The first row of a press to arrive reports 1; its points and
    *  press size are raised when its siblings land. */
   pressSize: number;
+  /**
+   * The notable decision behind `points`, when THIS call scored them: on a
+   * fresh insert, the decision of whichever scoring produced the returned
+   * points (the upload's own, or the press re-score that lifted the row).
+   * Undefined when the points were only read back (a replay, or a row another
+   * request rewrote first): nothing is stored on the row, so the caller asks
+   * the directory.
+   */
+  notable?: Notable | null;
 }
 
 /**
@@ -493,6 +518,11 @@ export interface CatchStore {
    * `pressSize` is the row's stored `press_size` (how many distinct airframes
    * the device caught in the same shutter press); 2 or more adds
    * `multiCatchBonus(base, pressSize)`. Omitted means 1, a lone catch.
+   *
+   * The notable-plane bonus (scoring v11) is the one input the scorer looks up
+   * itself: it asks the notable directory about the icao24, the same way it
+   * resolves rarity, and adds `notableBonus(base)` when the airframe is in it.
+   * Nothing is frozen on the row, so a re-score re-asks the directory.
    */
   scoreCatch(
     icao24: string,
@@ -600,7 +630,16 @@ export interface CatchStore {
 }
 
 export class DrizzleCatchStore implements CatchStore {
-  constructor(private readonly db: Database) {}
+  /**
+   * `notable` is the directory of notable airframes (src/notable/). Optional:
+   * without one no catch earns the notable bonus, which is what most tests
+   * want. Production and the re-score script always pass it, and must pass
+   * the same data, or a re-score would take back what an upload awarded.
+   */
+  constructor(
+    private readonly db: Database,
+    private readonly notable?: NotableLookup,
+  ) {}
 
   async countCatches(): Promise<number> {
     const rows = await withDbRetry(() =>
@@ -645,11 +684,13 @@ export class DrizzleCatchStore implements CatchStore {
     const guessCorrect = opts.guess?.correct ?? false;
     const pressSize = Math.max(1, opts.pressSize ?? 1);
     const base = pointsForRarity(rarity);
+    const notable = this.notable?.lookup(icao24) ?? null;
     const points =
       base +
       (firstOfType ? firstOfTypeBonus(base) : 0) +
       (opts.guess?.correct ? guessBonus(base, opts.guess.kind, opts.caughtAt ?? new Date()) : 0) +
-      multiCatchBonus(base, pressSize);
+      multiCatchBonus(base, pressSize) +
+      (notable ? notableBonus(base) : 0);
     return {
       typecode,
       rarity,
@@ -658,6 +699,7 @@ export class DrizzleCatchStore implements CatchStore {
       firstOfType,
       pressSize,
       guessCorrect,
+      notable,
     };
   }
 
@@ -729,10 +771,14 @@ export class DrizzleCatchStore implements CatchStore {
       // (press_size is only ever counted here), so the miss is logged loudly.
       let points = row.points;
       let pressSize = 1;
+      let notable = c.notable;
       try {
         const press = await this.reconcilePress(c.deviceId, c.caughtAt);
         pressSize = press.size;
         points = press.pointsById.get(row.id) ?? row.points;
+        // If the press re-score rewrote this row, its points came from THAT
+        // scoring, so report that scoring's notable decision with them.
+        if (press.notableById.has(row.id)) notable = press.notableById.get(row.id);
       } catch (err) {
         console.error("reconcilePress failed; catch kept at its lone-catch score", err);
       }
@@ -745,6 +791,7 @@ export class DrizzleCatchStore implements CatchStore {
           firstOfType: row.firstOfType,
           guessCorrect: row.guessCorrect,
           pressSize,
+          notable,
         },
         duplicate: false,
       };
@@ -797,7 +844,12 @@ export class DrizzleCatchStore implements CatchStore {
   private async reconcilePress(
     deviceId: string,
     caughtAt: Date,
-  ): Promise<{ size: number; pointsById: Map<string, number> }> {
+  ): Promise<{
+    size: number;
+    pointsById: Map<string, number>;
+    /** The notable decision of the scoring whose points were written, per lifted row. */
+    notableById: Map<string, Notable | null>;
+  }> {
     const rows = await withDbRetry(() =>
       this.db
         .select({
@@ -814,6 +866,7 @@ export class DrizzleCatchStore implements CatchStore {
     );
     const size = new Set(rows.map((r) => r.icao24)).size;
     const pointsById = new Map<string, number>();
+    const notableById = new Map<string, Notable | null>();
     type PressRow = (typeof rows)[number];
     // Score one row for this press and write it, but only if the row is still
     // as it was read: a smaller press size (a concurrent reconcile that wrote
@@ -851,6 +904,7 @@ export class DrizzleCatchStore implements CatchStore {
           )
           .returning({ points: catches.points }),
       );
+      if (written[0]) notableById.set(row.id, scored.notable);
       return written[0]?.points;
     };
     const reread = async (id: string): Promise<PressRow | undefined> =>
@@ -883,11 +937,16 @@ export class DrizzleCatchStore implements CatchStore {
         // either way, never a score that was not written.
         const current = await reread(row.id);
         if (current && current.pressSize < size) points = await lift(current);
-        points ??= (await reread(row.id))?.points ?? row.points;
+        if (points === undefined) {
+          // Reporting points someone else wrote: no scoring of ours stands
+          // behind them, so claim no notable decision either.
+          notableById.delete(row.id);
+          points = (await reread(row.id))?.points ?? row.points;
+        }
       }
       pointsById.set(row.id, points);
     }
-    return { size, pointsById };
+    return { size, pointsById, notableById };
   }
 
   async recreditGuess(
