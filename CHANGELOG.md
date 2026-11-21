@@ -5,6 +5,15 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-11-21 — Multi-catch bonus live on the server (API v66, rescore applied)
+
+- Noah gave the go for the server steps and, after reviewing the dry run and examples, for the rescore.
+- Volume snapshot `vs_Pye92D8L2lxsKbA02MmMDZ` of `tailspot-db`, then migration 0013 through the tracked `db:migrate` path (journal now 14). Backfill: 828 rows in presses of two, 138 in presses of three, 8 in presses of four, 26,963 single.
+- API release v66 from `main` at 14de0c5 (rollback target v65). `/healthz`, `/readyz` and `/v1/leaderboard` return 200; no unresolved Sentry issues in the 24 hours around the deploy.
+- Rescore v9→v10: dry run and apply agreed. 489,536 → 494,064 points (+4,528) on 974 multi-catch rows for 42 players; every other row restamped with no point change (two unknown rows resolved to common at +0). A second dry run finds nothing left to change.
+- Standings: top ten all-time unchanged; this week chemtrailsarereal 9th → 7th and mach_1170 7th → 9th; this month chemtrailsarereal and baby_plane_sp0tter swap 6th and 7th. Past weekly and monthly crowns are frozen and unchanged.
+- The app side is in TestFlight build 125 (1.2.7), not yet on the App Store. Users on 1.2.6 earn the bonus on the server but see no DOUBLE / TRIPLE CATCH line.
+
 ## 2026-11-20 — 1.2.7 train opened with the multi-catch bonus (branch `claude/catch-multiplier-scoring-a94f12`)
 
 - 1.2.6 is live on the App Store (Noah), so `MARKETING_VERSION` goes 1.2.6 → 1.2.7 in both app-target config blocks.
