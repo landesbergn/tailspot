@@ -347,6 +347,8 @@ struct ContentView: View {
     /// catches and had never retired it. DEBUG-only; read through
     /// `steeringEligible`, and keeps the pill out of telemetry.
     @AppStorage(SteeringPill.debugForceKey) private var steeringDebugForce = false
+    /// Wrench override: treat every plane as notable (NotableDebug).
+    @AppStorage(NotableDebug.forceKey) private var notableDebugForce = false
     #endif
     /// The plane the pill points at, carried across ticks for hysteresis.
     /// Written only by the 1 Hz `steeringPillTick`, never from `body`.
@@ -4344,6 +4346,7 @@ struct ContentView: View {
                         #if DEBUG
                         catchModeRow
                         steeringDebugRow
+                        notableDebugRow
                         #endif
                     }
                     .font(Brand.Font.mono(size: 12))
@@ -4619,6 +4622,24 @@ struct ContentView: View {
             title: "Act like a first-timer",
             detail: "On: the camera treats this phone as if it had never caught a plane, so the \"turn left / behind you\" pill shows. Off: normal behavior, where the pill only shows for someone with no catches yet.",
             isOn: $steeringDebugForce
+        )
+    }
+
+    /// Wrench row: see notable planes without waiting for a real one.
+    /// Turning it off removes the test star from every catch made with it.
+    private var notableDebugRow: some View {
+        debugFlagRow(
+            title: "Every plane is notable",
+            detail: "On: every plane gets the gold star, and a catch shows a test plate (\"Wrench Test Team\") and the +50% on this phone only. The leaderboard does not pay it. Off: only real notable planes, and the test star is removed from catches made while this was on.",
+            isOn: Binding(
+                get: { notableDebugForce },
+                set: { on in
+                    notableDebugForce = on
+                    if !on, NotableDebug.clearTestFlags(in: catches) > 0 {
+                        try? modelContext.save()
+                    }
+                }
+            )
         )
     }
 

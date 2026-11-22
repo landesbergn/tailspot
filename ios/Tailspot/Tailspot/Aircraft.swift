@@ -78,7 +78,8 @@ nonisolated struct Aircraft: Identifiable, Equatable, Sendable {
     /// Set when the server flags this exact airframe as notable (a head of
     /// state's transport, a team charter, ...). nil for nearly every plane,
     /// and on the replay path. See NotablePlane.swift.
-    let notable: NotablePlane?
+    /// `var` only so the Debug wrench override can stamp a copy.
+    var notable: NotablePlane?
 
     var id: String { icao24 }
 

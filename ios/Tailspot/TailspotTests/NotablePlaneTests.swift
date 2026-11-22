@@ -443,6 +443,35 @@ struct NotablePlaneTests {
         #expect(HangarRecentView.emptyMessage(query: "zzz") == "No catches match \u{201C}zzz\u{201D}")
     }
 
+    // MARK: Wrench test switch (Debug only)
+
+    #if DEBUG
+    @Test func debugSwitchStampsOnlyOrdinaryPlanesAndOnlyWhenOn() throws {
+        let plain = try decodeAircraft(nil)
+        let real = try decodeAircraft(#"{"kind":"team","label":"Team plane","name":"Golden State Warriors"}"#)
+        #expect(NotableDebug.apply(to: [plain, real], forced: false) == [plain, real])
+        let forced = NotableDebug.apply(to: [plain, real], forced: true)
+        #expect(forced[0].notable?.kind == NotableDebug.testKind)
+        #expect(forced[1].notable == real.notable)  // a real flag is left alone
+    }
+
+    @Test func debugTestFlagSurvivesTheServersNoAndIsClearedBySwitchOff() {
+        let test = makeCatch(icao: "aaa001", notable: NotableDebug.testPlane)
+        let real = makeCatch(icao: "aaa002", notable: Self.team)
+        // The server never confirms a test plane; the flag stays to be seen.
+        #expect(test.applyNotable(.notNotable) == false)
+        #expect(test.notableInfo == NotableDebug.testPlane)
+        // A real flag is still cleared by the server's "no".
+        let cleared = makeCatch(icao: "aaa003", notable: Self.team)
+        #expect(cleared.applyNotable(.notNotable))
+        #expect(cleared.notableInfo == nil)
+        // Switching off removes test flags only.
+        #expect(NotableDebug.clearTestFlags(in: [test, real]) == 1)
+        #expect(test.notableInfo == nil)
+        #expect(real.notableInfo == Self.team)
+    }
+    #endif
+
     // MARK: Analytics
 
     @Test func catchPerformedCarriesNotableKindOnlyWhenPresent() {

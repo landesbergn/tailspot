@@ -317,7 +317,13 @@ final class Catch {
     func applyNotable(_ verdict: NotableVerdict) -> Bool {
         switch verdict {
         case .unknown: return false
-        case .notNotable: return setNotable(nil)
+        case .notNotable:
+            #if DEBUG
+            // A wrench-panel test flag survives the server's "no", so the
+            // test catch can be looked at. Turning the switch off clears it.
+            if notableKind == NotableDebug.testKind { return false }
+            #endif
+            return setNotable(nil)
         case .notable(let plane): return setNotable(plane)
         }
     }

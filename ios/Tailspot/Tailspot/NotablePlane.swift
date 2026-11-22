@@ -147,3 +147,45 @@ nonisolated extension KeyedDecodingContainer {
         return .notable(plane)
     }
 }
+
+#if DEBUG
+/// Wrench-panel test switch (Debug builds only; Release never compiles it).
+/// When on, every plane the feed returns that is not already notable is
+/// stamped with a clearly fake entry, so the star, the plate, the ledger
+/// row, the Hangar row and Star Sighting can be seen without waiting for a
+/// real one. Applied at the ONE place feed aircraft enter the app
+/// (`ADSBManager`), so everything downstream runs its real code.
+///
+/// The server never confirms these (the airframes are not on its list), so
+/// the leaderboard pays nothing. `Catch.applyNotable` keeps a test flag
+/// through that "no", and turning the switch off clears every test flag.
+nonisolated enum NotableDebug {
+    static let forceKey = "tailspot.debug.notable.forceAll"
+    /// Marks a fake entry. Never sent by the server.
+    static let testKind = "test"
+    static let testPlane = NotablePlane(kind: testKind, label: "Team plane", name: "Wrench Test Team")
+
+    static var isForced: Bool { UserDefaults.standard.bool(forKey: forceKey) }
+
+    static func apply(to aircraft: [Aircraft], forced: Bool = isForced) -> [Aircraft] {
+        guard forced else { return aircraft }
+        return aircraft.map { plane in
+            guard plane.notable == nil else { return plane }
+            var copy = plane
+            copy.notable = testPlane
+            return copy
+        }
+    }
+
+    /// Remove the fake flag from every catch that carries it. Returns how
+    /// many rows changed.
+    @MainActor
+    static func clearTestFlags(in catches: [Catch]) -> Int {
+        var changed = 0
+        for row in catches where row.notableKind == testKind {
+            if row.setNotable(nil) { changed += 1 }
+        }
+        return changed
+    }
+}
+#endif
