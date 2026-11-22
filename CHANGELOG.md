@@ -5,6 +5,15 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-11-22 — Notable planes live on the server (API v67, migration 0014)
+
+- Noah gave the go for the server rollout. In order: volume snapshot `vs_DRbmgZ2Mg0pU9RjqbbG3zB` of `tailspot-db`; migration 0014 through the tracked `db:migrate` path (journal now 15; `catches.notable_kind` and `notable_name` exist, nullable); `fly deploy` of the branch at c0c4e2a, both machines on v67.
+- Checked after the deploy: `/readyz` ok; `GET /v1/aircraft` over New York returned one aircraft with a `notable` object (a business jet), so the snapshot file is in the image; 28,381 catches, none notable, and no points moved.
+- Not checked: a catch upload against v67. None arrived in the minutes after the deploy.
+- No rescore was run and none is needed. Older app versions are scored as before.
+- The server was deployed from the unmerged branch. Until [PR #438](https://github.com/landesbergn/tailspot/pull/438) merges, a deploy from `main` would put the old server back; that is harmless while no notable catch exists.
+- Next: the app on Noah's phone for a device check, then merge and a TestFlight build.
+
 ## 2026-11-21 — Notable planes: a gold star, a name at the reveal and +50% (scoring v11) (branch `claude/notable-planes-feature-a4225e`)
 
 - Some individual airframes are worth more than their type: a head of state's transport, a team plane, a celebrity or company jet, a warbird, a firefighting tanker. The server now recognises them by ICAO hex and the app marks them. Built on the branch; not merged, not deployed, not shipped.
