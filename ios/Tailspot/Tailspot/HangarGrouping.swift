@@ -49,12 +49,11 @@ struct HangarRow: Identifiable, Hashable {
     /// Snapshotted aircraft type from the most-recent catch.
     var aircraftType: AircraftType { mostRecent.resolvedType }
 
-    /// The airframe's notable flag (NotablePlane.swift), from the newest
-    /// catch that carries one. The flag belongs to the airframe, so one
-    /// flagged catch marks the whole row.
-    var notableInfo: NotablePlane? {
-        mostRecent.notableInfo ?? allCatches.lazy.compactMap(\.notableInfo).first
-    }
+    /// The notable flag (NotablePlane.swift) of the catch the row shows.
+    /// The flag belongs to a catch, not to the airframe: the star, the name
+    /// line and the bonus in the row's points all come from `mostRecent`,
+    /// so a row never shows a star its points do not include.
+    var notableInfo: NotablePlane? { mostRecent.notableInfo }
 }
 
 /// A single bucket of dedup'd catch rows sharing a group key.

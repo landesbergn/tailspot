@@ -115,9 +115,9 @@ struct TailCard: View {
         let guessKind: GuessKind? = (c.guessCorrect == true)
             ? c.guessKind.flatMap(GuessKind.init(rawValue:))
             : nil
-        // The notable flag belongs to the airframe, so any catch of it
-        // marks the row; the points bonus stays with the catch shown.
-        let notable = row.notableInfo
+        // The star, the name line and the bonus all come from the catch
+        // shown, so they always appear together.
+        let notable = c.notableInfo
         let points = ScoringBonuses.displayPoints(
             base: base, isFirstOfType: isFirstOfType, guessKind: guessKind, caughtAt: c.caughtAt,
             pressSize: c.pressSize ?? 1,

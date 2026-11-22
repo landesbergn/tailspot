@@ -398,14 +398,24 @@ struct NotablePlaneTests {
         HangarGrouping.group(catches, by: .recent).first?.rows ?? []
     }
 
-    @Test func hangarRowIsNotableWhenAnyCatchOfTheAirframeIs() {
-        // The newest catch of this airframe predates nothing but has no flag
-        // (say it was caught again before the upload answered); the older does.
-        let older = makeCatch(icao: "aaa001", at: 1_790_000_000, notable: Self.team)
-        let newer = makeCatch(icao: "aaa001", at: 1_790_100_000)
-        let row = try! #require(rows([older, newer]).first)
-        #expect(row.mostRecent === newer)
-        #expect(row.notableInfo == Self.team)
+    @Test func hangarRowStarFollowsTheCatchItShows() {
+        // The flag is per catch. A row shows its newest catch, so the star
+        // and the bonus in its points come from that catch alone.
+        let before = makeCatch(icao: "aaa001", at: 1_790_000_000)
+        let after = makeCatch(icao: "aaa001", at: 1_790_100_000, notable: Self.team)
+        let starred = try! #require(rows([before, after]).first)
+        #expect(starred.mostRecent === after)
+        #expect(starred.notableInfo == Self.team)
+        #expect(before.notableInfo == nil)  // the older catch gains nothing
+
+        // The other way round: an older notable catch does not star a row
+        // whose newest catch earned no bonus.
+        let older = makeCatch(icao: "aaa002", at: 1_790_000_000, notable: Self.team)
+        let newer = makeCatch(icao: "aaa002", at: 1_790_100_000)
+        let plain = try! #require(rows([older, newer]).first)
+        #expect(plain.mostRecent === newer)
+        #expect(plain.notableInfo == nil)
+        #expect(HangarGrouping.search([plain], query: "notable").isEmpty)
     }
 
     @Test func notableSearchWordKeepsOnlyNotableRows() {

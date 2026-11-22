@@ -21,9 +21,10 @@ Git history + PLAN.md §9 remain the authoritative record.
 - Reach is small: of 13,433 airframes caught since 2026-06-26, about 141 are in scope, covering about 205 of 28,324 catches (0.7%). Both figures were measured before the last mapping changes, so they are approximate.
 - Settings credits gain "Notable aircraft data: plane-alert-db contributors (ODbL)"; `backend/data/NOTICE.md` carries the attribution.
 - Simplified the same day at Noah's request ("is this as simple as it can be?"): removed the daily refresh from GitHub and its size floors, body cap and `NOTABLE_REFRESH` switch (the committed snapshot is now the only data, so no third-party text reaches the app unreviewed); removed the Notable chip from the Catches search field; removed the Who's Who and Four of a Kind trophies.
+- The star is per catch (Noah, 2026-11-22): a Hangar row shows the star and name line only when the catch it shows earned the bonus. Before, any notable catch of the airframe starred the row.
 - Reworked 2026-11-22 to going-forward only (above). That removed the retroactive rescore, the phone's one-time backfill of past catches and the server's "ask the directory on every read" paths.
 - Not verified: a real device, a live server, the Settings credit row render, and the Dockerfile `COPY` line for the snapshot (no Docker build was run).
-- Tests: backend 769 passed; iOS 2,403 passed, 0 failed, 16 skipped on the iOS 26.5 iPhone Air simulator.
+- Tests: backend 769 passed; iOS 2,402 passed, 0 failed on the iOS 26.5 iPhone Air simulator.
 - Code review fixes (2026-11-21): catch responses always carry `notable` (object or `null`), so the app can tell an older server from "not notable" and clears a star the server did not pay for; names are cleaned of control and format characters. Review doc: `docs/reviews/2026-11-21-notable-planes.html`.
 
 ## 2026-11-21 — Multi-catch bonus live on the server (API v66, rescore applied)
