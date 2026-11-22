@@ -3,8 +3,8 @@
 //  TailspotTests
 //
 //  The notable-airframe feature's logic: wire decoding (with, without and
-//  malformed), the Catch fields, points, trophies, the one-time backfill,
-//  the Hangar filter and the analytics property.
+//  malformed), the Catch fields, the upload claim, points, trophies, the
+//  Hangar filter and the analytics property.
 //
 
 import Testing
@@ -33,20 +33,6 @@ struct NotablePlaneTests {
         c.setNotable(notable)
         c.serverUuid = uuid
         return c
-    }
-
-    private func container() throws -> ModelContainer {
-        let container = try ModelContainer(
-            for: Catch.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
-        TestContainerRetention.retain(container)
-        return container
-    }
-
-    private func makeDefaults() -> UserDefaults {
-        let name = "NotablePlaneTests.\(UUID().uuidString)"
-        let d = UserDefaults(suiteName: name)!
-        d.removePersistentDomain(forName: name)
-        return d
     }
 
     private func aircraftJSON(_ notable: String?) -> Data {
@@ -149,10 +135,53 @@ struct NotablePlaneTests {
         let page = try JSONDecoder().decode(
             RestoredCatchesResponse.self, from: listJSON([Self.teamJSON, "null", nil, "{}"]))
         #expect(page.catches.map(\.notable) == [.notable(Self.team), .notNotable, .unknown, .unknown])
-        // A restored Hangar comes back with the flag.
-        #expect(HangarRestore.makeCatch(from: page.catches[0]).notableInfo == Self.team)
-        #expect(HangarRestore.makeCatch(from: page.catches[1]).notableInfo == nil)
-        #expect(HangarRestore.makeCatch(from: page.catches[2]).notableInfo == nil)
+    }
+
+    /// A restored row takes the notable flag the server stored at upload;
+    /// null, no key (an old server) and a malformed object all restore plain.
+    @Test func restoreAppliesTheStoredNotableAndNothingElse() throws {
+        let page = try JSONDecoder().decode(
+            RestoredCatchesResponse.self, from: listJSON([Self.teamJSON, "null", nil, "{}"]))
+        let restored = page.catches.map { HangarRestore.makeCatch(from: $0) }
+        #expect(restored[0].notableKind == "team")
+        #expect(restored[0].notableLabel == "Team plane")
+        #expect(restored[0].notableName == "Golden State Warriors")
+        for plain in restored.dropFirst() {
+            #expect(plain.notableKind == nil && plain.notableLabel == nil && plain.notableName == nil)
+        }
+        // A restored notable catch claims again if it is ever re-sent.
+        #expect(restored.map(\.claimsNotable) == [true, false, false, false])
+    }
+
+    // MARK: Upload claim
+
+    private func requestJSON(claim: Bool) throws -> String {
+        let req = UploadCatchRequest(
+            catchUuid: "11111111-1111-4111-8111-111111111111", icao24: "a1b2c3",
+            callsign: nil, caughtAt: 1_790_000_000,
+            observer: .init(lat: 37.8, lon: -122.2, headingDeg: nil, elevationDeg: nil,
+                            headingAccuracyDeg: nil),
+            aircraft: nil, guess: nil, notableClaim: claim)
+        return String(decoding: try JSONEncoder().encode(req), as: UTF8.self)
+    }
+
+    /// `"notableClaim": true` when claiming; otherwise the key is absent
+    /// (not false, not null), so the body matches what older builds send.
+    @Test func uploadRequestCarriesTheClaimOnlyWhenTrue() throws {
+        #expect(try requestJSON(claim: true).contains("\"notableClaim\":true"))
+        #expect(try requestJSON(claim: false).contains("notableClaim") == false)
+    }
+
+    /// The claim comes from the row's own stored flag: a catch recorded as
+    /// notable claims, an ordinary or pre-feature catch never does, and a
+    /// row the server cleared stops claiming.
+    @Test func onlyACatchRecordedAsNotableClaims() {
+        #expect(makeCatch(icao: "a1b2c3", notable: Self.team).claimsNotable)
+        #expect(makeCatch(icao: "a1b2c3", notable: Self.bizjet).claimsNotable)
+        #expect(makeCatch(icao: "a1b2c3").claimsNotable == false)
+        let cleared = makeCatch(icao: "a1b2c3", notable: Self.team)
+        CatchUploader.reconcileNotable(cleared, with: response(.notNotable))
+        #expect(cleared.claimsNotable == false)
     }
 
     /// The verdict also decodes on its own (as a present value).
@@ -226,7 +255,7 @@ struct NotablePlaneTests {
                             notable: verdict)
     }
 
-    @Test func uploadResponseSetsCorrectsClearsOrLeavesAlone() {
+    @Test func uploadResponseSetsCorrectsOrLeavesAlone() {
         // Feed said nothing, server says notable: set.
         let fresh = makeCatch(icao: "a1b2c3")
         CatchUploader.reconcileNotable(fresh, with: response(.notable(Self.team)))
@@ -361,247 +390,6 @@ struct NotablePlaneTests {
         #expect(TrophyTracks.featSymbols["notable"] != nil)
         #expect(TrophyTracks.displayTitle(for: ach("notable")) == "Star Sighting")
         #expect(Trophies.roster.filter { $0.id.hasPrefix("notable") }.map(\.id) == ["notable"])
-    }
-
-    // MARK: Backfill
-
-    private typealias ServerRow = NotableBackfill.ServerRow
-
-    private func runner(
-        defaults: UserDefaults, hasToken: Bool = true,
-        pages: @escaping NotableBackfillRunner.FetchPage
-    ) -> NotableBackfillRunner {
-        NotableBackfillRunner(defaults: defaults, hasToken: { hasToken }, fetchPage: pages)
-    }
-
-    @Test func backfillMarksMatchingRowsOnceAndLeavesEverythingElseAlone() async throws {
-        let container = try container()
-        let ctx = container.mainContext
-        // Local uuids are uppercase, the server's lowercase.
-        let star = makeCatch(icao: "aaa001", uuid: "AAAA-1111")
-        let plain = makeCatch(icao: "aaa002", uuid: "BBBB-2222")
-        let pending = makeCatch(icao: "aaa003", uuid: nil)
-        plain.placeName = "Oakland"
-        [star, plain, pending].forEach(ctx.insert)
-        try ctx.save()
-
-        let defaults = makeDefaults()
-        var calls = 0
-        let r = runner(defaults: defaults) { _, _ in
-            calls += 1
-            return ([ServerRow(uuid: "aaaa-1111", verdict: .notable(Self.team)),
-                     ServerRow(uuid: "bbbb-2222", verdict: .notNotable),
-                     // A server row the phone doesn't have: ignored.
-                     ServerRow(uuid: "zzzz-9999", verdict: .notable(Self.bizjet))], 3)
-        }
-        #expect(await r.runIfNeeded(context: ctx) == 1)
-        #expect(star.notableInfo == Self.team)
-        #expect(plain.notableInfo == nil && pending.notableInfo == nil)
-        #expect(plain.placeName == "Oakland")
-        #expect(try ctx.fetchCount(FetchDescriptor<Catch>()) == 3)
-        #expect(r.isComplete)
-
-        // Latched: a second run does nothing and makes no request.
-        #expect(await r.runIfNeeded(context: ctx) == nil)
-        #expect(calls == 1)
-    }
-
-    @Test func backfillIsIdempotentWhenForcedToRunAgain() async throws {
-        let container = try container()
-        let ctx = container.mainContext
-        let star = makeCatch(icao: "aaa001", uuid: "AAAA-1111")
-        ctx.insert(star)
-        try ctx.save()
-        let page: NotableBackfillRunner.FetchPage = { _, _ in
-            ([ServerRow(uuid: "aaaa-1111", verdict: .notable(Self.team))], 1)
-        }
-        // Fresh defaults each time = no latch, so the reconcile really runs twice.
-        #expect(await runner(defaults: makeDefaults(), pages: page).runIfNeeded(context: ctx) == 1)
-        #expect(await runner(defaults: makeDefaults(), pages: page).runIfNeeded(context: ctx) == 0)
-        #expect(star.notableInfo == Self.team)
-        #expect(try ctx.fetchCount(FetchDescriptor<Catch>()) == 1)
-    }
-
-    /// An old server (no `notable` key on its rows): nothing changes, the
-    /// latch stays unset, and the run stops after ONE request so the retry
-    /// on a later launch stays cheap.
-    @Test func backfillAgainstAnOldServerStaysUnlatchedAndCheap() async throws {
-        let container = try container()
-        let ctx = container.mainContext
-        let star = makeCatch(icao: "aaa001", notable: Self.team, uuid: "AAAA-1111")
-        ctx.insert(star)
-        try ctx.save()
-        let defaults = makeDefaults()
-        var calls = 0
-        let old = runner(defaults: defaults) { _, offset in
-            calls += 1
-            // 1,200 rows, none carrying the key.
-            let n = min(500, 1_200 - offset)
-            return ((0..<n).map { ServerRow(uuid: "row-\(offset + $0)", verdict: .unknown) }
-                    + (offset == 0 ? [ServerRow(uuid: "aaaa-1111", verdict: .unknown)] : []), 1_200)
-        }
-        #expect(await old.runIfNeeded(context: ctx) == nil)
-        #expect(calls == 1)
-        #expect(!old.isComplete)
-        #expect(star.notableInfo == Self.team)
-
-        // A later launch, once the server is deployed, finishes the job.
-        let aware = runner(defaults: defaults) { _, _ in
-            ([ServerRow(uuid: "aaaa-1111", verdict: .notable(Self.team))], 1)
-        }
-        #expect(await aware.runIfNeeded(context: ctx) == 0)
-        #expect(aware.isComplete)
-    }
-
-    /// One row without the key is enough to withhold the latch, and then
-    /// nothing is applied: half a list is not a verdict.
-    @Test func backfillWithAMixedPageAppliesNothingAndDoesNotLatch() async throws {
-        let container = try container()
-        let ctx = container.mainContext
-        let star = makeCatch(icao: "aaa001", uuid: "AAAA-1111")
-        ctx.insert(star)
-        try ctx.save()
-        let r = runner(defaults: makeDefaults()) { _, _ in
-            ([ServerRow(uuid: "aaaa-1111", verdict: .notable(Self.team)),
-              ServerRow(uuid: "bbbb-2222", verdict: .unknown)], 2)
-        }
-        #expect(await r.runIfNeeded(context: ctx) == nil)
-        #expect(star.notableInfo == nil && !r.isComplete)
-    }
-
-    /// An aware server with no notable catches at all: every row says null.
-    /// That is a full answer, so the run latches having changed nothing.
-    @Test func backfillAgainstAnAwareServerWithZeroNotableRowsLatches() async throws {
-        let container = try container()
-        let ctx = container.mainContext
-        let plain = makeCatch(icao: "aaa001", uuid: "AAAA-1111")
-        ctx.insert(plain)
-        try ctx.save()
-        let r = runner(defaults: makeDefaults()) { _, _ in
-            ([ServerRow(uuid: "aaaa-1111", verdict: .notNotable),
-              ServerRow(uuid: "bbbb-2222", verdict: .notNotable)], 2)
-        }
-        #expect(await r.runIfNeeded(context: ctx) == 0)
-        #expect(r.isComplete)
-        #expect(plain.notableInfo == nil)
-    }
-
-    /// The server lists nothing for this device: that proves nothing about
-    /// whether it knows notable planes, so no latch.
-    @Test func backfillAgainstAnEmptyServerListDoesNotLatch() async throws {
-        let container = try container()
-        let ctx = container.mainContext
-        let star = makeCatch(icao: "aaa001", notable: Self.team, uuid: "AAAA-1111")
-        ctx.insert(star)
-        try ctx.save()
-        let r = runner(defaults: makeDefaults()) { _, _ in ([], 0) }
-        #expect(await r.runIfNeeded(context: ctx) == nil)
-        #expect(!r.isComplete)
-        #expect(star.notableInfo == Self.team)
-        #expect(NotableBackfill.provesServerAware([]) == false)
-    }
-
-    /// Per row: null clears, an object sets, a row the server did not list
-    /// is left alone. Nothing but the three notable fields moves.
-    @Test func backfillNullClearsOnlyTheThreeNotableFields() async throws {
-        let container = try container()
-        let ctx = container.mainContext
-        let wronglyFlagged = fullCatch(notable: Self.team, uuid: "AAAA-1111")
-        let unflagged = fullCatch(notable: nil, uuid: "BBBB-2222")
-        let unlisted = fullCatch(notable: Self.bizjet, uuid: "CCCC-3333")
-        [wronglyFlagged, unflagged, unlisted].forEach(ctx.insert)
-        try ctx.save()
-        let before = [wronglyFlagged, unflagged, unlisted].map(otherFields)
-
-        let r = runner(defaults: makeDefaults()) { _, _ in
-            ([ServerRow(uuid: "aaaa-1111", verdict: .notNotable),
-              ServerRow(uuid: "bbbb-2222", verdict: .notable(Self.team))], 2)
-        }
-        #expect(await r.runIfNeeded(context: ctx) == 2)
-        #expect(wronglyFlagged.notableKind == nil && wronglyFlagged.notableLabel == nil
-                && wronglyFlagged.notableName == nil)
-        #expect(unflagged.notableInfo == Self.team)
-        #expect(unlisted.notableInfo == Self.bizjet)
-        #expect([wronglyFlagged, unflagged, unlisted].map(otherFields) == before)
-        #expect(try ctx.fetchCount(FetchDescriptor<Catch>()) == 3)
-        #expect(r.isComplete)
-    }
-
-    @Test func backfillIsSafeOfflineAndUnregisteredAndRetriesLater() async throws {
-        let container = try container()
-        let ctx = container.mainContext
-        let star = makeCatch(icao: "aaa001", uuid: "AAAA-1111")
-        ctx.insert(star)
-        try ctx.save()
-
-        // No token: no request, no latch.
-        let defaults = makeDefaults()
-        var calls = 0
-        let unregistered = runner(defaults: defaults, hasToken: false) { _, _ in
-            calls += 1
-            return ([], 0)
-        }
-        #expect(await unregistered.runIfNeeded(context: ctx) == nil)
-        #expect(calls == 0 && !unregistered.isComplete)
-
-        // Offline: the page throws. Nothing changes, nothing latches.
-        let offline = runner(defaults: defaults) { _, _ in throw URLError(.notConnectedToInternet) }
-        #expect(await offline.runIfNeeded(context: ctx) == nil)
-        #expect(star.notableInfo == nil && !offline.isComplete)
-
-        // A later run with the network back finishes the job.
-        let online = runner(defaults: defaults) { _, _ in
-            ([ServerRow(uuid: "aaaa-1111", verdict: .notable(Self.team))], 1)
-        }
-        #expect(await online.runIfNeeded(context: ctx) == 1)
-        #expect(star.notableInfo == Self.team && online.isComplete)
-    }
-
-    @Test func backfillReadsEveryPageBeforeLatching() async throws {
-        let container = try container()
-        let ctx = container.mainContext
-        let late = makeCatch(icao: "aaa001", uuid: "LATE-0001")
-        ctx.insert(late)
-        try ctx.save()
-        var offsets: [Int] = []
-        let r = runner(defaults: makeDefaults()) { _, offset in
-            offsets.append(offset)
-            // 1,200 server rows in pages of 500; the flagged one is the last.
-            let n = min(500, 1_200 - offset)
-            var rows = (0..<n).map { ServerRow(uuid: "row-\(offset + $0)", verdict: .notNotable) }
-            if offset == 1_000 { rows[n - 1] = ServerRow(uuid: "late-0001", verdict: .notable(Self.team)) }
-            return (rows, 1_200)
-        }
-        #expect(await r.runIfNeeded(context: ctx) == 1)
-        #expect(offsets == [0, 500, 1_000])
-        #expect(late.notableInfo == Self.team)
-        #expect(r.isComplete)
-    }
-
-    /// A later page that fails mid-list: nothing applied, nothing latched.
-    @Test func backfillThatLosesTheNetworkMidListChangesNothing() async throws {
-        let container = try container()
-        let ctx = container.mainContext
-        let star = makeCatch(icao: "aaa001", uuid: "ROW-0")
-        ctx.insert(star)
-        try ctx.save()
-        let r = runner(defaults: makeDefaults()) { _, offset in
-            if offset > 0 { throw URLError(.timedOut) }
-            return ((0..<500).map { ServerRow(uuid: "row-\($0)", verdict: .notable(Self.team)) }, 1_200)
-        }
-        #expect(await r.runIfNeeded(context: ctx) == nil)
-        #expect(star.notableInfo == nil && !r.isComplete)
-    }
-
-    @Test func backfillSkipsAnEmptyHangarWithoutLatching() async throws {
-        let ctx = try container().mainContext
-        var calls = 0
-        let r = runner(defaults: makeDefaults()) { _, _ in
-            calls += 1
-            return ([], 0)
-        }
-        #expect(await r.runIfNeeded(context: ctx) == nil)
-        #expect(calls == 0 && !r.isComplete)
     }
 
     // MARK: Hangar search

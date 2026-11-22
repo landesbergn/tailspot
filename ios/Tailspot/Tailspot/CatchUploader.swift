@@ -205,12 +205,12 @@ class CatchUploader {
         guessHolds.isHeld(row.serverUuid, now: now)
     }
 
-    /// Bring a row's notable flag in line with the upload response. The
-    /// server is the authority whenever it speaks: an object sets or
-    /// corrects the flag, and an explicit null clears it (the server did not
-    /// pay the bonus, so the row must not show one). A response with no
-    /// `notable` key comes from a backend that predates the feature and
-    /// leaves what the live feed said at the press alone.
+    /// Make a row's notable flag match the upload response. The server is
+    /// the authority whenever it speaks: an object sets or corrects the
+    /// flag, and an explicit null clears it (the server did not pay the
+    /// bonus, so the row must not show one). A response with no `notable`
+    /// key comes from a backend that predates the feature and leaves what
+    /// the live feed said at the press alone.
     static func reconcileNotable(_ row: Catch, with response: UploadCatchResponse) {
         row.applyNotable(response.notable)
     }
@@ -329,7 +329,12 @@ class CatchUploader {
                         // bonus itself; the local `guessCorrect` verdict is
                         // display/trophy state and never leaves the device.
                         guessKind: catchRow.guessKind,
-                        guessValue: catchRow.guessValue
+                        guessValue: catchRow.guessValue,
+                        // From the row's own stored flag, so every path into
+                        // this sweep (first upload, retry, the reconcile's
+                        // re-send) claims only for a catch recorded as
+                        // notable when it was made.
+                        notableClaim: catchRow.claimsNotable
                     )
                     // Deleted while this POST was in flight: the DELETE may
                     // have reached the server first (a no-op), so this POST

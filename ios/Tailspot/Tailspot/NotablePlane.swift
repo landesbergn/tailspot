@@ -5,9 +5,14 @@
 //  A "notable" airframe: one specific plane the server has flagged as worth
 //  remarking on (a head-of-state transport, a team charter, a celebrity or
 //  business jet, a historic or special-mission aircraft). The server is the
-//  only source: the flag rides on `GET /v1/aircraft`, on the
-//  `POST /v1/catches` response and on each `GET /v1/catches` row, always as
-//  an optional `notable` object. Absent means "not notable".
+//  only source: the flag rides on `GET /v1/aircraft` as an optional
+//  `notable` object (absent means "not notable").
+//
+//  Going forward only: a catch is notable when the feed said so at the
+//  press. The upload then sends `notableClaim: true`, the server stores its
+//  answer on the catch row, and the `POST /v1/catches` response and each
+//  `GET /v1/catches` row carry that stored answer (`NotableVerdict`).
+//  Nothing ever looks up an existing catch to flag it after the fact.
 //
 //  Not to be confused with `Rarity.isNotable` (SetsScreen.swift), which
 //  means "rare or better" and is about the TYPE. This is about one airframe.
@@ -88,10 +93,11 @@ nonisolated struct NotablePlaneWire: Decodable, Sendable {
     }
 }
 
-/// What the server said about one CATCH's notable flag (`POST /v1/catches`
+/// What the server stored about one CATCH's notable flag (`POST /v1/catches`
 /// response, each `GET /v1/catches` row). A notable-aware server always
-/// sends the key: an object when the airframe is notable, an explicit JSON
-/// `null` when it is not. So the three states mean different things:
+/// sends the key: an object when it paid the notable bonus, an explicit
+/// JSON `null` when it did not. So the three states mean different things
+/// to the upload response (`Catch.applyNotable`):
 ///
 ///   `.unknown`     key absent: the server predates the feature and has said
 ///                  nothing. Also a malformed object (it says nothing usable).
@@ -99,6 +105,8 @@ nonisolated struct NotablePlaneWire: Decodable, Sendable {
 ///   `.notNotable`  explicit null: the server did not pay the bonus. Clear
 ///                  the row's notable fields.
 ///   `.notable`     set or correct the row's notable fields.
+///
+/// The Hangar restore only reads `plane` (an object or nothing).
 ///
 /// (`GET /v1/aircraft` is different: there the key is simply omitted for an
 /// ordinary plane, so the feed keeps the two-state `NotablePlaneWire`.)
@@ -112,9 +120,6 @@ nonisolated enum NotableVerdict: Equatable, Sendable {
         if case .notable(let plane) = self { return plane }
         return nil
     }
-
-    /// True when the server spoke (null or a usable object).
-    var isKnown: Bool { self != .unknown }
 }
 
 nonisolated extension NotableVerdict: Decodable {

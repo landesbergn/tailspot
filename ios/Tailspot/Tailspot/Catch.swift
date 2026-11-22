@@ -205,11 +205,13 @@ final class Catch {
     /// `notableKind` is the machine category ("team", "government", ...; an
     /// open string), `notableLabel` the user-facing category ("Team plane"),
     /// `notableName` who it is, when known. All nil = not notable. Filled at
-    /// catch time from the live feed, then reconciled to the server's
-    /// verdict by the upload response and, for older rows, `NotableBackfill`
-    /// (`applyNotable`: an object sets, an explicit null clears, a missing
-    /// key leaves the row alone). Read through `notableInfo`. Not on the init. Added
-    /// 2026-11, optional + nil-default for lightweight migration.
+    /// catch time from the live feed, and only then: a catch made before the
+    /// feature never gains the flag. The upload sends it as `notableClaim`,
+    /// and the response confirms or clears it (`applyNotable`: an object
+    /// sets, an explicit null clears, a missing key leaves the row alone).
+    /// A Hangar restore reads back what the server stored. Read through
+    /// `notableInfo`. Not on the init. Added 2026-11, optional + nil-default
+    /// for lightweight migration.
     var notableKind: String?
     var notableLabel: String?
     var notableName: String?
@@ -284,6 +286,12 @@ final class Catch {
         self.aircraftType = (aircraftType ?? autoType).rawValue
     }
 
+    /// What `POST /v1/catches` sends as `notableClaim`: true only for a
+    /// catch recorded as notable at catch time. The server pays the bonus
+    /// only when this is sent and its own list confirms the airframe, so a
+    /// catch from before the feature, re-uploaded by this build, earns none.
+    var claimsNotable: Bool { notableKind != nil }
+
     /// The notable flag as one value, or nil for an ordinary plane.
     var notableInfo: NotablePlane? {
         NotablePlane(kind: notableKind, label: notableLabel, name: notableName)
@@ -300,11 +308,11 @@ final class Catch {
         return true
     }
 
-    /// Apply what the server said about this catch (upload response or a
-    /// `GET /v1/catches` row): an object sets or corrects the flag, an
-    /// explicit null clears it, and silence (`.unknown`, an older server)
-    /// leaves the row alone. Only the three notable fields ever change.
-    /// Returns true when the row changed.
+    /// Apply the upload response's answer for this catch: an object sets or
+    /// corrects the flag, an explicit null clears it (no bonus was paid, so
+    /// the card must not show one), and silence (`.unknown`, an older
+    /// server) leaves the row alone. Only the three notable fields ever
+    /// change. Returns true when the row changed.
     @discardableResult
     func applyNotable(_ verdict: NotableVerdict) -> Bool {
         switch verdict {

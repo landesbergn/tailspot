@@ -87,11 +87,12 @@ export const UNKNOWN_RARITY_POINTS = 10;
  *  11 — notable planes (2026-11-21): a catch of an individually notable
  *       airframe (a head-of-state transport, a celebrity or corporate jet, a
  *       team plane, a historic or special-mission aircraft; see
- *       src/notable/) earns +50% of its base. Notability is looked up by
- *       icao24 at score time from the in-memory directory, so there is no new
- *       column and no migration. RETROACTIVE: the v10→v11 rescore pays the
- *       bonus on every past catch of a notable airframe. Deploy, then
- *       rescore; review the dry-run delta first.
+ *       src/notable/) earns +50% of its base. GOING FORWARD ONLY: the
+ *       decision is frozen on the row at upload (migration 0014,
+ *       `notable_kind`), and only for a catch the app itself showed as
+ *       notable (1.2.7+ sends `notableClaim`). Past catches and older app
+ *       versions never earn it, so NO rescore is needed and none moves any
+ *       points. Apply migration 0014 BEFORE deploying this server.
  */
 export const CURRENT_SCORING_VERSION = 11;
 

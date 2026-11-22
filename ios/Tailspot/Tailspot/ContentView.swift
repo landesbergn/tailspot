@@ -811,7 +811,6 @@ struct ContentView: View {
             // modifier: `body` is at the type-check budget.
             CatchBackfill.backfillPressSizes(catches, in: modelContext)
             await missedCatchRepair.runIfNeeded(context: modelContext)
-            await runNotableBackfill()
         }
         // When any primary sheet closes, re-diff the trophies. Hangar: a
         // country backfill done inside CatchDetailView can cross Mr.
@@ -2984,7 +2983,9 @@ struct ContentView: View {
                 // event about this catch carry the same persisted `catch_uuid`.
                 row.ensureServerUuid()
                 // The server's notable flag, as the live feed carried it at
-                // the press. The upload response reconciles it later.
+                // the press. This is the only place a catch becomes notable
+                // on the phone; the upload sends it as `notableClaim` and the
+                // response can only confirm or clear it.
                 row.setNotable(observed?.aircraft.notable)
                 modelContext.insert(row)
                 newCatches.append(row)
@@ -3686,9 +3687,9 @@ struct ContentView: View {
             guessKind: guessKind,
             guessBonusPoints: guessBonusPoints,
             pressSize: row.pressSize ?? 1,
-            // A row from before the flag existed still shows the plate when
-            // the live feed says the plane is notable (a re-catch).
-            notable: row.notableInfo ?? observed?.aircraft.notable,
+            // The row's own flag only, never the live feed: a catch that
+            // was not recorded (or not paid) as notable shows no plate.
+            notable: row.notableInfo,
             icao24: row.icao24
         )
     }
@@ -4885,17 +4886,6 @@ struct ContentView: View {
         assertedPlanes = [:]
         pressHold.reset()
         Log.ui.notice("Catch mode → \(mode.label, privacy: .public)")
-    }
-
-    /// One-time reconcile of the notable-airframe flag on catches made
-    /// before the app knew about it (NotableBackfill.swift). It only writes
-    /// the three notable fields. When it changes a row, re-diff the trophies
-    /// so Star Sighting unlocks now rather than on the next catch.
-    private func runNotableBackfill() async {
-        let changed = await NotableBackfillRunner().runIfNeeded(context: modelContext)
-        if (changed ?? 0) > 0 {
-            unlockCenter.enqueueNewUnlocks(from: catches)
-        }
     }
 
     /// Spoken summary for a plane's AR label: callsign, airframe model

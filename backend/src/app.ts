@@ -108,10 +108,9 @@ export interface BuildAppOptions {
   catchStore?: CatchStore;
   /**
    * The notable-planes directory (src/notable/): stamps `notable` on
-   * /v1/aircraft and the catch responses, and prices the notable bonus in the
-   * default catch store. Omitted (production), the app loads the committed
-   * snapshot; tests inject a small one.
-   * An injected `catchStore` scores with whatever directory IT was built with.
+   * /v1/aircraft and confirms an uploaded catch's notable claim. Omitted
+   * (production), the app loads the committed snapshot; tests inject a small
+   * one.
    */
   notableDirectory?: NotableLookup;
   /** Injectable clock (unix seconds) for deterministic catch-validation tests. */
@@ -484,8 +483,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     return { status: "ok" };
   });
 
-  // Notable planes: one directory for the whole app, so the aircraft feed,
-  // the catch responses and the scorer can never disagree about an airframe.
+  // Notable planes: one directory for the whole app, so the star the
+  // aircraft feed shows and the claim the catch upload confirms always agree.
   const notableDirectory =
     options.notableDirectory ??
     NotableDirectory.fromSnapshot({
@@ -732,7 +731,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   }
   let catchStore = options.catchStore;
   function getCatchStore(): CatchStore {
-    if (!catchStore) catchStore = new DrizzleCatchStore(getDb(), notableDirectory);
+    if (!catchStore) catchStore = new DrizzleCatchStore(getDb());
     return catchStore;
   }
   const identity: IdentityStore = {

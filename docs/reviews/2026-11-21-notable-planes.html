@@ -109,13 +109,15 @@ td.n{text-align:right} .gold{color:var(--gold);font-weight:600}
 <h2>Trophies</h2>
 <p>One new trophy, shown with the other feats: <b class="gold">Star Sighting</b>, earned by catching a notable plane.</p>
 
-<h2>Past catches</h2>
+<h2>Past catches and older app versions</h2>
+<p>Notable planes apply to catches made from this release on. Nothing reaches back.</p>
 <ul>
-<li>On the first foreground after the update, the app lists your catches from the server once and marks the ones the server says are notable. Stars and name lines then appear in the Hangar, and Star Sighting unlocks right away if you have already earned it.</li>
-<li>The backfill only ever sets the mark. It never deletes a catch, never clears a mark and never touches another field.</li>
-<li>It runs until one pass has read the whole list, then never again. If there is no network or no account yet, it tries again on the next foreground.</li>
-<li>A Hangar restored on a new phone gets the marks as part of the restore.</li>
-<li>Points for past catches come from a one-time re-score on the server, the same way the multi-catch bonus was paid.</li>
+<li>A catch already in your Hangar never gains a star, a name line or the bonus, even if the plane is on the list. This includes your own past catches.</li>
+<li>Star Sighting counts from the first notable catch made on this version.</li>
+<li>Someone still on an older app version is scored exactly as today. They see no star and earn no bonus until they update.</li>
+<li>Nobody's points or leaderboard position change when the server is deployed.</li>
+<li>A Hangar restored on a new phone gets back the stars that were recorded when each catch was made.</li>
+<li>If you catch a plane again that you first caught before this release, the Hangar row for that plane shows the star, because one of its catches is notable. The older catch keeps its original points.</li>
 </ul>
 
 <h2>Scoring</h2>
@@ -129,9 +131,9 @@ td.n{text-align:right} .gold{color:var(--gold);font-weight:600}
 <tr><td>Legendary</td><td class="n">500</td><td class="n">+250</td><td class="n">750</td><td class="n">1,000</td></tr>
 </table></div>
 <ul>
-<li>The server decides. It looks the plane up by its ICAO hex each time it scores, so nothing new is stored on a catch and there is no database migration.</li>
-<li>Because of that, builds already on people's phones earn the bonus as soon as the server is deployed and re-scored. They show no star, plate or ledger row until they update.</li>
-<li>If the source later adds a plane someone already caught, the catch shows as notable straight away but keeps its old points until a full re-score (<code>npm run rescore -- --all</code>). The same full pass takes the bonus back from a plane the source has removed.</li>
+<li>The app tells the server "I showed this catch as notable". The server checks its own list and, if the plane is on it, pays the bonus and records the category and name on that catch. A catch sent without that note is scored as an ordinary catch.</li>
+<li>What is recorded on a catch never changes afterwards. If the list later adds or drops a plane, catches already made keep what they earned.</li>
+<li>This needs one small database change: two optional columns on the catches table (migration 0014).</li>
 </ul>
 
 <h2>Data source</h2>
@@ -163,16 +165,15 @@ td.n{text-align:right} .gold{color:var(--gold);font-weight:600}
 <p>Two things seen in the data while writing this, for the same conversation. The source files some company jets under its oligarch category, so "Norilsk Nikel" shows as Celebrity. Its football category holds an owner's jet as well as club aircraft, so one "Team plane" is named for a person.</p>
 
 <h2>Deploy order</h2>
-<div class="note"><p><b>The server must go first.</b> The app's backfill of past catches runs until it has read your whole catch list once, then never again. An app that reaches a phone before the server sends the notable mark would read the list, find nothing, and stop for good.</p></div>
+<div class="note"><p><b>The server must go first.</b> An app that reaches a phone before the server would show the star and the bonus on the card, and the leaderboard would not pay it.</p></div>
 <div class="scroll"><table>
 <tr><th>Step</th><th>Who</th><th>State</th></tr>
 <tr><td>Review this doc and settle the decisions above</td><td>You</td><td>Waiting</td></tr>
-<tr><td>Deploy the server (no database migration)</td><td>Claude, on your go</td><td>Waiting</td></tr>
-<tr><td>Re-score dry run: <code>npm run rescore -- --dry-run</code></td><td>Claude, on your go</td><td>Waiting</td></tr>
-<tr><td>Review the point changes and any weekly or monthly standing that would change</td><td>You</td><td>Waiting</td></tr>
-<tr><td>Apply the re-score: <code>npm run rescore</code></td><td>Claude, on your go</td><td>Waiting</td></tr>
+<tr><td>Snapshot the database, then apply migration 0014 (two optional columns)</td><td>Claude, on your go</td><td>Waiting</td></tr>
+<tr><td>Deploy the server</td><td>Claude, on your go</td><td>Waiting</td></tr>
 <tr><td>App on your phone, then merge and a TestFlight build</td><td>Claude</td><td>After the server steps</td></tr>
 </table></div>
+<p>There is no re-score step. No existing catch changes.</p>
 
 <h2>Not yet verified</h2>
 <ul>
@@ -182,6 +183,7 @@ td.n{text-align:right} .gold{color:var(--gold);font-weight:600}
 <li>The Dockerfile line that copies the snapshot into the image has not been built. If it is wrong the server still starts, with nothing notable.</li>
 <li>The reach figures (141 airframes, 205 catches) predate the last rule changes.</li>
 </ul>
-<p>Tests: backend 769 passed. iOS 2,410 passed on the iOS 26.5 iPhone Air simulator.</p>
+<p>Tests: backend 769 passed. iOS 2,403 passed, 0 failed, 16 skipped on the iOS 26.5 iPhone Air simulator.</p>
 <p>Simplified on 2026-11-21 before merge: the daily refresh from GitHub, the Notable search chip, and the Who&rsquo;s Who and Four of a Kind trophies were removed.</p>
+<p>Reworked on 2026-11-22 to apply to new catches only: the re-score of past catches and the phone&rsquo;s one-time backfill were removed, and the notable mark is now recorded on each catch when it is uploaded.</p>
 </main>

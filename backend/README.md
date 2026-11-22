@@ -155,44 +155,55 @@ object, the same shape everywhere it appears:
 | `special` | Historic and special | Warbirds and vintage types, display teams, one-offs (Beluga, Dreamlifter, NASA), airships and balloons, heavy-lift helicopters |
 | `working` | Special mission | Coast guard, aerial firefighting, survey, surveillance, contract air services, UN, Civil Air Patrol |
 
-Where it appears. The two catch routes and the aircraft feed treat "not
-notable" differently, on purpose:
+Where it appears:
 
-| Route | Notable plane | Ordinary plane |
+| Route | Notable | Not notable |
 |---|---|---|
 | `GET /v1/aircraft`, each aircraft | the object | key **omitted** |
 | `POST /v1/catches`, the response | the object | `"notable": null` |
 | `GET /v1/catches`, each item | the object | `"notable": null` |
 
-- On the catch routes the key is **always present** while the directory holds data (with no data at all, for example a snapshot that failed to load, it is omitted, because the server cannot vouch for "not notable"). The app reads a missing
-  key as "this server predates notable planes" and an explicit `null` as "the
-  server checked, and it isn't one", so never drop it. Builds that predate the
-  field ignore it either way.
-- On `/v1/aircraft` the key is omitted for ordinary planes (nearly all of a
-  list of hundreds) and stamped on every serve, including tile-cache hits.
+- `/v1/aircraft` answers "is this airframe on the list?". The key is omitted
+  for ordinary planes (nearly all of a list of hundreds) and stamped on every
+  serve, including tile-cache hits.
+- The catch routes answer a different question: "was this **catch** recorded
+  as notable?". The key is always present, an object or an explicit `null`.
+  The app reads a missing key as "this server predates notable planes".
+
+**Going forward only: claim and confirm.** A catch is notable only if the app
+said so when it uploaded it and the server agreed:
 
 ```jsonc
-// POST /v1/catches, an ordinary plane
+// POST /v1/catches request, from an app that showed this catch as notable
+{ "catchUuid": "…", "icao24": "a4d2ab", …, "notableClaim": true }
+```
+
+- The app sends `notableClaim: true` only for a catch it recorded as notable
+  at catch time (it saw `notable` on `/v1/aircraft`). App versions before
+  1.2.7 never send it.
+- The claim is a request, not a verdict. The server looks the airframe up in
+  its own directory; if it is listed, the row stores `notable_kind` and
+  `notable_name` (migration 0014) and the points include the bonus. A claim on
+  an unlisted airframe earns nothing and the response says `"notable": null`.
+- No claim, no bonus. Every catch stored before this shipped, and every catch
+  from an older app version, has both columns null and stays that way.
+- The stored decision is frozen, like `first_of_type`. A replay
+  (`200`, `duplicate: true`) and `GET /v1/catches` report what the row stores.
+  Regenerating the snapshot later never adds or removes a bonus on a catch
+  that already exists.
+
+```jsonc
+// POST /v1/catches response, an ordinary catch
 { "catchId": "…", "points": 75, "rarity": "rare", "typecode": "B738", "firstOfType": true,
   "guessCorrect": false, "pressSize": 1, "notable": null, "duplicate": false }
 ```
 
-Nothing about notability is stored on a catch row, so where `notable` comes
-from depends on the path:
-
-- **Fresh insert** (`201`): the decision of the scoring that produced the
-  returned `points`, the same single directory lookup. A response can never
-  show the bonus without the object or the object without the bonus, even if
-  the two were computed apart.
-- **Replay** (`200`, `duplicate: true`): the points stored when the catch was
-  first scored, plus what the directory says now.
-- **`GET /v1/catches`**: likewise stored points plus the directory's current
-  answer. See "Rescore" below for when those two can differ.
-
 **Scoring (version 11).** A notable catch earns +50% of its base, additive
 with first-of-type, the guess bonuses and the multi-catch bonus
 (`notableBonus` in `src/catches/points.ts`; the fraction is `notable` in
-`scoring-bonuses.json`).
+`scoring-bonuses.json`). The scorer is told whether the catch is notable (the
+confirmed claim at upload, the stored `notable_kind` everywhere else) and
+never looks the airframe up itself.
 
 **Source and licence.** [plane-alert-db](https://github.com/sdr-enthusiasts/plane-alert-db),
 a community-maintained CSV of about 17,000 airframes, under the Open Database
@@ -214,11 +225,12 @@ they live:
   raw category never leave the server: they are the maintainers' in-jokes and
   editorial labels.
 
-**No moving parts.** There is no table, no migration, no ingest step and no
+**Few moving parts.** The list itself has no table, no ingest step and no
 network call. At boot the server loads the committed snapshot,
 `data/notable-airframes.json` (already filtered and mapped), and serves it
 until the next deploy. If the file is missing or corrupt the server logs an
-error and starts with nothing notable.
+error and starts with nothing notable. The only database change is the two
+nullable columns on `catches` (migration 0014).
 
 **Regenerating the snapshot.** The list changes slowly. Regenerate it when a
 release train opens, or when the rules in `mapping.ts` change:
@@ -231,22 +243,14 @@ npm run notable:snapshot -- --input file.csv   # from a saved copy
 Read the diff before committing it: every added line is a name that will
 appear in the app, and a category that lost most of its rows means upstream
 renamed something. The Docker image copies `data/notable-airframes.json`, so
-a new snapshot reaches production with the next deploy; run `npm run rescore`
-after that deploy.
+a new snapshot reaches production with the next deploy. It affects only
+catches made after that deploy.
 
-**Rescore.** Nothing about notability is stored on a catch: the scorer asks
-the directory by icao24 each time. `npm run rescore` loads the same committed
-snapshot, so run it from the deployed commit. Two
-consequences:
-
-- **Deploying scoring version 11 needs `npm run rescore` afterwards**, to pay
-  the bonus on past catches of notable airframes. Run `-- --dry-run` first and
-  read the delta.
-- The default rescore only revisits unresolved or older-version rows. When
-  a regenerated snapshot adds an airframe someone already caught, that old
-  catch shows `notable` in `GET /v1/catches` once the snapshot is deployed but
-  keeps its old points until a `npm run rescore -- --all`. The same full pass
-  takes the bonus back from catches of an airframe the snapshot has dropped.
+**Rescore.** Scoring version 11 needs **no rescore**. `npm run rescore` reads
+each row's stored `notable_kind` the way it reads `first_of_type`, so a pass
+over existing rows restamps their version and moves no points. Apply migration
+0014 **before** deploying the server (the server reads and writes the new
+columns).
 
 ### `GET /v1/metadata/{icao24}` (WP 1.4)
 
@@ -910,8 +914,9 @@ Fly managed-Postgres connection string.
 
 A deploy that raises `CURRENT_SCORING_VERSION` (`src/catches/points.ts`) is
 not finished until the rescore has run: `npm run rescore -- --dry-run`, read
-the delta, then `npm run rescore`. Version 11 (notable planes) is one of
-these, and needs no migration.
+the delta, then `npm run rescore`. Version 11 (notable planes) is the
+exception: it applies to new catches only, so it needs migration 0014 and no
+rescore.
 
 After provisioning Postgres and setting `DATABASE_URL`, apply migrations and seed
 the metadata tables once (then on each refresh):

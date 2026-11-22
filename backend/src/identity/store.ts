@@ -46,7 +46,7 @@ import {
   typecodes,
   weeklyChampions,
 } from "../db/schema.js";
-import type { Notable, NotableLookup } from "../notable/mapping.js";
+import { type Notable, isNotableKind, makeNotable } from "../notable/mapping.js";
 import {
   addDaysUtc,
   monthStartUtc,
@@ -298,13 +298,10 @@ export interface ScoredCatch {
    */
   guessCorrect: boolean;
   /**
-   * The directory's answer for this airframe AT THE MOMENT `points` was
-   * computed: the notable object when the notable-plane bonus is baked into
-   * `points`, null when it is not. One lookup decides both, so a caller that
-   * reports `points` and `notable` from the same ScoredCatch can never show
-   * a bonus without the flag or the flag without the bonus. Not persisted.
+   * Whether the notable-plane bonus is baked into `points` (echoes the flag
+   * handed to the scorer).
    */
-  notable: Notable | null;
+  notable: boolean;
 }
 
 /**
@@ -367,9 +364,10 @@ export interface NewCatch {
   aircraftPositionTimestamp: Date | null;
   validation: unknown;
   /**
-   * The `notable` of the ScoredCatch that produced `points` above. NOT
-   * persisted: it only rides through so a fresh insert can hand back the same
-   * decision its points were scored with (see `StoredCatchResult.notable`).
+   * The notable decision to FREEZE on the row: the directory's entry when the
+   * app claimed this catch as notable and the directory confirmed it, null
+   * otherwise (and when omitted). Must agree with the `notable` flag `points`
+   * was scored with.
    */
   notable?: Notable | null;
 }
@@ -388,15 +386,8 @@ export interface StoredCatchResult {
    *  lone catch). The first row of a press to arrive reports 1; its points and
    *  press size are raised when its siblings land. */
   pressSize: number;
-  /**
-   * The notable decision behind `points`, when THIS call scored them: on a
-   * fresh insert, the decision of whichever scoring produced the returned
-   * points (the upload's own, or the press re-score that lifted the row).
-   * Undefined when the points were only read back (a replay, or a row another
-   * request rewrote first): nothing is stored on the row, so the caller asks
-   * the directory.
-   */
-  notable?: Notable | null;
+  /** What the row stores about notability (read back on a replay too). */
+  notable: Notable | null;
 }
 
 /**
@@ -431,6 +422,18 @@ export interface RestorableCatch {
   /** Joined from `typecodes` by the row's typecode (clean DOC 8643 names). */
   manufacturer: string | null;
   model: string | null;
+  /** What the row stores about notability; null for an ordinary catch and
+   *  for every catch made before notable planes shipped. */
+  notable: Notable | null;
+}
+
+/**
+ * The wire `notable` object for a row's stored `notable_kind`/`notable_name`.
+ * Null when the row is not notable (or stores a kind this build no longer
+ * knows, which keeps its bonus but shows no label).
+ */
+export function storedNotable(kind: string | null, name: string | null): Notable | null {
+  return isNotableKind(kind) ? makeNotable(kind, name ?? undefined) : null;
 }
 
 /** One page of a device's catches, for the restore endpoint. */
@@ -519,14 +522,22 @@ export interface CatchStore {
    * the device caught in the same shutter press); 2 or more adds
    * `multiCatchBonus(base, pressSize)`. Omitted means 1, a lone catch.
    *
-   * The notable-plane bonus (scoring v11) is the one input the scorer looks up
-   * itself: it asks the notable directory about the icao24, the same way it
-   * resolves rarity, and adds `notableBonus(base)` when the airframe is in it.
-   * Nothing is frozen on the row, so a re-score re-asks the directory.
+   * `notable` follows the same pattern (scoring v11): the caller supplies the
+   * flag and `notableBonus(base)` is added when it is true. Upload sets it
+   * when the app claimed the catch as notable and the directory confirmed it;
+   * everything else reads the frozen `notable_kind` off the row. The scorer
+   * never asks the directory, so past catches and later list changes cannot
+   * move anyone's points.
    */
   scoreCatch(
     icao24: string,
-    opts?: { firstOfType?: boolean; guess?: GuessVerdict; caughtAt?: Date; pressSize?: number },
+    opts?: {
+      firstOfType?: boolean;
+      guess?: GuessVerdict;
+      caughtAt?: Date;
+      pressSize?: number;
+      notable?: boolean;
+    },
   ): Promise<ScoredCatch>;
   /**
    * Whether `deviceId` has NO existing catch of `typecode` — i.e. a new catch of
@@ -630,16 +641,7 @@ export interface CatchStore {
 }
 
 export class DrizzleCatchStore implements CatchStore {
-  /**
-   * `notable` is the directory of notable airframes (src/notable/). Optional:
-   * without one no catch earns the notable bonus, which is what most tests
-   * want. Production and the re-score script always pass it, and must pass
-   * the same data, or a re-score would take back what an upload awarded.
-   */
-  constructor(
-    private readonly db: Database,
-    private readonly notable?: NotableLookup,
-  ) {}
+  constructor(private readonly db: Database) {}
 
   async countCatches(): Promise<number> {
     const rows = await withDbRetry(() =>
@@ -677,6 +679,7 @@ export class DrizzleCatchStore implements CatchStore {
       guess?: GuessVerdict;
       caughtAt?: Date;
       pressSize?: number;
+      notable?: boolean;
     } = {},
   ): Promise<ScoredCatch> {
     const { typecode, rarity } = await this.resolveRarity(icao24);
@@ -684,7 +687,7 @@ export class DrizzleCatchStore implements CatchStore {
     const guessCorrect = opts.guess?.correct ?? false;
     const pressSize = Math.max(1, opts.pressSize ?? 1);
     const base = pointsForRarity(rarity);
-    const notable = this.notable?.lookup(icao24) ?? null;
+    const notable = opts.notable ?? false;
     const points =
       base +
       (firstOfType ? firstOfTypeBonus(base) : 0) +
@@ -738,6 +741,8 @@ export class DrizzleCatchStore implements CatchStore {
           guessKind: c.guessKind,
           guessValue: c.guessValue,
           guessCorrect: c.guessCorrect,
+          notableKind: c.notable?.kind ?? null,
+          notableName: c.notable?.name ?? null,
           caughtAt: c.caughtAt,
           observerLat: c.observerLat,
           observerLon: c.observerLon,
@@ -758,6 +763,8 @@ export class DrizzleCatchStore implements CatchStore {
           typecode: catches.typecode,
           firstOfType: catches.firstOfType,
           guessCorrect: catches.guessCorrect,
+          notableKind: catches.notableKind,
+          notableName: catches.notableName,
         }),
     );
 
@@ -771,14 +778,10 @@ export class DrizzleCatchStore implements CatchStore {
       // (press_size is only ever counted here), so the miss is logged loudly.
       let points = row.points;
       let pressSize = 1;
-      let notable = c.notable;
       try {
         const press = await this.reconcilePress(c.deviceId, c.caughtAt);
         pressSize = press.size;
         points = press.pointsById.get(row.id) ?? row.points;
-        // If the press re-score rewrote this row, its points came from THAT
-        // scoring, so report that scoring's notable decision with them.
-        if (press.notableById.has(row.id)) notable = press.notableById.get(row.id);
       } catch (err) {
         console.error("reconcilePress failed; catch kept at its lone-catch score", err);
       }
@@ -791,7 +794,7 @@ export class DrizzleCatchStore implements CatchStore {
           firstOfType: row.firstOfType,
           guessCorrect: row.guessCorrect,
           pressSize,
-          notable,
+          notable: storedNotable(row.notableKind, row.notableName),
         },
         duplicate: false,
       };
@@ -809,6 +812,8 @@ export class DrizzleCatchStore implements CatchStore {
           firstOfType: catches.firstOfType,
           guessCorrect: catches.guessCorrect,
           pressSize: catches.pressSize,
+          notableKind: catches.notableKind,
+          notableName: catches.notableName,
         })
         .from(catches)
         .where(and(eq(catches.deviceId, c.deviceId), eq(catches.catchUuid, c.catchUuid)))
@@ -824,6 +829,7 @@ export class DrizzleCatchStore implements CatchStore {
         firstOfType: row.firstOfType,
         guessCorrect: row.guessCorrect,
         pressSize: row.pressSize,
+        notable: storedNotable(row.notableKind, row.notableName),
       },
       duplicate: true,
     };
@@ -844,12 +850,7 @@ export class DrizzleCatchStore implements CatchStore {
   private async reconcilePress(
     deviceId: string,
     caughtAt: Date,
-  ): Promise<{
-    size: number;
-    pointsById: Map<string, number>;
-    /** The notable decision of the scoring whose points were written, per lifted row. */
-    notableById: Map<string, Notable | null>;
-  }> {
+  ): Promise<{ size: number; pointsById: Map<string, number> }> {
     const rows = await withDbRetry(() =>
       this.db
         .select({
@@ -860,13 +861,13 @@ export class DrizzleCatchStore implements CatchStore {
           firstOfType: catches.firstOfType,
           guessKind: catches.guessKind,
           guessCorrect: catches.guessCorrect,
+          notableKind: catches.notableKind,
         })
         .from(catches)
         .where(and(eq(catches.deviceId, deviceId), eq(catches.caughtAt, caughtAt))),
     );
     const size = new Set(rows.map((r) => r.icao24)).size;
     const pointsById = new Map<string, number>();
-    const notableById = new Map<string, Notable | null>();
     type PressRow = (typeof rows)[number];
     // Score one row for this press and write it, but only if the row is still
     // as it was read: a smaller press size (a concurrent reconcile that wrote
@@ -881,6 +882,7 @@ export class DrizzleCatchStore implements CatchStore {
           : undefined,
         caughtAt,
         pressSize: size,
+        notable: row.notableKind !== null,
       });
       const written = await withDbRetry(() =>
         this.db
@@ -904,7 +906,6 @@ export class DrizzleCatchStore implements CatchStore {
           )
           .returning({ points: catches.points }),
       );
-      if (written[0]) notableById.set(row.id, scored.notable);
       return written[0]?.points;
     };
     const reread = async (id: string): Promise<PressRow | undefined> =>
@@ -919,6 +920,7 @@ export class DrizzleCatchStore implements CatchStore {
               firstOfType: catches.firstOfType,
               guessKind: catches.guessKind,
               guessCorrect: catches.guessCorrect,
+              notableKind: catches.notableKind,
             })
             .from(catches)
             .where(eq(catches.id, id))
@@ -938,15 +940,12 @@ export class DrizzleCatchStore implements CatchStore {
         const current = await reread(row.id);
         if (current && current.pressSize < size) points = await lift(current);
         if (points === undefined) {
-          // Reporting points someone else wrote: no scoring of ours stands
-          // behind them, so claim no notable decision either.
-          notableById.delete(row.id);
           points = (await reread(row.id))?.points ?? row.points;
         }
       }
       pointsById.set(row.id, points);
     }
-    return { size, pointsById, notableById };
+    return { size, pointsById };
   }
 
   async recreditGuess(
@@ -967,6 +966,7 @@ export class DrizzleCatchStore implements CatchStore {
             pressSize: catches.pressSize,
             guessKind: catches.guessKind,
             guessCorrect: catches.guessCorrect,
+            notableKind: catches.notableKind,
             caughtAt: catches.caughtAt,
             createdAt: catches.createdAt,
           })
@@ -1013,6 +1013,7 @@ export class DrizzleCatchStore implements CatchStore {
       guess: { kind: guess.kind, correct },
       caughtAt: row.caughtAt,
       pressSize: row.pressSize,
+      notable: row.notableKind !== null,
     });
 
     // Conditional on `guess_kind IS NULL`: two concurrent calls can both get
@@ -1102,6 +1103,8 @@ export class DrizzleCatchStore implements CatchStore {
           registration: registry.registration,
           manufacturer: typecodes.manufacturer,
           model: typecodes.model,
+          notableKind: catches.notableKind,
+          notableName: catches.notableName,
         })
         .from(catches)
         .leftJoin(registry, eq(registry.icao24, catches.icao24))
@@ -1133,6 +1136,7 @@ export class DrizzleCatchStore implements CatchStore {
         registration: r.registration,
         manufacturer: r.manufacturer,
         model: r.model,
+        notable: storedNotable(r.notableKind, r.notableName),
       })),
     };
   }

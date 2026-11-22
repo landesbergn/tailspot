@@ -15,7 +15,8 @@
  *
  *   POST /v1/catches   (auth required)
  *     body { catchUuid, icao24, callsign|null, caughtAt, observer{…}, aircraft{…},
- *            guess?: { kind: "route"|"type", value: string } }
+ *            guess?: { kind: "route"|"type", value: string },
+ *            notableClaim?: true }
  *     → 201 { catchId, points, rarity, typecode, firstOfType, guessCorrect, pressSize,
  *             notable, duplicate:false }
  *       200 { …, duplicate:true }   when catchUuid was already ingested (replay)
@@ -38,16 +39,16 @@
  *     route's 404 apart from the framework 404 an older server returns for an
  *     unknown route.
  *
- * `notable` (additive 2026-11-21, scoring v11) is ALWAYS present on the POST
- * response and on each GET item: `{ kind, label, name? }` when the caught
- * airframe is in the notable-planes directory (src/notable/), an explicit
- * `null` when it is not. The app reads a MISSING key as "this server predates
- * notable planes", so never drop it. (GET /v1/aircraft differs: there the key
- * is omitted for an ordinary plane.) Nothing is stored on the row:
- *   - fresh insert: the decision of the scoring that produced `points` (which
- *     already include the +50% bonus), so the two cannot disagree;
- *   - replay, and every GET item: the STORED points plus what the directory
- *     says now.
+ * NOTABLE PLANES (additive 2026-11-21, scoring v11, going forward only).
+ * The app sends `notableClaim: true` for a catch it showed as notable (the
+ * star came from GET /v1/aircraft). The claim is only a request: the server
+ * pays the +50% bonus and freezes `notable_kind`/`notable_name` on the row
+ * when its OWN directory (src/notable/) lists the airframe. No claim, no
+ * bonus, so app versions before 1.2.7 and every catch already stored are
+ * untouched. `notable` on the POST response and on each GET item is what the
+ * row stores: `{ kind, label, name? }` or an explicit `null`, always present
+ * (the app reads a MISSING key as "this server predates notable planes").
+ * GET /v1/aircraft differs: there the key is omitted for an ordinary plane.
  *
  * Server-side resolution: the icao24 is looked up in the metadata store →
  * typecode → rarity → points. The client sends NO points/rarity (deliberately);
@@ -88,7 +89,7 @@ import { resolveDevice } from "../identity/auth.js";
 import { ipKey } from "../identity/clientIp.js";
 import type { RateLimiter } from "../identity/rateLimiter.js";
 import type { CatchStore, IdentityStore } from "../identity/store.js";
-import { type NotableLookup, notableDirectoryHasData } from "../notable/mapping.js";
+import type { NotableLookup } from "../notable/mapping.js";
 import type { RouteResolver } from "../providers/adsblolRoutes.js";
 
 export interface CatchesRouteOptions {
@@ -151,10 +152,8 @@ export interface CatchesRouteOptions {
    */
   routeResolver?: RouteResolver;
   /**
-   * The notable-planes directory. In production the SAME instance the catch
-   * store scores with. Answers the replay and list paths (a fresh insert
-   * reports the scorer's own decision instead). Omitted → those paths send
-   * `notable: null`.
+   * The notable-planes directory, which confirms an upload's `notableClaim`.
+   * Omitted → no claim is ever confirmed.
    */
   notable?: NotableLookup;
   /** Injectable clock (unix seconds) for deterministic validation in tests. */
@@ -253,19 +252,7 @@ export function registerCatchesRoute(app: FastifyInstance, opts: CatchesRouteOpt
     const offset = intParam(q.offset, 0);
 
     const page = await catchStore.listCatches(device.id, limit, offset);
-    // Stamp `notable` on EVERY row from the directory (nothing is stored):
-    // the object, or an explicit null. The key is absent only when the
-    // directory holds no data at all, so the app does not mistake "the
-    // server has no list right now" for "none of these is notable".
-    const directory = opts.notable;
-    if (!notableDirectoryHasData(directory)) return reply.code(200).send(page);
-    return reply.code(200).send({
-      total: page.total,
-      catches: page.catches.map((c) => ({
-        ...c,
-        notable: directory?.lookup(c.icao24) ?? null,
-      })),
-    });
+    return reply.code(200).send(page);
   });
 
   // ── DELETE /v1/catches/:catchUuid — the user deleted the catch ────────────
@@ -545,6 +532,15 @@ export function registerCatchesRoute(app: FastifyInstance, opts: CatchesRouteOpt
       guess = { kind: g.kind, value };
     }
 
+    // ── Optional notable claim ──────────────────────────────────────────────
+    // Absent (every app before 1.2.7, and every ordinary catch) = no claim.
+    // A claim is confirmed against the server's own directory, so a forged
+    // one on an ordinary airframe earns nothing.
+    if (body.notableClaim !== undefined && typeof body.notableClaim !== "boolean") {
+      return reject("notableClaim must be a boolean");
+    }
+    const notable = body.notableClaim === true ? (opts.notable?.lookup(icao24) ?? null) : null;
+
     // ── Server-side scoring (typecode → rarity → points, regime-stamped) ────
     // First-of-type is server-authoritative (un-spoofable): resolve the typecode,
     // then check whether THIS device already holds a catch of it BEFORE inserting
@@ -594,16 +590,11 @@ export function registerCatchesRoute(app: FastifyInstance, opts: CatchesRouteOpt
     // re-balance is going-forward only) — never the scoring moment, so a
     // delayed offline upload of an old catch still earns its era's fraction.
     const caughtAtDate = new Date(storedCaughtAt(caughtAt, nowSeconds()) * 1000);
-    const {
-      typecode,
-      rarity,
-      points,
-      scoringVersion,
-      notable: scoredNotable,
-    } = await catchStore.scoreCatch(icao24, {
+    const { typecode, rarity, points, scoringVersion } = await catchStore.scoreCatch(icao24, {
       firstOfType,
       guess: guess ? { kind: guess.kind, correct: guessCorrect } : undefined,
       caughtAt: caughtAtDate,
+      notable: notable !== null,
     });
 
     // ── Instrumented anti-cheat (stored, never enforced) ────────────────────
@@ -648,7 +639,7 @@ export function registerCatchesRoute(app: FastifyInstance, opts: CatchesRouteOpt
       aircraftPositionTimestamp:
         aircraft?.positionTimestamp == null ? null : new Date(aircraft.positionTimestamp * 1000),
       validation,
-      notable: scoredNotable,
+      notable,
     });
 
     // Post-upload side effects, scheduled AFTER the reply. A replay (the same
@@ -666,19 +657,6 @@ export function registerCatchesRoute(app: FastifyInstance, opts: CatchesRouteOpt
 
     // Response NEVER varies on the verdict (no oracle). The only difference
     // between a fresh insert and a replay is the status code + `duplicate` flag.
-    // `notable` is sent (object or null) whenever the directory holds data. A fresh insert reports the
-    // decision of the scoring behind `result.points`; a replay's points were
-    // scored in the past and nothing about notability is stored, so it gets
-    // the directory's current answer.
-    // With no directory data at all the key is omitted (see the GET route).
-    // A scorer that said "notable" is always believed.
-    const notable = result.notable
-      ? result.notable
-      : !notableDirectoryHasData(opts.notable)
-        ? undefined
-        : result.notable !== undefined
-          ? result.notable
-          : (opts.notable?.lookup(icao24) ?? null);
     return reply.code(duplicate ? 200 : 201).send({
       catchId: result.catchId,
       points: result.points,
@@ -689,10 +667,9 @@ export function registerCatchesRoute(app: FastifyInstance, opts: CatchesRouteOpt
       // Scoring v10. `points` above already includes the multi-catch bonus
       // for the press as it stands now; the first row of a press reports 1.
       pressSize: result.pressSize,
-      // Scoring v11. The object for a notable airframe (`points` above already
-      // includes its bonus), null otherwise. Omitted only when the directory
-      // holds no data.
-      notable,
+      // Scoring v11. What the row stores: the object when the bonus is in
+      // `points`, null otherwise. A replay reports the ORIGINAL decision.
+      notable: result.notable,
       duplicate,
     });
   });
