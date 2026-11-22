@@ -1786,6 +1786,12 @@ struct CatchRevealView: View {
         // modifier, so the chips' pop and collapse still animate one height.
         let photoMaxHeight = (render?.chipsInLayout ?? false) || _fillDisabled
             ? photoHeight : CardPhotoFill.maxHeight(cardWidth: width, base: photoHeight)
+        // And the one part that gives height back when the card is too tall
+        // for the viewport (three-line name, several ledger rows): down to
+        // the height it already takes while the chips are up, never below.
+        // (60% of 152 is 91, under that, so the chip height is the floor.)
+        let photoMinHeight = (render?.chipsInLayout ?? false) || _fillDisabled
+            ? photoHeight : min(photoHeight, max(100 * scale, CardPhotoFill.minHeight(base: photoHeight)))
         // The reveal's own count-up climbs to the pre-bonus total; a correct
         // in-card guess then rolls its route bonus in on the separate `bt` clock.
         let revealCount = Int((Double(revealTargetTotal) * easeOut(ss(0.82, 0.96, t))).rounded())
@@ -1821,7 +1827,7 @@ struct CatchRevealView: View {
                 RevealPhoto(url: livePlane.photoURL, focus: livePlane.photoFocus,
                             provisional: loader?.provisionalPhoto,
                             loading: loader.map { !$0.pipelineFinished } ?? false)
-                    .frame(minHeight: photoHeight, maxHeight: photoMaxHeight)
+                    .frame(minHeight: photoMinHeight, maxHeight: photoMaxHeight)
                     .frame(maxWidth: .infinity)
                     .reportsCardFrame(.photo)
                     // The notable caption: who this plane is, on the

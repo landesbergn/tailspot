@@ -55,6 +55,9 @@ struct SettledCatchCard: View {
     /// and everything under the photo keeps its size. Off (the share cards
     /// and every fixed render), the card is exactly what it was.
     var fillsHeight: Bool = false
+    /// Test hook, with `fillsHeight`: keep the photo at its usual height
+    /// whatever the card is offered (the card as it was before the fill).
+    var _photoFixed = false
 
     private var base: Int { plane.rarity.basePoints }
     private var bonus: Int { isFirstOfType ? ScoringBonuses.firstOfTypeBonus(base: base) : 0 }
@@ -208,8 +211,12 @@ struct SettledCatchCard: View {
     private func heroView(scale: CGFloat, accent: Color) -> some View {
         let photoHeight = 168 * scale
         let base = RevealPhoto(url: plane.photoURL, focus: plane.photoFocus)
-            .frame(minHeight: photoHeight,
-                   maxHeight: fillsHeight
+            // With `fillsHeight` the photo takes spare height (up to square)
+            // and gives height back when the card is too tall for its
+            // screen (down to `CardPhotoFill.minHeight`).
+            .frame(minHeight: fillsHeight && !_photoFixed
+                       ? CardPhotoFill.minHeight(base: photoHeight) : photoHeight,
+                   maxHeight: fillsHeight && !_photoFixed
                        ? CardPhotoFill.maxHeight(cardWidth: width, base: photoHeight)
                        : photoHeight)
             .frame(maxWidth: .infinity)

@@ -20,7 +20,18 @@
 
 import SwiftUI
 
+//  The mirror (2026-11-22, later the same day): a card TALLER than its
+//  screen takes height back from the photo, down to a floor, before it
+//  scrolls. Same mechanism, same single pass: the photo's frame simply has
+//  a minimum below its usual height as well as a maximum above it.
+//
+
 nonisolated enum CardPhotoFill {
+    /// The shortest the photo may get when the card is too tall for the
+    /// screen: 60% of its usual height. Below that it stops reading as a
+    /// photo once the notable caption (up to ~45 pt, two lines) is on it.
+    static func minHeight(base: CGFloat) -> CGFloat { base * 0.6 }
+
     /// The tallest the photo may grow: its own width (a square). The photo
     /// sits inside the card's 18 pt (at 300 wide) side padding.
     static func maxHeight(cardWidth: CGFloat, base: CGFloat) -> CGFloat {

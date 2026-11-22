@@ -93,8 +93,8 @@ struct CatchDetailView: View {
     /// bar (see the comment at its use). Internal for `CardFillLayoutTests`.
     static let columnTopInset: CGFloat = 8 + ChromeMetrics.disc + 16
     static let columnBottomInset: CGFloat = 8
-    /// Test hook: the column is offered no height, so the photo takes no
-    /// spare height: the screen as it was before the fill.
+    /// Test hook: the photo stays at its usual height whatever the screen
+    /// has room for: the screen as it was before the fill.
     /// `CardFillLayoutTests` compares the two.
     var _fillDisabled = false
 
@@ -108,10 +108,11 @@ struct CatchDetailView: View {
                 // offered the height between its top and bottom insets, and
                 // the card's photo is the one part that takes spare height
                 // (`SettledCatchCard.fillsHeight`). A card too tall for that
-                // lays out at its minimum, the card as it always was, and
-                // scrolls. The attribution line, when shown, comes out of
+                // takes height back from the photo, down to a floor, so the
+                // turn-over row stays on screen; one still too tall at the
+                // floor (an SE) scrolls, as it always did. The attribution line, when shown, comes out of
                 // the photo's share because the offer covers the column.
-                ProposedHeightLayout(height: _fillDisabled ? 0 : max(0, geo.size.height
+                ProposedHeightLayout(height: max(0, geo.size.height
                                                     - Self.columnTopInset - Self.columnBottomInset)) {
                 VStack(spacing: 14) {
                     // Direction B (2026-07-05): the reveal card at rest IS
@@ -133,7 +134,8 @@ struct CatchDetailView: View {
                                 : "View photo on Planespotters.net",
                             heroZoom: hasCatchPhoto ? heroZoom : nil,
                             caughtAt: shown.caughtAt,
-                            fillsHeight: true
+                            fillsHeight: true,
+                            _photoFixed: _fillDisabled
                         )
                     } back: {
                         CatchCardBack(model: backModel, width: cardWidth,

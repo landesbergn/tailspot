@@ -109,13 +109,16 @@ struct RevealShortScreenTests {
     @Test func seSizedRevealScrollsAndKeepsCTAOnScreen() async throws {
         // iPhone SE (3rd gen) safe area: 375 × (667 − 20 status bar).
         let size = CGSize(width: 375, height: 647)
-        let hosted = await hostReveal(size: size) { $0.contentSize.height > $0.bounds.height + 20 }
+        // The card gives the photo's spare height back before it scrolls
+        // (2026-11-22, CardPhotoFill.swift), so this card now overflows the
+        // SE by ~17 pt rather than ~80: still a scroll, by a smaller margin.
+        let hosted = await hostReveal(size: size) { $0.contentSize.height > $0.bounds.height + 5 }
         defer { hosted.window.isHidden = true }
         let bounds = CGRect(origin: .zero, size: size)
 
         let scrollView = try #require(hosted.scroll, "the reveal should host its card in a scroll view")
         // The card overflows the viewport → the scroll view has somewhere to go.
-        #expect(scrollView.contentSize.height > scrollView.bounds.height + 20,
+        #expect(scrollView.contentSize.height > scrollView.bounds.height + 5,
                 "SE card (\(scrollView.contentSize.height) pt) should overflow the \(scrollView.bounds.height) pt viewport")
         // The scroll region stops above the CTA strip: the strip (~71 pt) is
         // pinned inside the window, not pushed below it.

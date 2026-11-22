@@ -72,16 +72,24 @@ struct CardFillLayoutTests {
     /// `plain` is the card Noah reported (SHORT without the notable caption
     /// and its ledger row): asserted on, and rendered on the iPhone 16 only.
     enum Card: String, CaseIterable {
-        case plain, short, typical, tall
-        static let rendered: [Card] = [.short, .typical, .tall]
+        case plain, short, typical, tall, taller
+        static let rendered: [Card] = [.short, .typical, .tall, .taller]
     }
 
     static let team = NotablePlane(kind: "team", label: "Team plane", name: "Golden State Warriors")!
+    /// Long enough that the caption on the photo takes its two-line form.
+    static let longCaption = NotablePlane(
+        kind: "government", label: "Head of state and government",
+        name: "United States Air Force, 89th Airlift Wing")!
 
     /// PLAIN: no route, common, one-line name, a two-row ledger.
     /// SHORT: the same with the notable caption on (and its ledger row).
     /// TYPICAL: a route and a one-line name.
     /// TALL: a three-line name, a route, first-of-type and notable rows.
+    /// TALLER: the card that overflowed Noah's iPhone 16 (2026-11-22): a
+    /// three-line name, a DIST row, three ledger rows and a total, with the
+    /// two-line notable caption on the photo. Too tall for most screens at
+    /// the usual photo height, so the photo gives height back.
     private static func plane(_ card: Card, photo: URL?) -> CardPlane {
         let focus = photo == nil ? nil : CGPoint(x: 0.5, y: 0.45)
         switch card {
@@ -108,6 +116,13 @@ struct CardFillLayoutTests {
                 photoURL: photo, photoFocus: focus,
                 originIcao: "OAK", destIcao: "SQL", originName: "Oakland", destName: "San Carlos",
                 isFirstOfType: true, notable: team, icao24: "fa0003")
+        case .taller:
+            return CardPlane(
+                callsign: "N680CS", model: "Cessna 680 Citation Sovereign", carrier: "Private",
+                rarity: .uncommon, type: .biz,
+                altText: "41,000 ft", speedText: "430 kt", distText: "14.0 km",
+                photoURL: photo, photoFocus: focus,
+                isFirstOfType: true, notable: longCaption, icao24: "fa0005")
         }
     }
 
@@ -144,10 +159,13 @@ struct CardFillLayoutTests {
                            dist: 11_400, route: ("OAK", "DEN", "Oakland", "Denver"), at: at)
         let tall = make("fa0003", "N217MH", "Private", "B06", alt: 600, speed: 33, dist: 600,
                         route: ("OAK", "SQL", "Oakland", "San Carlos"), notable: team, at: at)
+        let taller = make("fa0005", "N680CS", "Private", "C680", alt: 12_500, speed: 221, dist: 14_000,
+                          notable: longCaption, at: at)
         // Saved, so the detail screen's query sees the older 737 from its
         // first pass (unsaved, FIRST OF TYPE can flicker onto the ledger).
         try container.mainContext.save()
-        return (container, [.plain: plain, .short: short, .typical: typical, .tall: tall])
+        return (container, [.plain: plain, .short: short, .typical: typical, .tall: tall,
+                            .taller: taller])
     }
 
     /// A sky with a small dark plane where the focus point is, so the crop
@@ -422,14 +440,70 @@ struct CardFillLayoutTests {
         }
     }
 
-    /// A card that already overflows the SE keeps the photo it always had.
-    @Test func revealTallCardOnSEKeepsBasePhoto() async throws {
+    private static func revealPhotoFloor(_ phone: Phone) -> CGFloat {
+        100 * min(phone.safe.width - 28, 420) / 300
+    }
+
+    private static func detailPhotoFloor(_ phone: Phone) -> CGFloat {
+        CardPhotoFill.minHeight(base: detailBasePhotoHeight(phone))
+    }
+
+    /// A card too tall for the SE even with the photo at its floor keeps the
+    /// photo at the floor (the reveal's chips-up height) and scrolls.
+    @Test func revealTallCardOnSEShrinksThePhotoToItsFloor() async throws {
         let (hosted, _) = await liveReveal(.tall, on: Self.se)
         defer { hosted.window.isHidden = true }
         let photo = try #require(hosted.frames.photo)
-        #expect(abs(photo.height - Self.revealBasePhotoHeight(Self.se)) < 0.5,
-                "photo \(photo.height) should stay at \(Self.revealBasePhotoHeight(Self.se))")
-        #expect(photo.height <= photo.width + 0.5)
+        #expect(abs(photo.height - Self.revealPhotoFloor(Self.se)) < 0.5,
+                "photo \(photo.height) should be at its floor \(Self.revealPhotoFloor(Self.se))")
+        let scroll = try #require(firstScrollView(in: hosted.view))
+        #expect(scroll.contentSize.height > scroll.bounds.height + 1, "the SE card should still scroll")
+    }
+
+    /// The card Noah reported (TALLER). On the 6.1" phones and up, both
+    /// screens: the photo gives back just enough height that the turn-over
+    /// row ends inside the screen, and stays between its floor and its
+    /// usual height. On the SE it is at the floor and the screen scrolls.
+    @Test func tallerCardShrinksItsPhotoToFit() async throws {
+        var lines: [String] = []
+        defer {
+            try? FileManager.default.createDirectory(at: Self.dir, withIntermediateDirectories: true)
+            try? lines.joined(separator: "\n").write(
+                to: Self.dir.appendingPathComponent("fill_taller_measurements.txt"),
+                atomically: true, encoding: .utf8)
+        }
+        for phone in Self.phones {
+            let (reveal, viewportFrame) = await liveReveal(.taller, on: phone)
+            let detail = try await liveDetail(.taller, on: phone, fullScreen: false)
+            defer { reveal.window.isHidden = true; detail.window.isHidden = true }
+            let viewport = try #require(viewportFrame)
+            let cases: [(String, Frames, CGFloat, CGFloat, CGFloat, UIView)] = [
+                ("reveal", reveal.frames, Self.revealPhotoFloor(phone), Self.revealBasePhotoHeight(phone),
+                 viewport.maxY, reveal.view),
+                ("detail", detail.frames, Self.detailPhotoFloor(phone), Self.detailBasePhotoHeight(phone),
+                 phone.safe.height, detail.view),
+            ]
+            for (screen, frames, floor, base, bottomEdge, view) in cases {
+                let name = "\(screen) \(phone.tag)"
+                let photo = try #require(frames.photo, "\(name): no photo frame")
+                let turnRow = try #require(frames.turnRow, "\(name): no turn row frame")
+                let scroll = try #require(firstScrollView(in: view), "\(name): no scroll view")
+                let scrolls = scroll.contentSize.height > scroll.bounds.height + 1
+                lines.append(String(format: "%@: photo %.1f (floor %.1f, base %.1f), turn row ends %.1f, "
+                                    + "screen ends %.1f, scrolls %@", name, photo.height, floor, base,
+                                    turnRow.maxY, bottomEdge, scrolls ? "yes" : "no"))
+                #expect(photo.height >= floor - 0.5, "\(name): photo \(photo.height) under its floor \(floor)")
+                if phone.tag == Self.se.tag {
+                    #expect(abs(photo.height - floor) < 0.5, "\(name): photo \(photo.height), floor \(floor)")
+                    #expect(scrolls, "\(name): should scroll")
+                } else if phone.size.width >= 393 {
+                    #expect(turnRow.maxY <= bottomEdge + 0.5,
+                            "\(name): turn row ends at \(turnRow.maxY), screen at \(bottomEdge)")
+                    #expect(photo.height <= base + 0.5, "\(name): photo \(photo.height) over base \(base)")
+                    #expect(!scrolls, "\(name): should not scroll")
+                }
+            }
+        }
     }
 
     /// The detail screen's text is at full size (the reveal's is squeezed)
@@ -468,13 +542,14 @@ struct CardFillLayoutTests {
         }
     }
 
-    @Test func detailTallCardOnSEKeepsBasePhoto() async throws {
+    @Test func detailTallCardOnSEShrinksThePhotoToItsFloor() async throws {
         let hosted = try await liveDetail(.tall, on: Self.se, fullScreen: false)
         defer { hosted.window.isHidden = true }
         let photo = try #require(hosted.frames.photo)
-        #expect(abs(photo.height - Self.detailBasePhotoHeight(Self.se)) < 0.5,
-                "photo \(photo.height) should stay at \(Self.detailBasePhotoHeight(Self.se))")
-        #expect(photo.height <= photo.width + 0.5)
+        #expect(abs(photo.height - Self.detailPhotoFloor(Self.se)) < 0.5,
+                "photo \(photo.height) should be at its floor \(Self.detailPhotoFloor(Self.se))")
+        let scroll = try #require(firstScrollView(in: hosted.view))
+        #expect(scroll.contentSize.height > scroll.bounds.height + 1, "the SE card should still scroll")
     }
 
     /// Frames are reported snapped to the pixel grid where they sit on
@@ -589,17 +664,21 @@ struct CardFillLayoutTests {
                 to: Self.dir.appendingPathComponent("fill_measurements.txt"), atomically: true, encoding: .utf8)
         }
         func check(_ screen: String, _ phone: Phone, _ card: Card,
-                   fill: Frames, off: Frames, base: CGFloat) throws {
+                   fill: Frames, off: Frames, base: CGFloat, floor: CGFloat) throws {
             let name = "\(screen) \(phone.tag) \(card.rawValue)"
             let photo = try #require(fill.photo, "\(name): no photo frame")
             let offPhoto = try #require(off.photo, "\(name): no photo frame with the fill off")
             #expect(abs(offPhoto.height - base) < 0.5, "\(name): fill off, photo \(offPhoto.height) vs base \(base)")
-            #expect(photo.height >= base - 0.5, "\(name): \(photo.size)")
+            #expect(photo.height >= floor - 0.5, "\(name): \(photo.size)")
             #expect(photo.height <= photo.width + 0.5, "\(name): \(photo.size)")
             let under = try #require(fill.underPhoto), underOff = try #require(off.underPhoto)
             #expect(abs(under - underOff) < Self.pixel, "\(name): under the photo \(under) vs \(underOff)")
             // ... and both are what the screen drew before the fill existed.
-            let was = try #require(Self.beforeTheFill[name], "\(name): no recorded size")
+            // (TALLER was added after the fill, so it has no record: for it
+            // "before" is the fill-off screen compared just above.)
+            let recorded = Self.beforeTheFill[name]
+            #expect(recorded != nil || card == .taller, "\(name): no recorded size")
+            let was = recorded ?? [underOff] + Self.textParts.map { off.parts[$0.0]?.height ?? 0 }
             #expect(abs(under - was[0]) < 2 * Self.pixel, "\(name): under the photo \(under), was \(was[0])")
             var texts: [String] = []
             for (index, (part, label)) in Self.textParts.enumerated() {
@@ -624,22 +703,22 @@ struct CardFillLayoutTests {
                                 name, photo.height, base, photo.width, under, underOff)
                          + texts.joined(separator: ", "))
         }
-        // One phone at a time, its sixteen screens side by side.
+        // One phone at a time, its twenty screens side by side.
         for phone in Self.phones {
-            var mounted: [(String, Card, Hosted, Hosted, CGFloat)] = []
+            var mounted: [(String, Card, Hosted, Hosted, CGFloat, CGFloat)] = []
             for card in Card.allCases {
                 mounted.append(("reveal", card, mountReveal(card, on: phone),
                                 mountReveal(card, on: phone, fill: false),
-                                Self.revealBasePhotoHeight(phone)))
+                                Self.revealBasePhotoHeight(phone), Self.revealPhotoFloor(phone)))
                 mounted.append(("detail", card, try mountDetail(card, on: phone, fullScreen: false),
                                 try mountDetail(card, on: phone, fullScreen: false, fill: false),
-                                Self.detailBasePhotoHeight(phone)))
+                                Self.detailBasePhotoHeight(phone), Self.detailPhotoFloor(phone)))
             }
             await waitUntilSteady(mounted.flatMap { [$0.2, $0.3] }, settle: .milliseconds(600))
-            for (screen, card, fill, off, base) in mounted {
+            for (screen, card, fill, off, base, floor) in mounted {
                 fill.window.isHidden = true
                 off.window.isHidden = true
-                try check(screen, phone, card, fill: fill.frames, off: off.frames, base: base)
+                try check(screen, phone, card, fill: fill.frames, off: off.frames, base: base, floor: floor)
             }
         }
     }
@@ -676,18 +755,26 @@ struct CardFillLayoutTests {
         #expect(allReported, "every screen should have laid its card out")
     }
 
-    /// With `fillsHeight` and no spare height, the card is the size the
-    /// detail screen's scroll view always made it: the plain card's.
-    @Test func settledCardWithFillAndNoSpareHeightIsThePlainCard() {
+    /// With `fillsHeight`, the card's shortest is the plain card less what
+    /// the photo may give back (down to its floor); with the photo held
+    /// (`_photoFixed`, the fill switched off) it is the plain card exactly.
+    @Test func settledCardShrinksOnlyByItsPhoto() {
         for card in Card.allCases {
-            let plain = UIHostingController(rootView: SettledCatchCard(
-                plane: Self.plane(card, photo: nil), isFirstOfType: card == .tall, width: 357))
-            let filling = UIHostingController(rootView: SettledCatchCard(
-                plane: Self.plane(card, photo: nil), isFirstOfType: card == .tall, width: 357,
-                fillsHeight: true))
-            let was = plain.sizeThatFits(in: CGSize(width: 357, height: 2_500))
-            let now = filling.sizeThatFits(in: CGSize(width: 357, height: 10))
-            #expect(abs(was.height - now.height) < 0.5, "\(card): \(was.height) vs \(now.height)")
+            let first = card == .tall || card == .taller
+            func height(_ view: SettledCatchCard, offered: CGFloat) -> CGFloat {
+                UIHostingController(rootView: view)
+                    .sizeThatFits(in: CGSize(width: 357, height: offered)).height
+            }
+            let plane = Self.plane(card, photo: nil)
+            let was = height(SettledCatchCard(plane: plane, isFirstOfType: first, width: 357), offered: 2_500)
+            let held = height(SettledCatchCard(plane: plane, isFirstOfType: first, width: 357,
+                                               fillsHeight: true, _photoFixed: true), offered: 10)
+            let shortest = height(SettledCatchCard(plane: plane, isFirstOfType: first, width: 357,
+                                                   fillsHeight: true), offered: 10)
+            let photo: CGFloat = 168 * 357 / 300
+            #expect(abs(was - held) < 0.5, "\(card): \(was) vs \(held)")
+            #expect(abs(was - shortest - (photo - CardPhotoFill.minHeight(base: photo))) < 0.5,
+                    "\(card): \(was) vs \(shortest)")
         }
     }
 
