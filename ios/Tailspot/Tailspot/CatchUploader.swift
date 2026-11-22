@@ -308,6 +308,8 @@ class CatchUploader {
                 // release kicks its own sweep, so skipping here loses nothing.
                 if Self.isHeldForGuess(catchRow) { break }
                 do {
+                    // Read before the response is applied to the row.
+                    let notableClaimed = catchRow.claimsNotable
                     let response = try await client.uploadCatch(
                         catchUuid: uuid,
                         icao24: catchRow.icao24,
@@ -357,7 +359,8 @@ class CatchUploader {
                     // come from the authoritative server response. Airframe
                     // attributes only — no precise coordinates, just coarse
                     // place_name. (See CatchTelemetry.uploadedProperties.)
-                    CatchTelemetry.fireUploaded(catchRow, response: response)
+                    CatchTelemetry.fireUploaded(catchRow, response: response,
+                                                notableClaimed: notableClaimed)
                     break   // success → move to the next catch
                 } catch AccountError.http(let status) where status == 429 {
                     // Rate limited. Wait for the bucket to refill (~1 token/sec

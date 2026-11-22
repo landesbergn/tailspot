@@ -606,6 +606,7 @@ func statCell(_ label: String, _ raw: String?, scale: CGFloat, accent: Color) ->
             }
         }
         .lineLimit(1).minimumScaleFactor(0.6)
+        .reportsCardFrame(label == "ALT" ? .altValue : label == "DIST" ? .distValue : nil)
     }
 }
 
@@ -704,6 +705,7 @@ func identityRow(callsign: String?, carrier: String?, rarity: Rarity,
                 .font(.system(size: 11 * scale, weight: .semibold, design: .monospaced))
                 .tracking(1).foregroundColor(RP.ink)
                 .lineLimit(1).minimumScaleFactor(0.7)
+                .reportsCardFrame(.callsign)
         }
         if isDuplicate {
             Text("· ALREADY CAUGHT")
@@ -733,109 +735,43 @@ func ledgerRow(_ label: String, _ amount: String, _ color: Color, _ opacity: Dou
 
 // MARK: - CatchRevealView
 
-/// Sizes its single child by offering it one fixed height (nil = the child's
-/// ideal), whatever the parent offers, then lays the child out in exactly
-/// the size that came back. Two jobs in the card-fills-the-screen layout
-/// (2026-11-22):
-///  - around a catch card, it offers the height the card should fill. The
-///    card's only stretchy part is its photo (`CardPhotoFill`), so a short
-///    card grows its photo to fit and a full one is left as it was.
-///  - inside `SettledCatchCard`, with nil, it pins everything under the
-///    photo at the ideal size the detail screen's scroll view always gave
-///    it, so the offer above can only ever reach the photo.
+/// Sizes its single child by offering it one fixed height, whatever the
+/// parent offers, and lays the child out in the size that came back. Two
+/// jobs in the card-fills-the-screen layout (2026-11-22, CardPhotoFill.swift):
+///  - around a catch card (`height` a number): it offers the height the
+///    card should fill. The card's only stretchy part is its photo, so a
+///    short card grows its photo to fit and a full one is left as it was.
+///  - inside `SettledCatchCard` (`height` nil): it pins everything under the
+///    photo at the size the detail screen always gave it, so the offer
+///    above can only ever reach the photo. That size is the content's ideal
+///    height offered back to it AS A NUMBER, which is how the stacks around
+///    it used to place it: at some card widths the number falls a hair
+///    short and the route codes drop to their small size, and the card was
+///    that much shorter. Reproduced here, not corrected.
 /// It is one layout pass with no measured state, so the card never changes
-/// size a frame after it appears.
+/// size a frame after it appears and nothing can loop.
 nonisolated struct ProposedHeightLayout: Layout {
     var height: CGFloat?
 
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        guard let child = subviews.first else { return .zero }
-        return child.sizeThatFits(ProposedViewSize(width: proposal.width, height: height))
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        subviews.first?.place(at: CGPoint(x: bounds.midX, y: bounds.minY), anchor: .top,
-                              proposal: ProposedViewSize(width: bounds.width, height: bounds.height))
-    }
-}
-
-/// Pins the reveal card's content under the photo at the height it has
-/// always had, whatever the card is offered, so spare height can only reach
-/// the photo (2026-11-22).
-///
-/// That height is not simply the content's minimum. Before this layout, the
-/// card sat in stacks that were offered zero height (the reveal column's
-/// old `CompressedHeightLayout`; see `revealColumn`): a stack measures a
-/// child at zero (its minimum), then places it IN the height it measured,
-/// and offered that height the content lays out a little taller than its
-/// minimum (the callsign line and the ALT/SPD values take their full size
-/// first). `FlipCard` then measured the card it saw and fed that size back,
-/// so the card on screen settled where the content, offered its own height,
-/// asks for exactly that height. This layout finds the same height directly:
-/// start from the minimum and re-offer until the answer stops changing.
-nonisolated struct SettledMinimumHeightLayout: Layout {
-    private func settledSize(_ child: LayoutSubview, width: CGFloat?) -> CGSize {
-        var size = child.sizeThatFits(ProposedViewSize(width: width, height: 0))
-        for _ in 0..<4 {
-            let next = child.sizeThatFits(ProposedViewSize(width: width, height: size.height))
-            let settled = abs(next.height - size.height) < 0.01
-            size = next
-            if settled { break }
+    /// The height to place the child in, and the size it takes there.
+    private func placement(_ child: LayoutSubview, width: CGFloat?) -> (offer: CGFloat?, size: CGSize) {
+        if let height {
+            return (nil, child.sizeThatFits(ProposedViewSize(width: width, height: height)))
         }
-        return size
+        let ideal = child.sizeThatFits(ProposedViewSize(width: width, height: nil)).height
+        return (ideal, child.sizeThatFits(ProposedViewSize(width: width, height: ideal)))
     }
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         guard let child = subviews.first else { return .zero }
-        return settledSize(child, width: proposal.width)
+        return placement(child, width: proposal.width).size
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        subviews.first?.place(at: CGPoint(x: bounds.midX, y: bounds.minY), anchor: .top,
-                              proposal: ProposedViewSize(width: bounds.width, height: bounds.height))
-    }
-}
-
-/// How tall a catch card's photo may be when the card fills the screen
-/// (Noah, 2026-11-22: a card with little on it left a band of empty screen
-/// under it). The photo takes the spare height; everything under it keeps
-/// its size. It never goes below the height it always had, and never above
-/// its own width (a square): past that the space stays empty.
-nonisolated enum CardPhotoFill {
-    /// The tallest the photo may grow: its own width. The photo sits inside
-    /// the card's 18 pt (at 300 wide) side padding.
-    static func maxHeight(cardWidth: CGFloat, base: CGFloat) -> CGFloat {
-        max(base, cardWidth - 2 * 18 * (cardWidth / 300))
-    }
-}
-
-/// Parts of a catch card whose frames the layout tests read
-/// (`CardFillLayoutTests`). Nothing in the app reads them.
-nonisolated enum CardFramePart: Hashable, Sendable { case card, photo, turnRow }
-
-nonisolated struct CardFrameKey: PreferenceKey {
-    static let defaultValue: [CardFramePart: CGRect] = [:]
-    static func reduce(value: inout [CardFramePart: CGRect],
-                       nextValue: () -> [CardFramePart: CGRect]) {
-        value.merge(nextValue()) { _, new in new }
-    }
-}
-
-extension View {
-    /// Publishes this view's frame (window coordinates) under `part` for the
-    /// layout tests. Debug builds only; Release compiles it away.
-    @ViewBuilder
-    func reportsCardFrame(_ part: CardFramePart) -> some View {
-        #if DEBUG
-        background {
-            GeometryReader { geo in
-                Color.clear.preference(key: CardFrameKey.self,
-                                       value: [part: geo.frame(in: .global)])
-            }
-        }
-        #else
-        self
-        #endif
+        guard let child = subviews.first else { return }
+        let offer = placement(child, width: bounds.width).offer ?? bounds.height
+        child.place(at: CGPoint(x: bounds.midX, y: bounds.minY), anchor: .top,
+                    proposal: ProposedViewSize(width: bounds.width, height: offer))
     }
 }
 
@@ -1465,6 +1401,10 @@ struct CatchRevealView: View {
     /// The air left above the card and below its turn-over row when the
     /// photo grows to fill the viewport. Internal for `CardFillLayoutTests`.
     static let fillMargin: CGFloat = 8
+    @Environment(\.displayScale) private var displayScale
+    /// Test hook: the photo takes no spare height, the reveal as it was
+    /// before the fill. `CardFillLayoutTests` compares the two.
+    var _fillDisabled = false
 
     /// Measured height of the scroll viewport above the CTA strip; nil until
     /// the first layout pass reports it. It is the scroll content's MINIMUM
@@ -1844,7 +1784,7 @@ struct CatchRevealView: View {
         // more room than it needs. Not while the chips are up: that card is
         // as short as it can be made. Both states go through the same frame
         // modifier, so the chips' pop and collapse still animate one height.
-        let photoMaxHeight = (render?.chipsInLayout ?? false)
+        let photoMaxHeight = (render?.chipsInLayout ?? false) || _fillDisabled
             ? photoHeight : CardPhotoFill.maxHeight(cardWidth: width, base: photoHeight)
         // The reveal's own count-up climbs to the pre-bonus total; a correct
         // in-card guess then rolls its route bonus in on the separate `bt` clock.
@@ -1923,7 +1863,12 @@ struct CatchRevealView: View {
                 // Everything under the photo stays at the size it has always
                 // had (see `SettledMinimumHeightLayout`), whatever height the
                 // card is offered: only the photo above may grow.
-                SettledMinimumHeightLayout {
+                SettledMinimumHeightLayout(above: photoHeight + 36 * scale,
+                                           // FlipCard's turn row: 44 pt less its
+                                           // 16 pt overhang, plus its top gap.
+                                           below: 28 + 4 * scale,
+                                           viewport: cardViewportHeight,
+                                           pixel: 1 / max(displayScale, 1)) {
                 VStack(alignment: .leading, spacing: 11 * scale) {
                     VStack(alignment: .leading, spacing: 4 * scale) {
                         ForEach(flapLines) { fl in
@@ -2146,6 +2091,7 @@ struct CatchRevealView: View {
                 }
             }
             .lineLimit(1).minimumScaleFactor(0.6)
+            .reportsCardFrame(.routeCodes)
             routeCityLine(origin: livePlane.originName, dest: livePlane.destName, scale: scale)
         }
     }

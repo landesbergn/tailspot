@@ -285,6 +285,7 @@ struct SettledCatchCard: View {
                 }
             }
             .lineLimit(1).minimumScaleFactor(0.6)
+            .reportsCardFrame(.routeCodes)
             routeCityLine(origin: plane.originName, dest: plane.destName, scale: scale)
         }
     }

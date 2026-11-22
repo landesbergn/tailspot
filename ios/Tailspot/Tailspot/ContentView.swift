@@ -3044,6 +3044,7 @@ struct ContentView: View {
             // Catch-confirmation telemetry (north-star). One event per
             // processed target: new catches carry rarity/type/slant,
             // duplicates record the dedup hit. Fire-and-forget.
+            let notableInView = visibleByIcao.values.count { $0.aircraft.notable != nil }
             for row in newCatches {
                 CatchTelemetry.firePerformed(
                     row,
@@ -3058,7 +3059,8 @@ struct ContentView: View {
                     // legacy zone cluster, or no photo).
                     detectorVerdict: detectorVerdicts[row.icao24],
                     catchMode: pressCatchMode,
-                    skyVerdict: skyVerdict
+                    skyVerdict: skyVerdict,
+                    notableInView: notableInView
                 )
             }
             for icao in duplicates { CatchTelemetry.fireDuplicate(icao24: icao) }
