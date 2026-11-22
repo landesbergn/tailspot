@@ -332,7 +332,7 @@ struct NotablePlaneTests {
 
     private func ach(_ id: String) -> Achievement { Trophies.roster.first { $0.id == id }! }
 
-    @Test func trophyInputsCountDistinctNotableAirframesAndKinds() {
+    @Test func trophyInputsCountDistinctNotableAirframes() {
         let catches = [
             makeCatch(icao: "aaa001", notable: Self.team),
             // The same airframe again: still one.
@@ -343,42 +343,24 @@ struct NotablePlaneTests {
         ]
         let inputs = Trophies.inputs(from: catches)
         #expect(inputs.notableAirframes == 3)
-        #expect(inputs.notableKinds == 2)
         #expect(Trophies.inputs(from: [makeCatch(icao: "aaa004")]).notableAirframes == 0)
     }
 
-    @Test func notableTrophiesUnlockAtOneTenAndFourKinds() {
+    @Test func starSightingUnlocksOnTheFirstNotablePlane() {
         #expect(ach("notable").isEarned(inputs: .zero) == false)
+        #expect(ach("notable").isEarned(inputs: Trophies.inputs(from: [makeCatch(icao: "aaa004")])) == false)
         let one = Trophies.inputs(from: [makeCatch(icao: "aaa001", notable: Self.team)])
         #expect(ach("notable").isEarned(inputs: one))
-        #expect(ach("notable2").isEarned(inputs: one) == false)
-        #expect(ach("notablekinds").isEarned(inputs: one) == false)
-
-        // Nine airframes across three kinds: neither hard trophy yet.
-        let kinds = ["team", "business", "government"]
-        var catches = (0..<9).map { i in
-            makeCatch(icao: String(format: "bbb%03d", i),
-                      notable: NotablePlane(kind: kinds[i % 3], label: kinds[i % 3], name: nil))
-        }
-        var inputs = Trophies.inputs(from: catches)
-        #expect(ach("notable2").isEarned(inputs: inputs) == false)
-        #expect(ach("notablekinds").isEarned(inputs: inputs) == false)
-
-        // The tenth is a fourth kind (one the app has never heard of).
-        catches.append(makeCatch(icao: "bbb009",
-                                 notable: NotablePlane(kind: "zeppelin", label: "Airship", name: nil)))
-        inputs = Trophies.inputs(from: catches)
-        #expect(ach("notable2").isEarned(inputs: inputs))
-        #expect(ach("notablekinds").isEarned(inputs: inputs))
     }
 
-    @Test func notableTrophiesSitInTheRosterAsATrackAndAFeat() {
-        #expect(TrophyTracks.track(forAchievementID: "notable")?.id == "notables")
-        #expect(TrophyTracks.level(ofAchievementID: "notable2") == 2)
-        #expect(TrophyTracks.track(forAchievementID: "notablekinds") == nil)
-        #expect(TrophyTracks.featSymbols["notablekinds"] != nil)
-        #expect(ach("notable2").threshold == 10)
-        #expect(ach("notablekinds").threshold == 4)
+    @Test func starSightingIsTheOnlyNotableTrophyAndAFeat() {
+        #expect(ach("notable").title == "Star Sighting")
+        #expect(ach("notable").threshold == 1)
+        #expect(TrophyTracks.track(forAchievementID: "notable") == nil)
+        #expect(TrophyTracks.feats().contains { $0.id == "notable" })
+        #expect(TrophyTracks.featSymbols["notable"] != nil)
+        #expect(TrophyTracks.displayTitle(for: ach("notable")) == "Star Sighting")
+        #expect(Trophies.roster.filter { $0.id.hasPrefix("notable") }.map(\.id) == ["notable"])
     }
 
     // MARK: Backfill
@@ -622,7 +604,7 @@ struct NotablePlaneTests {
         #expect(calls == 0 && !r.isComplete)
     }
 
-    // MARK: Hangar filter
+    // MARK: Hangar search
 
     private func rows(_ catches: [Catch]) -> [HangarRow] {
         HangarGrouping.group(catches, by: .recent).first?.rows ?? []
@@ -638,7 +620,7 @@ struct NotablePlaneTests {
         #expect(row.notableInfo == Self.team)
     }
 
-    @Test func notableFilterAndSearchWordKeepOnlyNotableRows() {
+    @Test func notableSearchWordKeepsOnlyNotableRows() {
         let catches = [
             makeCatch(icao: "aaa001", at: 1_790_000_300, notable: Self.team),
             makeCatch(icao: "aaa002", at: 1_790_000_200),
@@ -646,31 +628,21 @@ struct NotablePlaneTests {
         ]
         let all = rows(catches)
         let index = HangarGrouping.searchIndex(for: all)
-        #expect(HangarGrouping.notableOnly(all, index: index).map(\.icao24) == ["aaa001", "aaa003"])
         // The word works in the search field too, like a tier name.
         #expect(HangarGrouping.search(all, query: "notable").map(\.icao24) == ["aaa001", "aaa003"])
         #expect(HangarGrouping.search(all, query: "NOTABLE b738").map(\.icao24) == ["aaa001", "aaa003"])
         // Findable by who it is, and by category.
         #expect(HangarGrouping.search(all, query: "warriors").map(\.icao24) == ["aaa001"])
         #expect(HangarGrouping.search(all, query: "business jet").map(\.icao24) == ["aaa003"])
-
-        // The toggle and a query combine.
-        #expect(HangarRecentView.visibleRows(all, index: index, query: "", notableOnly: true).count == 2)
-        #expect(HangarRecentView.visibleRows(all, index: index, query: "warriors", notableOnly: true)
-            .map(\.icao24) == ["aaa001"])
-        #expect(HangarRecentView.visibleRows(all, index: index, query: "zzz", notableOnly: true).isEmpty)
-        #expect(HangarRecentView.visibleRows(all, index: index, query: "", notableOnly: false).count == 3)
+        #expect(index.map(\.isNotablePlane) == [true, false, true])
     }
 
-    @Test func notableFilterEmptyStates() {
+    @Test func notableSearchEmptyStates() {
         let plain = rows([makeCatch(icao: "aaa002")])
         #expect(HangarGrouping.search(plain, query: "notable").isEmpty)
-        #expect(HangarRecentView.emptyMessage(query: "notable", notableOnly: false)
-                == "No notable planes caught yet")
-        #expect(HangarRecentView.emptyMessage(query: "zzz", notableOnly: true)
-                == "No notable catches match \u{201C}zzz\u{201D}")
-        #expect(HangarRecentView.emptyMessage(query: "zzz", notableOnly: false)
-                == "No catches match \u{201C}zzz\u{201D}")
+        #expect(HangarRecentView.emptyMessage(query: "notable") == "No notable planes caught yet")
+        #expect(HangarRecentView.emptyMessage(query: "Notable") == "No notable planes caught yet")
+        #expect(HangarRecentView.emptyMessage(query: "zzz") == "No catches match \u{201C}zzz\u{201D}")
     }
 
     // MARK: Analytics

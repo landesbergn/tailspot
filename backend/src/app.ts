@@ -109,9 +109,8 @@ export interface BuildAppOptions {
   /**
    * The notable-planes directory (src/notable/): stamps `notable` on
    * /v1/aircraft and the catch responses, and prices the notable bonus in the
-   * default catch store. Production (index.ts) passes the instance it also
-   * refreshes from upstream; omitted, the app loads the committed snapshot and
-   * never refreshes it. buildApp itself starts no timer and makes no request.
+   * default catch store. Omitted (production), the app loads the committed
+   * snapshot; tests inject a small one.
    * An injected `catchStore` scores with whatever directory IT was built with.
    */
   notableDirectory?: NotableLookup;
@@ -491,10 +490,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     options.notableDirectory ??
     NotableDirectory.fromSnapshot({
       onError: (err) =>
-        app.log.error(
-          { err },
-          "notable snapshot failed to load; no plane is notable until a refresh",
-        ),
+        app.log.error({ err }, "notable snapshot failed to load; no plane is notable"),
     });
 
   // GET /v1/aircraft — cached, single-flighted position proxy (WP 1.3).

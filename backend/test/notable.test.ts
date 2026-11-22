@@ -1,24 +1,15 @@
 /**
  * Notable planes, unit level: the CSV parser, the row mapping and its
- * exclusion rules, the snapshot file, and the refresh (accept / reject /
- * fallback). No test here touches the network: every fetcher is injected.
+ * exclusion rules, the snapshot file, and the directory. No test here
+ * touches the network.
  */
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { parseCsv } from "../src/notable/csv.js";
 import {
-  MAX_UPSTREAM_CSV_BYTES,
-  MIN_ENTRIES_WITHOUT_SNAPSHOT,
   NotableDirectory,
-  type NotableRefreshOutcome,
-  PLANE_ALERT_DB_CSV_URL,
-  countNotableKinds,
   loadNotableSnapshot,
-  makePlaneAlertCsvFetcher,
-  notableRefreshEnabled,
   parseNotableSnapshot,
-  readCappedText,
   serializeNotableSnapshot,
-  startNotableRefresh,
 } from "../src/notable/directory.js";
 import {
   CATEGORY_KINDS,
@@ -38,15 +29,6 @@ const HEADER =
 /** One upstream CSV line. Fields are quoted only when the test passes quotes. */
 function line(icao: string, operator: string, cmpg: string, category: string, reg = "N1"): string {
   return `${icao},${reg},${operator},Some Type,B738,${cmpg},Tag One,Tag Two,Tag Three,${category},https://example.invalid/x`;
-}
-
-/** A CSV of `n` mapped rows (hex 100000 upward), for refresh-size tests. */
-function csvOf(n: number, category = "Bizjets"): string {
-  const rows = [HEADER];
-  for (let i = 0; i < n; i++) {
-    rows.push(line((0x100000 + i).toString(16), `Operator ${i}`, "Civ", category));
-  }
-  return `${rows.join("\n")}\n`;
 }
 
 describe("parseCsv", () => {
@@ -382,9 +364,6 @@ describe("the committed snapshot", () => {
   });
 });
 
-/** Zero for every kind, to spread into an expected per-kind count. */
-const NO_KINDS = { government: 0, celebrity: 0, business: 0, team: 0, special: 0, working: 0 };
-
 describe("NotableDirectory", () => {
   const seed = () =>
     new NotableDirectory(
@@ -416,319 +395,10 @@ describe("NotableDirectory", () => {
     });
     expect(dir.size).toBe(0);
     expect(errors).toHaveLength(1);
-    expect(dir.minimumRefreshEntries).toBe(MIN_ENTRIES_WITHOUT_SNAPSHOT);
   });
 
   it("fromSnapshot with no arguments loads the committed file", () => {
     expect(NotableDirectory.fromSnapshot().size).toBe(loadNotableSnapshot().size);
-  });
-
-  it("refresh ACCEPTS a plausible result and swaps the data", async () => {
-    const dir = seed();
-    const outcome = await dir.refresh(async () => csvOf(7));
-    expect(outcome).toEqual({
-      status: "updated",
-      entries: 7,
-      previous: 10,
-      kinds: { ...NO_KINDS, business: 7 },
-    });
-    expect(dir.size).toBe(7);
-    expect(dir.lookup("100000")).toEqual({
-      kind: "business",
-      label: "Business jet",
-      name: "Operator 0",
-    });
-    // An airframe upstream dropped is no longer notable.
-    expect(dir.lookup("a00003")).toBeUndefined();
-  });
-
-  it("refresh accepts exactly half the snapshot and REJECTS one fewer", async () => {
-    const dir = seed();
-    expect(dir.minimumRefreshEntries).toBe(5);
-    expect(await dir.refresh(async () => csvOf(4))).toEqual({
-      status: "rejected",
-      reason: "4 airframes, fewer than the minimum of 5",
-      entries: 4,
-      minimum: 5,
-      kinds: { ...NO_KINDS, business: 4 },
-      minimumKinds: { ...NO_KINDS, business: 5 },
-      kept: 10,
-    });
-    expect(dir.size).toBe(10);
-    expect(dir.lookup("a00003")?.name).toBe("Seed 3");
-    expect((await dir.refresh(async () => csvOf(5))).status).toBe("updated");
-  });
-
-  it("the size floor stays pinned to the SNAPSHOT, not to the last refresh", async () => {
-    const dir = seed();
-    await dir.refresh(async () => csvOf(100));
-    expect(dir.size).toBe(100);
-    // 5 is half the snapshot's 10; it is not held to half of 100.
-    expect((await dir.refresh(async () => csvOf(5))).status).toBe("updated");
-    expect((await dir.refresh(async () => csvOf(4))).status).toBe("rejected");
-  });
-
-  it("refresh rejects an error page served as text, and an empty body", async () => {
-    const dir = seed();
-    for (const body of ["<html>503 Service Unavailable</html>", "", HEADER]) {
-      expect((await dir.refresh(async () => body)).status).toBe("rejected");
-    }
-    expect(dir.size).toBe(10);
-  });
-
-  it("refresh FALLS BACK to the current data when the fetch fails, and never throws", async () => {
-    const dir = seed();
-    expect(
-      await dir.refresh(async () => {
-        throw new Error("HTTP 503");
-      }),
-    ).toEqual({ status: "failed", error: "HTTP 503", kept: 10 });
-    // A fetcher that throws synchronously, or throws a non-Error.
-    expect(
-      (
-        await dir.refresh(() => {
-          throw "boom";
-        })
-      ).status,
-    ).toBe("failed");
-    expect(dir.size).toBe(10);
-    expect(dir.lookup("a00003")?.name).toBe("Seed 3");
-  });
-
-  it("refresh times out a fetch that never answers, and aborts it", async () => {
-    const dir = seed();
-    let aborted = false;
-    const outcome = await dir.refresh(
-      (signal) =>
-        new Promise<string>(() => {
-          signal.addEventListener("abort", () => {
-            aborted = true;
-          });
-        }),
-      { timeoutMs: 20 },
-    );
-    expect(outcome).toEqual({ status: "failed", error: "no answer within 20 ms", kept: 10 });
-    expect(aborted).toBe(true);
-    expect(dir.size).toBe(10);
-  });
-
-  describe("per-kind floor", () => {
-    // A snapshot of 20 business jets, 6 team planes and 1 celebrity.
-    const mixed = () => {
-      const entries = new Map<string, Notable>();
-      let n = 0xb00000;
-      const add = (kind: NotableKind, count: number) => {
-        for (let i = 0; i < count; i++) entries.set((n++).toString(16), makeNotable(kind));
-      };
-      add("business", 20);
-      add("team", 6);
-      add("celebrity", 1);
-      return new NotableDirectory(entries);
-    };
-    /** An upstream CSV with the given number of rows per category. */
-    const csvWith = (counts: Record<string, number>) => {
-      const rows = [HEADER];
-      let n = 0x200000;
-      for (const [category, count] of Object.entries(counts)) {
-        for (let i = 0; i < count; i++) rows.push(line((n++).toString(16), "Op", "Civ", category));
-      }
-      return rows.join("\n");
-    };
-    const CELEB = "Don't you know who I am?";
-
-    it("each kind in the snapshot is held to half its own count", () => {
-      expect(mixed().minimumRefreshKinds).toEqual({
-        ...NO_KINDS,
-        business: 10,
-        team: 3,
-        celebrity: 1,
-      });
-      // No snapshot: no per-kind floor at all.
-      expect(new NotableDirectory().minimumRefreshKinds).toEqual(NO_KINDS);
-    });
-
-    it("REJECTS a refresh that clears the total but empties one kind, and says which", async () => {
-      const dir = mixed();
-      // 27 in the snapshot → total floor 14. This has 40, but no team planes:
-      // what an upstream rename of the Football category would look like.
-      const outcome = await dir.refresh(async () => csvWith({ Bizjets: 39, [CELEB]: 1 }));
-      expect(outcome).toEqual({
-        status: "rejected",
-        reason: "team: 0, minimum 3",
-        entries: 40,
-        minimum: 14,
-        kinds: { ...NO_KINDS, business: 39, celebrity: 1 },
-        minimumKinds: { ...NO_KINDS, business: 10, team: 3, celebrity: 1 },
-        kept: 27,
-      });
-      expect(dir.size).toBe(27);
-      expect(dir.lookup("b00014")?.kind).toBe("team"); // the old data still serves
-    });
-
-    it("rejects one below a kind's floor and accepts exactly on it", async () => {
-      const dir = mixed();
-      const below = await dir.refresh(async () =>
-        csvWith({ Bizjets: 20, Football: 2, [CELEB]: 1 }),
-      );
-      expect(below).toMatchObject({ status: "rejected", reason: "team: 2, minimum 3" });
-      const on = await dir.refresh(async () => csvWith({ Bizjets: 10, Football: 3, [CELEB]: 1 }));
-      expect(on).toEqual({
-        status: "updated",
-        entries: 14,
-        previous: 27,
-        kinds: { ...NO_KINDS, business: 10, team: 3, celebrity: 1 },
-      });
-    });
-
-    it("names every kind that fell short", async () => {
-      const outcome = await mixed().refresh(async () => csvWith({ Bizjets: 30 }));
-      expect(outcome).toMatchObject({
-        status: "rejected",
-        reason: "celebrity: 0, minimum 1; team: 0, minimum 3",
-      });
-    });
-
-    it("a kind the snapshot lacks has no floor, and a new kind is welcome", async () => {
-      const dir = mixed();
-      const outcome = await dir.refresh(async () =>
-        csvWith({ Bizjets: 20, Football: 6, [CELEB]: 1, Historic: 50 }),
-      );
-      expect(outcome).toMatchObject({ status: "updated", kinds: { special: 50, working: 0 } });
-    });
-
-    it("the per-kind floor stays pinned to the snapshot across refreshes", async () => {
-      const dir = mixed();
-      await dir.refresh(async () => csvWith({ Bizjets: 20, Football: 100, [CELEB]: 1 }));
-      // Team is held to 3 (half the snapshot's 6), not to half of 100.
-      expect(
-        (await dir.refresh(async () => csvWith({ Bizjets: 20, Football: 3, [CELEB]: 1 }))).status,
-      ).toBe("updated");
-    });
-
-    it("the committed snapshot sets a floor for all six kinds", () => {
-      const floors = NotableDirectory.fromSnapshot().minimumRefreshKinds;
-      for (const kind of Object.keys(NOTABLE_LABELS) as NotableKind[]) {
-        expect(floors[kind], kind).toBeGreaterThan(0);
-      }
-      expect(floors).toEqual(
-        Object.fromEntries(
-          Object.entries(countNotableKinds(loadNotableSnapshot())).map(([k, n]) => [
-            k,
-            Math.ceil(n / 2),
-          ]),
-        ),
-      );
-    });
-  });
-
-  it("with no snapshot, a refresh must clear the absolute floor", async () => {
-    const dir = new NotableDirectory();
-    expect((await dir.refresh(async () => csvOf(MIN_ENTRIES_WITHOUT_SNAPSHOT - 1))).status).toBe(
-      "rejected",
-    );
-    expect((await dir.refresh(async () => csvOf(MIN_ENTRIES_WITHOUT_SNAPSHOT))).status).toBe(
-      "updated",
-    );
-  });
-});
-
-describe("the upstream fetcher: body cap", () => {
-  const signal = new AbortController().signal;
-  /** A streamed body of `chunks` chunks of `size` bytes, with pull/cancel counters. */
-  function streamed(chunks: number, size: number, headers: Record<string, string> = {}) {
-    const state = { pulled: 0, cancelled: false };
-    const body = new ReadableStream<Uint8Array>({
-      pull(controller) {
-        if (state.pulled >= chunks) return controller.close();
-        state.pulled += 1;
-        controller.enqueue(new Uint8Array(size).fill(0x61));
-      },
-      cancel() {
-        state.cancelled = true;
-      },
-    });
-    return { state, res: new Response(body, { headers }) };
-  }
-
-  it("reads a body under the cap, across chunks, including a split multi-byte character", async () => {
-    expect(await readCappedText(new Response("a,b\n1,2\n"), 100)).toBe("a,b\n1,2\n");
-    const bytes = new TextEncoder().encode("Société ✈ Aérienne");
-    const body = new ReadableStream<Uint8Array>({
-      start(controller) {
-        for (const b of bytes) controller.enqueue(Uint8Array.of(b)); // one byte per chunk
-        controller.close();
-      },
-    });
-    expect(await readCappedText(new Response(body), 100)).toBe("Société ✈ Aérienne");
-    // Exactly at the cap is allowed.
-    expect(await readCappedText(streamed(4, 25).res, 100)).toHaveLength(100);
-    expect(await readCappedText(new Response(null), 100)).toBe("");
-  });
-
-  it("refuses on content-length alone, before reading a byte", async () => {
-    const over = MAX_UPSTREAM_CSV_BYTES + 1;
-    const { state, res } = streamed(1000, 1024, { "content-length": String(over) });
-    await expect(readCappedText(res, MAX_UPSTREAM_CSV_BYTES)).rejects.toThrow(
-      `response too large: content-length ${over} exceeds ${MAX_UPSTREAM_CSV_BYTES} bytes`,
-    );
-    expect(state.pulled).toBeLessThanOrEqual(1); // at most the stream's own prefetch
-    expect(state.cancelled).toBe(true);
-    expect(MAX_UPSTREAM_CSV_BYTES).toBe(8 * 1024 * 1024);
-  });
-
-  it("aborts a stream that runs past the cap, whatever content-length claimed", async () => {
-    // No header at all, and a header that lies low: both are counted, not trusted.
-    for (const headers of [{}, { "content-length": "10" }] as Record<string, string>[]) {
-      const { state, res } = streamed(1_000_000, 1024, headers);
-      await expect(readCappedText(res, 10 * 1024)).rejects.toThrow(
-        "response too large: more than 10240 bytes",
-      );
-      // It stopped just past the cap instead of draining a gigabyte.
-      expect(state.pulled).toBeLessThanOrEqual(12);
-      expect(state.cancelled).toBe(true);
-    }
-  });
-
-  it("the fetcher applies the cap, sends no user data, and rejects a non-2xx", async () => {
-    const calls: { url: string; init: RequestInit | undefined }[] = [];
-    const ok = makePlaneAlertCsvFetcher({
-      fetchFn: (async (url: string, init?: RequestInit) => {
-        calls.push({ url, init });
-        return new Response(csvOf(2));
-      }) as typeof fetch,
-    });
-    expect(await ok(signal)).toBe(csvOf(2));
-    expect(calls).toHaveLength(1);
-    expect(calls[0].url).toBe(PLANE_ALERT_DB_CSV_URL);
-    expect(calls[0].init?.signal).toBe(signal);
-    expect(calls[0].init?.headers).toEqual({ "user-agent": "tailspot-api-notable-refresh" });
-
-    const tooBig = makePlaneAlertCsvFetcher({
-      maxBytes: 64,
-      fetchFn: (async () => new Response(csvOf(50))) as typeof fetch,
-    });
-    await expect(tooBig(signal)).rejects.toThrow("response too large");
-
-    const down = makePlaneAlertCsvFetcher({
-      fetchFn: (async () => new Response("nope", { status: 503 })) as typeof fetch,
-    });
-    await expect(down(signal)).rejects.toThrow("HTTP 503");
-  });
-
-  it("an oversized upstream body is a FAILED refresh that keeps the current data", async () => {
-    const dir = new NotableDirectory(new Map([["a00000", makeNotable("business", "Seed")]]));
-    const outcome = await dir.refresh(
-      makePlaneAlertCsvFetcher({
-        maxBytes: 64,
-        fetchFn: (async () => new Response(csvOf(50))) as typeof fetch,
-      }),
-    );
-    expect(outcome).toEqual({
-      status: "failed",
-      error: "response too large: more than 64 bytes",
-      kept: 1,
-    });
-    expect(dir.lookup("a00000")?.name).toBe("Seed");
   });
 });
 
@@ -749,75 +419,5 @@ describe("the real upstream shape", () => {
     // The committed snapshot is real data that changes when regenerated, so
     // only its shape is checked here, never a particular airframe.
     expect(loadNotableSnapshot().size).toBeGreaterThan(1000);
-  });
-});
-
-describe("refresh wiring", () => {
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  it("is off under test and when NOTABLE_REFRESH says so", () => {
-    expect(notableRefreshEnabled({ NODE_ENV: "test" })).toBe(false);
-    expect(notableRefreshEnabled({ NODE_ENV: "production" })).toBe(true);
-    expect(notableRefreshEnabled({})).toBe(true);
-    for (const flag of ["off", "OFF", " off ", "false", "0", "no"]) {
-      expect(notableRefreshEnabled({ NODE_ENV: "production", NOTABLE_REFRESH: flag }), flag).toBe(
-        false,
-      );
-    }
-    expect(notableRefreshEnabled({ NODE_ENV: "production", NOTABLE_REFRESH: "on" })).toBe(true);
-    expect(notableRefreshEnabled({ NODE_ENV: "production", NOTABLE_REFRESH: "" })).toBe(true);
-    // The suite itself runs with the refresh off.
-    expect(notableRefreshEnabled()).toBe(false);
-  });
-
-  it("refreshes shortly after start and then daily, reports each outcome, and stops", async () => {
-    vi.useFakeTimers();
-    const dir = new NotableDirectory(new Map([["a00000", makeNotable("team")]]));
-    let fetches = 0;
-    const outcomes: NotableRefreshOutcome[] = [];
-    const stop = startNotableRefresh(dir, {
-      fetchCsv: async () => {
-        fetches++;
-        if (fetches === 2) throw new Error("HTTP 500");
-        return csvOf(3, "Football");
-      },
-      onOutcome: (o) => {
-        outcomes.push(o);
-        throw new Error("a listener that throws must not stop the refresh");
-      },
-    });
-
-    expect(fetches).toBe(0); // nothing at start: boot is never delayed
-    await vi.advanceTimersByTimeAsync(30_000);
-    expect(fetches).toBe(1);
-    expect(dir.size).toBe(3);
-
-    await vi.advanceTimersByTimeAsync(24 * 60 * 60_000);
-    expect(fetches).toBe(2); // this one fails: the data stays
-    expect(dir.size).toBe(3);
-
-    await vi.advanceTimersByTimeAsync(24 * 60 * 60_000);
-    expect(fetches).toBe(3);
-    expect(outcomes.map((o) => o.status)).toEqual(["updated", "failed", "updated"]);
-
-    stop();
-    await vi.advanceTimersByTimeAsync(3 * 24 * 60 * 60_000);
-    expect(fetches).toBe(3);
-  });
-
-  it("stop before the first run cancels it", async () => {
-    vi.useFakeTimers();
-    let fetches = 0;
-    const stop = startNotableRefresh(new NotableDirectory(), {
-      fetchCsv: async () => {
-        fetches++;
-        return "";
-      },
-    });
-    stop();
-    await vi.advanceTimersByTimeAsync(2 * 24 * 60 * 60_000);
-    expect(fetches).toBe(0);
   });
 });

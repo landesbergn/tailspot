@@ -220,7 +220,6 @@ nonisolated struct TrophyProgressInputs: Sendable {
     // catch rows (`Catch.notableInfo`, NotablePlane.swift). Nothing to do
     // with `Rarity.isNotable` (rare-or-better).
     let notableAirframes: Int       // distinct icao24 carrying the flag
-    let notableKinds: Int           // distinct notable kinds among them
 
     init(
         totalCatches: Int,
@@ -264,8 +263,7 @@ nonisolated struct TrophyProgressInputs: Sendable {
         bestGuessStreak: Int = 0,
         weeklyWins: Int = 0,
         everToppedAllTime: Bool = false,
-        notableAirframes: Int = 0,
-        notableKinds: Int = 0
+        notableAirframes: Int = 0
     ) {
         self.totalCatches = totalCatches
         self.uniqueAirframes = uniqueAirframes
@@ -309,7 +307,6 @@ nonisolated struct TrophyProgressInputs: Sendable {
         self.weeklyWins = weeklyWins
         self.everToppedAllTime = everToppedAllTime
         self.notableAirframes = notableAirframes
-        self.notableKinds = notableKinds
     }
 
     static let zero = TrophyProgressInputs(
@@ -566,15 +563,11 @@ nonisolated enum Trophies {
                     progress: { $0.heritageCatches }),
 
         // ── Notable airframes (2026-11) ──
-        // Planes the server flags as notable (a head of state's transport,
-        // a team charter, ...). Counted by distinct airframe, so catching
-        // one team plane ten times is one. Hard on purpose: most skies
-        // never see one.
+        // Star Sighting: catch a plane the server flags as notable (a head
+        // of state's transport, a team charter, ...). One trophy, a feat.
+        // Hard on purpose: most skies never see one.
         Achievement(id: "notable", title: "Star Sighting", summary: "Catch a notable plane",
                     tiers: [.init(tier: .gold, at: 1)],
-                    progress: { $0.notableAirframes }),
-        Achievement(id: "notable2", title: "Who's Who", summary: "Catch 10 different notable planes",
-                    tiers: [.init(tier: .gold, at: 10)],
                     progress: { $0.notableAirframes }),
 
         // ── Rarity one-shots ──
@@ -703,14 +696,6 @@ nonisolated enum Trophies {
         Achievement(id: "hotstreak", title: "Hot Streak", summary: "Three correct route calls in a row",
                     tiers: [.init(tier: .gold, at: 1)], secret: true,
                     progress: { $0.bestGuessStreak >= 3 ? 1 : 0 }),
-        // Four of a Kind (2026-11): a notable plane in each of four
-        // different notable kinds (say a team plane, a business jet, a
-        // head of state and a historic aircraft). Not secret: the two
-        // Notables levels already say the category exists.
-        Achievement(id: "notablekinds", title: "Four of a Kind",
-                    summary: "Catch notable planes of four different kinds",
-                    tiers: [.init(tier: .gold, at: 4)],
-                    progress: { $0.notableKinds }),
         // Dynasty (dynamic-leaderboards PR3): three weekly crowns, off the
         // same server-fact input as Top Flight. Secret — masked `???` until
         // earned, the Hot Streak treatment. Deliberately NO `prerequisite`
@@ -794,14 +779,12 @@ nonisolated enum Trophies {
         // offered rounds leave guessCorrect nil and don't participate.
         var guessTimeline: [(Date, Bool)] = []
         var notableAirframes = Set<String>()
-        var notableKinds = Set<String>()
         let calendar = Calendar(identifier: .gregorian)
 
         for c in catches {
             unique.insert(c.icao24)
-            if let notable = c.notableInfo {
+            if c.notableInfo != nil {
                 notableAirframes.insert(c.icao24)
-                notableKinds.insert(notable.kind)
             }
             let r = c.resolvedRarity
             let t = c.resolvedType
@@ -980,8 +963,7 @@ nonisolated enum Trophies {
             bestGuessStreak: bestGuessStreak(guessTimeline),
             weeklyWins: standing.weeklyWins,
             everToppedAllTime: standing.everToppedAllTime,
-            notableAirframes: notableAirframes.count,
-            notableKinds: notableKinds.count
+            notableAirframes: notableAirframes.count
         )
     }
 

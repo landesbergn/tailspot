@@ -140,14 +140,8 @@ enum HangarGrouping {
     }
 
     /// The search word that means "notable airframes only", like a tier
-    /// name. Also what the Catches list's Notable toggle filters by.
+    /// name.
     static let notableTerm = "notable"
-
-    /// Rows that are notable airframes, order kept. Backs the Catches
-    /// list's Notable toggle.
-    static func notableOnly(_ rows: [HangarRow], index: [SearchEntry]) -> [HangarRow] {
-        zip(rows, index).compactMap { row, entry in entry.isNotablePlane ? row : nil }
-    }
 
     /// Filters rows to those matching `query`, keeping order. Each
     /// whitespace-separated term must match. A term that is exactly a

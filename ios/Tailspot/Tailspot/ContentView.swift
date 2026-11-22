@@ -4890,7 +4890,7 @@ struct ContentView: View {
     /// One-time reconcile of the notable-airframe flag on catches made
     /// before the app knew about it (NotableBackfill.swift). It only writes
     /// the three notable fields. When it changes a row, re-diff the trophies
-    /// so the Notables ones unlock now rather than on the next catch.
+    /// so Star Sighting unlocks now rather than on the next catch.
     private func runNotableBackfill() async {
         let changed = await NotableBackfillRunner().runIfNeeded(context: modelContext)
         if (changed ?? 0) > 0 {

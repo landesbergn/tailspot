@@ -183,7 +183,7 @@ from depends on the path:
 - **Fresh insert** (`201`): the decision of the scoring that produced the
   returned `points`, the same single directory lookup. A response can never
   show the bonus without the object or the object without the bonus, even if
-  the directory is refreshed mid-request.
+  the two were computed apart.
 - **Replay** (`200`, `duplicate: true`): the points stored when the catch was
   first scored, plus what the directory says now.
 - **`GET /v1/catches`**: likewise stored points plus the directory's current
@@ -214,60 +214,39 @@ they live:
   raw category never leave the server: they are the maintainers' in-jokes and
   editorial labels.
 
-**No maintenance.** There is no table, no migration and no ingest step:
+**No moving parts.** There is no table, no migration, no ingest step and no
+network call. At boot the server loads the committed snapshot,
+`data/notable-airframes.json` (already filtered and mapped), and serves it
+until the next deploy. If the file is missing or corrupt the server logs an
+error and starts with nothing notable.
 
-1. At boot the server loads the committed snapshot,
-   `data/notable-airframes.json` (already filtered and mapped). If the file is
-   missing or corrupt the server logs an error and starts with nothing notable.
-2. Thirty seconds after boot, and every 24 hours, each machine fetches the
-   upstream CSV from `raw.githubusercontent.com` (20 s timeout), maps it and
-   swaps the whole directory in memory. The body is capped at 8 MB (the file
-   is about 2.4 MB): a larger `content-length` is refused outright, and the
-   body is otherwise read as a stream against a running byte count and
-   aborted when it passes the cap, so it is never buffered unbounded.
-3. A refresh is **rejected** when it looks wrong, and the data already in
-   memory keeps serving. Both floors are measured against the committed
-   snapshot, not against the previous refresh:
-   - fewer than half the snapshot's entries in total, which is what a
-     truncated download, an error page or an upstream reorganisation looks
-     like; or
-   - any one kind below half of that kind's count in the snapshot. The total
-     alone would pass an upstream category rename that empties a small kind
-     (all 22 team planes, say) while the other five thousand rows look fine.
-4. Every outcome is logged with its per-kind counts: `notable planes
-   refreshed from plane-alert-db` at info with `kinds`, or a warning for
-   `failed` (fetch error, timeout, body over the cap) or `rejected` (with
-   `reason`, `kinds` and the `minimumKinds` floors, so the log names the kind
-   that fell short).
-
-`NOTABLE_REFRESH=off` turns the refresh off and pins the server to the
-snapshot. The refresh never runs under test.
-
-**Regenerating the snapshot.** Only needed when the rules in `mapping.ts`
-change (the running server refreshes itself):
+**Regenerating the snapshot.** The list changes slowly. Regenerate it when a
+release train opens, or when the rules in `mapping.ts` change:
 
 ```sh
 npm run notable:snapshot                       # fetch upstream, rewrite data/notable-airframes.json
 npm run notable:snapshot -- --input file.csv   # from a saved copy
 ```
 
-Commit the diff. The Docker image copies `data/notable-airframes.json`, so a
-new snapshot reaches production with the next deploy.
+Read the diff before committing it: every added line is a name that will
+appear in the app, and a category that lost most of its rows means upstream
+renamed something. The Docker image copies `data/notable-airframes.json`, so
+a new snapshot reaches production with the next deploy; run `npm run rescore`
+after that deploy.
 
 **Rescore.** Nothing about notability is stored on a catch: the scorer asks
-the directory by icao24 each time. So `npm run rescore` loads the snapshot and
-refreshes it once from upstream before scoring, to use the same data as the
-server (it prints which it used; `NOTABLE_REFRESH=off` skips the fetch). Two
+the directory by icao24 each time. `npm run rescore` loads the same committed
+snapshot, so run it from the deployed commit. Two
 consequences:
 
 - **Deploying scoring version 11 needs `npm run rescore` afterwards**, to pay
   the bonus on past catches of notable airframes. Run `-- --dry-run` first and
   read the delta.
 - The default rescore only revisits unresolved or older-version rows. When
-  upstream later adds an airframe someone already caught, that old catch shows
-  `notable` in `GET /v1/catches` straight away but keeps its old points until
-  a `npm run rescore -- --all`. The same full pass takes the bonus back from
-  catches of an airframe upstream has since removed.
+  a regenerated snapshot adds an airframe someone already caught, that old
+  catch shows `notable` in `GET /v1/catches` once the snapshot is deployed but
+  keeps its old points until a `npm run rescore -- --all`. The same full pass
+  takes the bonus back from catches of an airframe the snapshot has dropped.
 
 ### `GET /v1/metadata/{icao24}` (WP 1.4)
 
@@ -553,7 +532,6 @@ stub session.
 | `STALE_MAX_SECONDS` | `60` | Max age of a last-good snapshot served on upstream failure. |
 | `CACHE_TILE_SIZE_DEG` | `0.25` | Grid size for bbox→tile quantization. |
 | `UPSTREAM_RPS` | `0.8` | Position-feed requests per second this process may send (adsb.fi allows 1/s per IP). Per machine: two running machines share the egress IP. |
-| `NOTABLE_REFRESH` | — (on) | `off` stops the daily refresh of the notable-planes directory from plane-alert-db; the server then serves the committed snapshot only. See "Notable planes". |
 | `SITE_PROBE_URLS` | tailspot.app home + AASA file | Comma-separated URLs the API probes every 60 s for the website-down alert. `off` disables. |
 | `DATABASE_URL` | — | Postgres connection string. Required for `/v1/metadata` and the ingest jobs; read lazily (the position-only endpoints don't need it). |
 | `STATS_ALLOWED_ORIGINS` | — | Comma-separated extra browser origins allowed to read `/v1/stats` (tailspot.app, www, and the preview site are always allowed). |

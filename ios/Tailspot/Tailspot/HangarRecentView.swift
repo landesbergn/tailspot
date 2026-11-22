@@ -19,13 +19,10 @@ struct HangarRecentView: View {
     @Query(sort: \Catch.caughtAt, order: .reverse) private var catches: [Catch]
     @State private var rowToDelete: HangarRow?
     @State private var query: String
-    /// The Notable toggle in the search field: show notable airframes only.
-    @State private var notableOnly: Bool
 
-    /// The parameters exist for the snapshot harness; the app passes nothing.
-    init(initialQuery: String = "", initialNotableOnly: Bool = false) {
+    /// `initialQuery` exists for the snapshot harness; the app passes nothing.
+    init(initialQuery: String = "") {
         _query = State(initialValue: initialQuery)
-        _notableOnly = State(initialValue: initialNotableOnly)
     }
     /// Memoizes the grouped rows AND the first-of-type row set across body
     /// evals — this body used to run the full HangarGrouping pass TWICE per
@@ -59,18 +56,13 @@ struct HangarRecentView: View {
         // check, so deleting down to five can't leave an invisible query
         // hiding cards.
         let showsSearch = allRows.count >= HangarGrouping.searchMinRows
-        // The Notable toggle only exists once the Hangar holds a notable
-        // airframe, and the filter is gated on the same checks as the
-        // toggle, so it can never hide cards with no control to undo it.
-        let showsNotableToggle = showsSearch && searchIndex.contains(where: \.isNotablePlane)
-        let filtersNotable = showsNotableToggle && notableOnly
-        let rows = HangarRecentView.visibleRows(
-            allRows, index: searchIndex, query: showsSearch ? query : "",
-            notableOnly: filtersNotable)
+        let rows = showsSearch
+            ? HangarGrouping.search(allRows, index: searchIndex, query: query)
+            : allRows
         let trimmedQuery = query.trimmingCharacters(in: .whitespaces)
         return VStack(spacing: 0) {
             if showsSearch {
-                searchField(showsNotableToggle: showsNotableToggle)
+                searchField
             }
             ScrollView {
                 if allRows.isEmpty {
@@ -79,7 +71,7 @@ struct HangarRecentView: View {
                         .foregroundStyle(Brand.Color.textTertiary)
                         .padding(.top, 32)
                 } else if rows.isEmpty {
-                    Text(HangarRecentView.emptyMessage(query: trimmedQuery, notableOnly: filtersNotable))
+                    Text(HangarRecentView.emptyMessage(query: trimmedQuery))
                         .font(Brand.Font.body)
                         .foregroundStyle(Brand.Color.textTertiary)
                         .multilineTextAlignment(.center)
@@ -134,66 +126,25 @@ struct HangarRecentView: View {
         }
     }
 
-    /// The rows the list shows: the search, then the Notable toggle.
-    static func visibleRows(_ rows: [HangarRow], index: [HangarGrouping.SearchEntry],
-                            query: String, notableOnly: Bool) -> [HangarRow] {
-        let base = notableOnly ? HangarGrouping.notableOnly(rows, index: index) : rows
-        let baseIndex = notableOnly ? index.filter(\.isNotablePlane) : index
-        return HangarGrouping.search(base, index: baseIndex, query: query)
-    }
-
-    /// What the list says when the search or the Notable toggle leaves
-    /// nothing to show.
-    static func emptyMessage(query: String, notableOnly: Bool) -> String {
-        let wordIsNotable = query.lowercased() == HangarGrouping.notableTerm
-        if query.isEmpty || wordIsNotable { return "No notable planes caught yet" }
-        return notableOnly
-            ? "No notable catches match \u{201C}\(query)\u{201D}"
+    /// What the list says when the search leaves nothing to show. The
+    /// word "notable" alone is a filter, not text to match, so it gets its
+    /// own line.
+    static func emptyMessage(query: String) -> String {
+        query.lowercased() == HangarGrouping.notableTerm
+            ? "No notable planes caught yet"
             : "No catches match \u{201C}\(query)\u{201D}"
-    }
-
-    /// The Notable toggle at the trailing end of the search field: a gold
-    /// star chip that narrows the list to notable airframes. Lives inside
-    /// the field so the Catches list keeps one control, not two rows.
-    private var notableToggle: some View {
-        Button {
-            notableOnly.toggle()
-        } label: {
-            HStack(spacing: 4) {
-                Image(systemName: "star.fill")
-                    .font(.system(size: 10, weight: .bold))
-                Text("Notable")
-                    .font(.footnote.weight(.semibold))
-            }
-            .foregroundStyle(notableOnly ? Brand.Color.bgPrimary : Brand.Color.ledgerGold)
-            .padding(.horizontal, 9)
-            .padding(.vertical, 5)
-            .background(
-                notableOnly ? Brand.Color.ledgerGold : Brand.Color.ledgerGold.opacity(0.12),
-                in: Capsule()
-            )
-            .overlay(Capsule().strokeBorder(Brand.Color.ledgerGold.opacity(0.5), lineWidth: 1))
-            .contentShape(Rectangle().inset(by: -8))
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Notable planes only")
-        .accessibilityAddTraits(notableOnly ? [.isButton, .isSelected] : .isButton)
     }
 
     /// Custom field rather than `.searchable`: that modifier attaches to the
     /// Hangar's NavigationStack, so it would show over Sets and Trophies too.
-    private func searchField(showsNotableToggle: Bool) -> some View {
+    private var searchField: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(Brand.Color.textTertiary)
             TextField(
                 "",
                 text: $query,
-                // The Notable toggle takes a third of the field, so the
-                // long hint would be cut mid-word beside it.
-                prompt: Text(showsNotableToggle
-                             ? "Search catches"
-                             : "Search callsign, airline, aircraft, tier")
+                prompt: Text("Search callsign, airline, aircraft, tier")
                     .foregroundStyle(Brand.Color.textTertiary)
             )
             .font(Brand.Font.body)
@@ -213,13 +164,9 @@ struct HangarRecentView: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("Clear search")
             }
-            if showsNotableToggle {
-                notableToggle
-            }
         }
-        .padding(.leading, 12)
-        .padding(.trailing, showsNotableToggle ? 8 : 12)
-        .padding(.vertical, showsNotableToggle ? 7 : 10)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
         .background(
             Brand.Color.bgElevated,
             in: RoundedRectangle(cornerRadius: Brand.Radius.row)

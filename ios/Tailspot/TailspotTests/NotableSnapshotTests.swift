@@ -381,28 +381,23 @@ struct NotableSnapshotTests {
         return container
     }
 
-    private func catchesScreen(query: String = "", notableOnly: Bool = false) -> some View {
+    private func catchesScreen(query: String = "") -> some View {
         NavigationStack {
             VStack(spacing: 0) {
                 HangarSegmentedSwitcher(selection: .constant(.recent))
-                HangarRecentView(initialQuery: query, initialNotableOnly: notableOnly)
+                HangarRecentView(initialQuery: query)
             }
             .background(Brand.Color.bgPrimary)
         }
     }
 
-    @Test func renderHangarCatchesFilter() async throws {
-        // Before: a Hangar with no notable airframe has no toggle at all.
+    @Test func renderHangarCatchesList() async throws {
         await hosted(catchesScreen().modelContainer(try hangar(notableCount: 0)),
                      "notable_catches_list_before")
         await hosted(catchesScreen().modelContainer(try hangar(notableCount: 3)),
                      "notable_catches_list_after")
-        await hosted(catchesScreen(notableOnly: true).modelContainer(try hangar(notableCount: 3)),
-                     "notable_catches_filter_on")
         await hosted(catchesScreen(query: "warriors").modelContainer(try hangar(notableCount: 3)),
                      "notable_catches_search_by_name")
-        await hosted(catchesScreen(query: "zzz", notableOnly: true)
-            .modelContainer(try hangar(notableCount: 3)), "notable_catches_filter_no_match")
         await hosted(catchesScreen(query: "notable").modelContainer(try hangar(notableCount: 0)),
                      "notable_catches_word_empty")
     }

@@ -7,7 +7,7 @@
  * ends, a leading UTF-8 byte-order mark, and a missing final newline. Blank
  * lines are skipped. It never throws: an unterminated quote runs to the end of
  * the input and yields whatever was read, so a truncated download produces
- * fewer rows (which the refresh's size check then rejects), not an exception.
+ * fewer rows (visible in the regenerated snapshot's diff), not an exception.
  */
 export function parseCsv(text: string): string[][] {
   const rows: string[][] = [];

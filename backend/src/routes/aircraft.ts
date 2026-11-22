@@ -94,16 +94,13 @@ function parseCoord(v: unknown): number | undefined {
 }
 
 /**
- * Set or clear `notable` on each aircraft, in place (the same objects live in
- * the tile cache, like the route enricher's). Clearing matters: a plane the
- * directory dropped on refresh must not keep a stale object from an earlier
- * serve.
+ * Set `notable` on each notable aircraft, in place (the same objects live in
+ * the tile cache, like the route enricher's).
  */
 export function attachNotable(aircraft: NormalizedAircraft[], directory: NotableLookup): void {
   for (const ac of aircraft) {
     const notable = directory.lookup(ac.icao24);
     if (notable) ac.notable = notable;
-    else if (ac.notable !== undefined) ac.notable = undefined;
   }
 }
 
@@ -151,8 +148,7 @@ export function registerAircraftRoute(app: FastifyInstance, opts: AircraftRouteO
       // so a tile-cache hit also carries routes once the route cache is warm.
       opts.routeEnricher?.enrich(snapshot.aircraft);
       // Notable planes: stamped on EVERY serve, cache hit or not, so the field
-      // never depends on which request filled the tile, and a directory
-      // refresh shows up (or clears) on the next poll. A Map read per plane.
+      // never depends on which request filled the tile. A Map read per plane.
       if (opts.notable) attachNotable(snapshot.aircraft, opts.notable);
       // fetchedAt is the upstream snapshot time (possibly stale on fallback) —
       // never the serve time. Clients reason about freshness from it.

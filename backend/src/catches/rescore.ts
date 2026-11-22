@@ -30,11 +30,10 @@
  *     only on the icao24, which every variant key already starts with.
  *
  * NOTABLE PLANES. The scorer asks the notable directory (src/notable/) about
- * each icao24. The running server holds the committed snapshot refreshed from
- * upstream once a day, so the script does the same: it loads the snapshot and
- * refreshes it once before scoring (skipped when `NOTABLE_REFRESH=off`; a
- * failed refresh falls back to the snapshot and says so). Scoring against
- * different data than the server would take back, or hand out, bonuses.
+ * each icao24. The running server serves the committed snapshot, so the
+ * script loads the same file. Run it from the commit that is deployed:
+ * scoring against a different snapshot than the server's would take back, or
+ * hand out, bonuses.
  *
  * Run as a script:  npm run rescore -- [--all] [--dry-run]
  *   (default targets only stale rows: unresolved OR older-regime.)
@@ -44,11 +43,7 @@ import { eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { type Database, closeDb, getDb } from "../db/client.js";
 import { catches } from "../db/schema.js";
 import { DrizzleCatchStore, type GuessVerdict, type ScoredCatch } from "../identity/store.js";
-import {
-  NotableDirectory,
-  fetchPlaneAlertCsv,
-  notableRefreshEnabled,
-} from "../notable/directory.js";
+import { NotableDirectory } from "../notable/directory.js";
 import type { NotableLookup } from "../notable/mapping.js";
 import { CURRENT_SCORING_VERSION, ROUTE_GUESS_REBALANCE_CUTOVER, isGuessKind } from "./points.js";
 
@@ -309,20 +304,11 @@ function formatReport(report: RescoreReport, opts: RescoreOptions): string {
 /** Script entrypoint:  node dist/catches/rescore.js [--all] [--dry-run] */
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
-  // Same notable data as the running server: the snapshot, refreshed once.
+  // Same notable data as the running server: the committed snapshot.
   const notable = NotableDirectory.fromSnapshot({
     onError: (err) => console.error("notable snapshot failed to load; starting empty", err),
   });
-  if (notableRefreshEnabled()) {
-    const outcome = await notable.refresh(fetchPlaneAlertCsv);
-    console.log(
-      outcome.status === "updated"
-        ? `notable planes: refreshed from upstream (${outcome.entries} airframes)`
-        : `notable planes: refresh ${outcome.status} (${JSON.stringify(outcome)}); using the committed snapshot (${notable.size} airframes)`,
-    );
-  } else {
-    console.log(`notable planes: committed snapshot only (${notable.size} airframes)`);
-  }
+  console.log(`notable planes: committed snapshot (${notable.size} airframes)`);
   const opts: RescoreOptions = {
     all: args.includes("--all"),
     dryRun: args.includes("--dry-run"),

@@ -107,36 +107,6 @@ describe("GET /v1/aircraft: the notable field", () => {
     expect(second.body).toBe(first.body);
   });
 
-  it("follows a directory refresh on the next serve of a cached tile, both ways", async () => {
-    const provider = new StubProvider([JET, AIRLINER]);
-    const dir = directory();
-    app = await buildApp({ provider, notableDirectory: dir, now: () => 1_700_000_100_000 });
-    expect(byIcao((await get(app)).json<ProviderSnapshot>()).get(JET)?.notable).toEqual(
-      JET_NOTABLE,
-    );
-
-    // Upstream drops the jet and adds the airliner. The other two rows keep
-    // one celebrity and one special, as this directory's snapshot has (each
-    // kind must hold half its snapshot count).
-    const csv = [
-      "$ICAO,$Registration,$Operator,$Type,$ICAO Type,#CMPG,$Tag 1,$#Tag 2,$#Tag 3,Category,$#Link",
-      `${AIRLINER},N1,Some Club,B738,B738,Civ,t,t,t,Football,x`,
-      "dddddd,N2,Private,B738,B738,Civ,t,t,t,Historic,x",
-      "eeeeee,N3,Someone Else,GLF6,GLF6,Civ,t,t,t,Don't you know who I am?,x",
-    ].join("\n");
-    expect((await dir.refresh(async () => csv)).status).toBe("updated");
-
-    const after = await get(app);
-    expect(provider.calls).toBe(1); // still the cached tile
-    const planes = byIcao(after.json<ProviderSnapshot>());
-    expect(planes.get(JET)).not.toHaveProperty("notable");
-    expect(planes.get(AIRLINER)?.notable).toEqual({
-      kind: "team",
-      label: "Team plane",
-      name: "Some Club",
-    });
-  });
-
   it("with no directory injected the app serves the committed snapshot", async () => {
     const [hex, expected] = [...loadNotableSnapshot().entries()][0];
     app = await buildApp({ provider: new StubProvider([hex, AIRLINER]) });

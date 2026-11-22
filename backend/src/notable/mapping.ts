@@ -16,7 +16,7 @@
  *
  * UNKNOWN CATEGORIES ARE EXCLUDED. The map below is an allow-list, so a
  * category upstream adds tomorrow does nothing until someone maps it here.
- * That is what makes a daily unattended refresh safe.
+ * That keeps a regenerated snapshot's diff to rows someone chose to include.
  */
 
 import { parseCsv } from "./csv.js";
@@ -54,8 +54,7 @@ export interface NotableLookup {
   lookup(icao24: string): Notable | undefined;
   /**
    * How many airframes the directory holds, when it can say. Zero means the
-   * directory has no data at all (the snapshot failed to load and no refresh
-   * has landed), which is different from "this plane is not notable".
+   * directory has no data at all (the snapshot failed to load), which is different from "this plane is not notable".
    */
   readonly size?: number;
 }
@@ -258,7 +257,7 @@ const COLUMNS = {
 /**
  * Parse the whole upstream CSV into icao24 → notable. Columns are found by
  * header NAME, not position, so an upstream column reorder still parses and a
- * renamed or missing column yields an empty map (which the refresh rejects)
+ * renamed or missing column yields an empty map (which snapshot.ts refuses)
  * instead of silently reading the wrong field. When a hex appears twice the
  * first row wins.
  */
