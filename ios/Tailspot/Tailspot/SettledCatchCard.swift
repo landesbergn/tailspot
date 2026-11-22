@@ -50,6 +50,11 @@ struct SettledCatchCard: View {
     /// (CatchDetailView, 2026-10-26 — it replaced the CAUGHT block that
     /// floated under the card). nil (the share card) leaves it out.
     var caughtAt: Date? = nil
+    /// The Hangar detail screen sets this (2026-11-22): when the card is
+    /// offered more height than it needs, the photo takes it, up to square,
+    /// and everything under the photo keeps its size. Off (the share cards
+    /// and every fixed render), the card is exactly what it was.
+    var fillsHeight: Bool = false
 
     private var base: Int { plane.rarity.basePoints }
     private var bonus: Int { isFirstOfType ? ScoringBonuses.firstOfTypeBonus(base: base) : 0 }
@@ -88,6 +93,9 @@ struct SettledCatchCard: View {
         }()
 
         let hero = heroView(scale: scale, accent: accent)
+        let details = detailsView(scale: scale, accent: accent, flapLines: flapLines,
+                                  fs: fs, cw: cw, flapGap: flapGap,
+                                  totalFlapChars: totalFlapChars)
 
         return VStack(alignment: .leading, spacing: 0) {
             Group {
@@ -110,7 +118,26 @@ struct SettledCatchCard: View {
             }
             .padding(18 * scale)
 
-            VStack(alignment: .leading, spacing: 11 * scale) {
+            if fillsHeight {
+                // Pinned at its ideal size, which is what the detail screen's
+                // scroll view always gave it, so spare height offered to the
+                // card can only reach the photo.
+                ProposedHeightLayout(height: nil) { details }
+            } else {
+                details
+            }
+        }
+        .frame(width: width)
+        .reportsCardFrame(.card)
+        .modifier(CatchRarityFrame(rarity: plane.rarity, scale: scale))
+    }
+
+    /// Everything under the photo: name, callsign line, stats, route, ledger.
+    private func detailsView(scale: CGFloat, accent: Color, flapLines: [FlapLine],
+                             fs: CGFloat, cw: CGFloat, flapGap: CGFloat,
+                             totalFlapChars: Int) -> some View {
+        let hPad = 22 * scale
+        return VStack(alignment: .leading, spacing: 11 * scale) {
                 VStack(alignment: .leading, spacing: 4 * scale) {
                     ForEach(flapLines) { fl in
                         // t=1 / spanT=0 → every cell settled; the flap frame
@@ -169,9 +196,6 @@ struct SettledCatchCard: View {
             // stats, route, ledger). The hero stays OUTSIDE the combine so
             // its Planespotters link remains an actionable element.
             .accessibilityElement(children: .combine)
-        }
-        .frame(width: width)
-        .modifier(CatchRarityFrame(rarity: plane.rarity, scale: scale))
     }
 
     /// The photo hero — its own function, not inline in `body`, both to
@@ -182,9 +206,14 @@ struct SettledCatchCard: View {
     /// no live card ever flips identity.
     @ViewBuilder
     private func heroView(scale: CGFloat, accent: Color) -> some View {
+        let photoHeight = 168 * scale
         let base = RevealPhoto(url: plane.photoURL, focus: plane.photoFocus)
-            .frame(height: 168 * scale)
+            .frame(minHeight: photoHeight,
+                   maxHeight: fillsHeight
+                       ? CardPhotoFill.maxHeight(cardWidth: width, base: photoHeight)
+                       : photoHeight)
             .frame(maxWidth: .infinity)
+            .reportsCardFrame(.photo)
             // The notable caption rides the photo's bottom edge.
             .overlay(alignment: .bottom) {
                 if let notable = plane.notable {

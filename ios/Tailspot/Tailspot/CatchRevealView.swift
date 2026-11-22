@@ -733,20 +733,109 @@ func ledgerRow(_ label: String, _ amount: String, _ color: Color, _ opacity: Dou
 
 // MARK: - CatchRevealView
 
-/// Lays out its single child at the child's compressed minimum height and
-/// reports THAT size — proposing zero height, the way the reveal's old
-/// `VStack { Spacer; card; Spacer; cta }` column effectively did (see
-/// `CatchRevealView.revealColumn`). Keeps the card pixel-identical to what
-/// shipped while the column around it changes; width passes through.
-nonisolated struct CompressedHeightLayout: Layout {
+/// Sizes its single child by offering it one fixed height (nil = the child's
+/// ideal), whatever the parent offers, then lays the child out in exactly
+/// the size that came back. Two jobs in the card-fills-the-screen layout
+/// (2026-11-22):
+///  - around a catch card, it offers the height the card should fill. The
+///    card's only stretchy part is its photo (`CardPhotoFill`), so a short
+///    card grows its photo to fit and a full one is left as it was.
+///  - inside `SettledCatchCard`, with nil, it pins everything under the
+///    photo at the ideal size the detail screen's scroll view always gave
+///    it, so the offer above can only ever reach the photo.
+/// It is one layout pass with no measured state, so the card never changes
+/// size a frame after it appears.
+nonisolated struct ProposedHeightLayout: Layout {
+    var height: CGFloat?
+
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         guard let child = subviews.first else { return .zero }
-        return child.sizeThatFits(ProposedViewSize(width: proposal.width, height: 0))
+        return child.sizeThatFits(ProposedViewSize(width: proposal.width, height: height))
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         subviews.first?.place(at: CGPoint(x: bounds.midX, y: bounds.minY), anchor: .top,
-                              proposal: ProposedViewSize(width: bounds.width, height: 0))
+                              proposal: ProposedViewSize(width: bounds.width, height: bounds.height))
+    }
+}
+
+/// Pins the reveal card's content under the photo at the height it has
+/// always had, whatever the card is offered, so spare height can only reach
+/// the photo (2026-11-22).
+///
+/// That height is not simply the content's minimum. Before this layout, the
+/// card sat in stacks that were offered zero height (the reveal column's
+/// old `CompressedHeightLayout`; see `revealColumn`): a stack measures a
+/// child at zero (its minimum), then places it IN the height it measured,
+/// and offered that height the content lays out a little taller than its
+/// minimum (the callsign line and the ALT/SPD values take their full size
+/// first). `FlipCard` then measured the card it saw and fed that size back,
+/// so the card on screen settled where the content, offered its own height,
+/// asks for exactly that height. This layout finds the same height directly:
+/// start from the minimum and re-offer until the answer stops changing.
+nonisolated struct SettledMinimumHeightLayout: Layout {
+    private func settledSize(_ child: LayoutSubview, width: CGFloat?) -> CGSize {
+        var size = child.sizeThatFits(ProposedViewSize(width: width, height: 0))
+        for _ in 0..<4 {
+            let next = child.sizeThatFits(ProposedViewSize(width: width, height: size.height))
+            let settled = abs(next.height - size.height) < 0.01
+            size = next
+            if settled { break }
+        }
+        return size
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let child = subviews.first else { return .zero }
+        return settledSize(child, width: proposal.width)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(at: CGPoint(x: bounds.midX, y: bounds.minY), anchor: .top,
+                              proposal: ProposedViewSize(width: bounds.width, height: bounds.height))
+    }
+}
+
+/// How tall a catch card's photo may be when the card fills the screen
+/// (Noah, 2026-11-22: a card with little on it left a band of empty screen
+/// under it). The photo takes the spare height; everything under it keeps
+/// its size. It never goes below the height it always had, and never above
+/// its own width (a square): past that the space stays empty.
+nonisolated enum CardPhotoFill {
+    /// The tallest the photo may grow: its own width. The photo sits inside
+    /// the card's 18 pt (at 300 wide) side padding.
+    static func maxHeight(cardWidth: CGFloat, base: CGFloat) -> CGFloat {
+        max(base, cardWidth - 2 * 18 * (cardWidth / 300))
+    }
+}
+
+/// Parts of a catch card whose frames the layout tests read
+/// (`CardFillLayoutTests`). Nothing in the app reads them.
+nonisolated enum CardFramePart: Hashable, Sendable { case card, photo, turnRow }
+
+nonisolated struct CardFrameKey: PreferenceKey {
+    static let defaultValue: [CardFramePart: CGRect] = [:]
+    static func reduce(value: inout [CardFramePart: CGRect],
+                       nextValue: () -> [CardFramePart: CGRect]) {
+        value.merge(nextValue()) { _, new in new }
+    }
+}
+
+extension View {
+    /// Publishes this view's frame (window coordinates) under `part` for the
+    /// layout tests. Debug builds only; Release compiles it away.
+    @ViewBuilder
+    func reportsCardFrame(_ part: CardFramePart) -> some View {
+        #if DEBUG
+        background {
+            GeometryReader { geo in
+                Color.clear.preference(key: CardFrameKey.self,
+                                       value: [part: geo.frame(in: .global)])
+            }
+        }
+        #else
+        self
+        #endif
     }
 }
 
@@ -1373,6 +1462,10 @@ struct CatchRevealView: View {
     private static let ctaStripPadding: (top: CGFloat, bottom: CGFloat) = (24, 28)
     private static let ctaStripEstimate: CGFloat = ctaStripPadding.top + 19 + ctaStripPadding.bottom
 
+    /// The air left above the card and below its turn-over row when the
+    /// photo grows to fill the viewport. Internal for `CardFillLayoutTests`.
+    static let fillMargin: CGFloat = 8
+
     /// Measured height of the scroll viewport above the CTA strip; nil until
     /// the first layout pass reports it. It is the scroll content's MINIMUM
     /// height, so a card that fits centers exactly as it did in the fixed
@@ -1401,8 +1494,9 @@ struct CatchRevealView: View {
         @ViewBuilder cta: () -> CTA
     ) -> some View {
         let viewport = cardViewportHeight ?? max(0, height - Self.ctaStripEstimate)
-        // The card is laid out through `CompressedHeightLayout` so it takes the
-        // SAME size it always has. The pre-scroll column was
+        // Everything under the card's photo is pinned at the size it always
+        // had (`SettledMinimumHeightLayout`, inside `card`). The pre-scroll
+        // column was
         // `VStack { Spacer; card; Spacer; cta }`: a VStack offers each child a
         // share of the remaining space in order of flexibility, so the card
         // was proposed about a third of the screen and always laid out at its
@@ -1419,7 +1513,16 @@ struct CatchRevealView: View {
         // scrolls. No padding or Spacers here: under the scroll view's
         // unbounded proposal even `Spacer(minLength: 0)` reports 8 pt, a
         // phantom scroll where a card just fits.
-        let content = CompressedHeightLayout { card() }
+        //
+        // The card fills the viewport (2026-11-22). It is offered the
+        // viewport's height less a small margin top and bottom, and the only
+        // part of it that can take up height is the photo (see `card`), so:
+        // a short card grows its photo until the card and its turn-over row
+        // fill the space; a card that already fills or overflows it gets an
+        // offer below its minimum and lays out at that minimum, the same
+        // card as before; and once the photo is square the rest stays empty
+        // and the min-height frame below centers the card, as before.
+        let content = ProposedHeightLayout(height: max(0, viewport - 2 * Self.fillMargin)) { card() }
             .frame(maxWidth: .infinity)
             .frame(minHeight: viewport)
             .background {
@@ -1736,6 +1839,13 @@ struct CatchRevealView: View {
         // under the card needs that room on a 6.1" phone with a three-line
         // name (`RevealShortScreenTests`).
         let photoHeight = ((render?.chipsInLayout ?? false) ? 100.0 : 152.0) * scale
+        // The photo is the one part of the card that takes spare height
+        // (2026-11-22): up to square when the reveal column offers the card
+        // more room than it needs. Not while the chips are up: that card is
+        // as short as it can be made. Both states go through the same frame
+        // modifier, so the chips' pop and collapse still animate one height.
+        let photoMaxHeight = (render?.chipsInLayout ?? false)
+            ? photoHeight : CardPhotoFill.maxHeight(cardWidth: width, base: photoHeight)
         // The reveal's own count-up climbs to the pre-bonus total; a correct
         // in-card guess then rolls its route bonus in on the separate `bt` clock.
         let revealCount = Int((Double(revealTargetTotal) * easeOut(ss(0.82, 0.96, t))).rounded())
@@ -1767,20 +1877,13 @@ struct CatchRevealView: View {
         }()
 
         return ZStack {
-            // Tier bloom behind the card — modest for rare, cinematic for legendary.
-            if livePlane.rarity.ordinal >= Rarity.epic.ordinal {
-                RadialGradient(colors: [accent.opacity(0.22), .clear],
-                               center: .center, startRadius: 1, endRadius: Double(width) * 0.9)
-                    .opacity(ss(0.0, 0.4, t) * (livePlane.rarity == .legendary ? 1.0 : 0.6))
-                    .blur(radius: 8)
-            }
-
             VStack(alignment: .leading, spacing: 0) {
                 RevealPhoto(url: livePlane.photoURL, focus: livePlane.photoFocus,
                             provisional: loader?.provisionalPhoto,
                             loading: loader.map { !$0.pipelineFinished } ?? false)
-                    .frame(height: photoHeight)
+                    .frame(minHeight: photoHeight, maxHeight: photoMaxHeight)
                     .frame(maxWidth: .infinity)
+                    .reportsCardFrame(.photo)
                     // The notable caption: who this plane is, on the
                     // photo's bottom edge, revealed with the identity line
                     // (the AR label only showed a star).
@@ -1817,6 +1920,10 @@ struct CatchRevealView: View {
                     .opacity(ss(0.0, 0.18, t))
                     .padding(18 * scale)
 
+                // Everything under the photo stays at the size it has always
+                // had (see `SettledMinimumHeightLayout`), whatever height the
+                // card is offered: only the photo above may grow.
+                SettledMinimumHeightLayout {
                 VStack(alignment: .leading, spacing: 11 * scale) {
                     VStack(alignment: .leading, spacing: 4 * scale) {
                         ForEach(flapLines) { fl in
@@ -1909,9 +2016,23 @@ struct CatchRevealView: View {
                 // 16, not 22 (2026-10-28): the turn row under the card
                 // needs the room on a 6.1" phone.
                 .padding(.bottom, 16 * scale)
+                }
             }
             .frame(width: width)
+            .reportsCardFrame(.card)
             .modifier(CatchRarityFrame(rarity: livePlane.rarity, scale: scale))
+        }
+        // Tier bloom behind the card — modest for rare, cinematic for
+        // legendary. A background, so it is the card's size: as a flexible
+        // sibling in the stack above it would take the whole height the card
+        // is offered, including the part the card leaves empty.
+        .background {
+            if livePlane.rarity.ordinal >= Rarity.epic.ordinal {
+                RadialGradient(colors: [accent.opacity(0.22), .clear],
+                               center: .center, startRadius: 1, endRadius: Double(width) * 0.9)
+                    .opacity(ss(0.0, 0.4, t) * (livePlane.rarity == .legendary ? 1.0 : 0.6))
+                    .blur(radius: 8)
+            }
         }
     }
 
