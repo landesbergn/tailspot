@@ -250,7 +250,11 @@ catches made after that deploy.
 each row's stored `notable_kind` the way it reads `first_of_type`, so a pass
 over existing rows restamps their version and moves no points. Apply migration
 0014 **before** deploying the server (the server reads and writes the new
-columns).
+columns; without them every catch upload and Hangar restore returns 500, for
+every app version). Once a notable catch exists, roll forward rather than back:
+the previous server knows nothing of the flag and would drop the bonus the next
+time it re-scores that row. Keep "server before client" for TestFlight builds
+too, or a phone shows a bonus the server never paid.
 
 ### `GET /v1/metadata/{icao24}` (WP 1.4)
 

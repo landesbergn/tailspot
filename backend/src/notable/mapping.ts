@@ -21,6 +21,12 @@
 
 import { parseCsv } from "./csv.js";
 
+/**
+ * The six kinds. They are stored on catch rows (`catches.notable_kind`), so
+ * never rename or remove one: a row whose kind this build no longer knows
+ * keeps its bonus but would report `notable: null` (see `storedNotable`).
+ * Adding a kind is safe.
+ */
 export type NotableKind = "government" | "celebrity" | "business" | "team" | "special" | "working";
 
 /** The user-facing label for each kind. Fixed strings: the app shows them as is. */
