@@ -1781,6 +1781,15 @@ struct CatchRevealView: View {
                             loading: loader.map { !$0.pipelineFinished } ?? false)
                     .frame(height: photoHeight)
                     .frame(maxWidth: .infinity)
+                    // The notable caption: who this plane is, on the
+                    // photo's bottom edge, revealed with the identity line
+                    // (the AR label only showed a star).
+                    .overlay(alignment: .bottom) {
+                        if let notable = livePlane.notable {
+                            NotablePlate(notable: notable, scale: scale)
+                                .opacity(ss(0.6, 0.74, t))
+                        }
+                    }
                     .clipShape(RoundedRectangle(cornerRadius: Brand.Radius.card))
                     // Zoom-transition source: publishes the hero's frame and
                     // owns the opening pinch. Enabled under the same gate as
@@ -1831,13 +1840,6 @@ struct CatchRevealView: View {
                             .opacity(ss(0.56, 0.7, t))
                         Spacer(minLength: 0)
                         shareButton(scale: scale, visible: shareVisible)
-                    }
-
-                    // The notable plate: who this plane is, revealed with
-                    // the identity line (the AR label only showed a star).
-                    if let notable = livePlane.notable {
-                        NotablePlate(notable: notable, scale: scale)
-                            .opacity(ss(0.6, 0.74, t))
                     }
 
                     Rectangle().fill(RP.rule).frame(width: CGFloat(avail) * line, height: 1)

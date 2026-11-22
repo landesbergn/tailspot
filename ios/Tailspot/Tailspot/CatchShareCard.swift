@@ -333,11 +333,6 @@ struct CatchShareCompactCard: View {
                     .fixedSize()
                 }
 
-                // The notable plate; the hero above gives up the height.
-                if let notable = plane.notable {
-                    NotablePlate(notable: notable, scale: scale)
-                }
-
                 Rectangle().fill(RP.rule).frame(height: 1)
 
                 statsRow(scale: scale, accent: accent)
@@ -393,6 +388,12 @@ struct CatchShareCompactCard: View {
     private func hero(accent: Color) -> some View {
         RevealPhoto(url: plane.photoURL, focus: plane.photoFocus)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // The notable caption rides the photo's bottom edge.
+            .overlay(alignment: .bottom) {
+                if let notable = plane.notable {
+                    NotablePlate(notable: notable, scale: 0.9)
+                }
+            }
             .clipShape(RoundedRectangle(cornerRadius: Self.heroRadius))
             .overlay(
                 CatchRarityBorder(rarity: plane.rarity,
@@ -408,6 +409,8 @@ struct CatchShareCompactCard: View {
                         .padding(.vertical, 4)
                         .background(RP.gold, in: .rect(cornerRadius: Brand.Radius.chip))
                         .padding(8)
+                        // Clear of the notable caption on the same edge.
+                        .padding(.bottom, plane.notable == nil ? 0 : 26)
                 }
             }
     }

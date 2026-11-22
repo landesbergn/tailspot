@@ -142,10 +142,6 @@ struct SettledCatchCard: View {
                     }
                 }
 
-                if let notable = plane.notable {
-                    NotablePlate(notable: notable, scale: scale)
-                }
-
                 Rectangle().fill(RP.rule).frame(height: 1)
 
                 dataSection(scale: scale, accent: accent)
@@ -189,6 +185,12 @@ struct SettledCatchCard: View {
         let base = RevealPhoto(url: plane.photoURL, focus: plane.photoFocus)
             .frame(height: 168 * scale)
             .frame(maxWidth: .infinity)
+            // The notable caption rides the photo's bottom edge.
+            .overlay(alignment: .bottom) {
+                if let notable = plane.notable {
+                    NotablePlate(notable: notable, scale: scale)
+                }
+            }
             .clipShape(RoundedRectangle(cornerRadius: Brand.Radius.card))
         Group {
             if let heroZoom {
