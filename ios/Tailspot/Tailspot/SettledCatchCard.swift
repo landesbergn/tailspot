@@ -55,9 +55,6 @@ struct SettledCatchCard: View {
     /// and everything under the photo keeps its size. Off (the share cards
     /// and every fixed render), the card is exactly what it was.
     var fillsHeight: Bool = false
-    /// Test hook, with `fillsHeight`: keep the photo at its usual height
-    /// whatever the card is offered (the card as it was before the fill).
-    var _photoFixed = false
 
     private var base: Int { plane.rarity.basePoints }
     private var bonus: Int { isFirstOfType ? ScoringBonuses.firstOfTypeBonus(base: base) : 0 }
@@ -122,10 +119,10 @@ struct SettledCatchCard: View {
             .padding(18 * scale)
 
             if fillsHeight {
-                // Pinned at its ideal size, which is what the detail screen's
-                // scroll view always gave it, so spare height offered to the
-                // card can only reach the photo.
-                ProposedHeightLayout(height: nil) { details }
+                // At its designed size while the photo can still give way;
+                // past the photo's floor the whole block scales down
+                // together, to 88% at most (CardPhotoFill.swift).
+                details.shrinksToFit(width: width, minScale: CardPhotoFill.minTextScale)
             } else {
                 details
             }
@@ -214,9 +211,9 @@ struct SettledCatchCard: View {
             // With `fillsHeight` the photo takes spare height (up to square)
             // and gives height back when the card is too tall for its
             // screen (down to `CardPhotoFill.minHeight`).
-            .frame(minHeight: fillsHeight && !_photoFixed
+            .frame(minHeight: fillsHeight
                        ? CardPhotoFill.minHeight(base: photoHeight) : photoHeight,
-                   maxHeight: fillsHeight && !_photoFixed
+                   maxHeight: fillsHeight
                        ? CardPhotoFill.maxHeight(cardWidth: width, base: photoHeight)
                        : photoHeight)
             .frame(maxWidth: .infinity)

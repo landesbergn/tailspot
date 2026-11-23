@@ -8,12 +8,10 @@
 //  the photo, up to square; everything under the photo keeps its size, and
 //  a card that already fills or overflows the screen is unchanged.
 //
-//  "Keeps its size" is the part that is easy to break on the reveal, where
-//  the callsign line, the ALT/SPD values and the route codes are squeezed
-//  text whose size falls out of the card's layout (CardPhotoFill.swift).
-//  `textUnderThePhotoIsTheSameWithAndWithoutTheFill` hosts every phone and
-//  card twice, with the fill and with it switched off (`_fillDisabled`, the
-//  screen as it was), and compares that text.
+//  A card too tall for its screen takes height back from the photo, down
+//  to a floor, before it scrolls. And the text under the photo is at its
+//  designed size times the card's width scale on every phone: height
+//  pressure never shrinks it (`textUnderThePhotoIsAtItsDesignedSize`).
 //
 //  Two halves:
 //   - `render…` writes PNGs for a person to look at (the NotableSnapshotTests
@@ -282,17 +280,15 @@ struct CardFillLayoutTests {
         return nil
     }
 
-    /// `fill: false` is the reveal as it was before the fill.
-    private func mountReveal(_ card: Card, on phone: Phone, fill: Bool = true) -> Hosted {
+    private func mountReveal(_ card: Card, on phone: Phone) -> Hosted {
         var reveal = CatchRevealView(plane: Self.plane(card, photo: nil), entryNumber: 62,
                                      onDismiss: {}, onViewInHangar: {})
         reveal._reduceMotionOverride = true
-        reveal._fillDisabled = !fill
         return mount(reveal, size: phone.safe)
     }
 
-    private func liveReveal(_ card: Card, on phone: Phone, fill: Bool = true) async -> (Hosted, CGRect?) {
-        let hosted = mountReveal(card, on: phone, fill: fill)
+    private func liveReveal(_ card: Card, on phone: Phone) async -> (Hosted, CGRect?) {
+        let hosted = mountReveal(card, on: phone)
         await waitUntilSteady([hosted], settle: .milliseconds(400))
         let viewport = firstScrollView(in: hosted.view).map { $0.convert($0.bounds, to: hosted.window) }
         return (hosted, viewport)
@@ -300,16 +296,13 @@ struct CardFillLayoutTests {
 
     /// The detail screen laid out in the phone's safe area. With `fullScreen`
     /// the status-bar and home-indicator bands are padded back on around it,
-    /// so a capture of the window is the whole screen. `fill: false` is the
-    /// screen as it was before the fill.
+    /// so a capture of the window is the whole screen.
     private func mountDetail(_ card: Card, on phone: Phone, fullScreen: Bool,
-                             photoFilename: String? = nil, fill: Bool = true) throws -> Hosted {
+                             photoFilename: String? = nil) throws -> Hosted {
         let (container, catches) = try Self.hangar(photoFilename: photoFilename)
         let c = try #require(catches[card])
         let row = HangarRow(icao24: c.icao24, mostRecent: c, count: 1, allCatches: [c])
-        var detail = CatchDetailView(row: row)
-        detail._fillDisabled = !fill
-        let screen = detail
+        let screen = CatchDetailView(row: row)
             .frame(width: phone.safe.width, height: phone.safe.height)
             .padding(.top, fullScreen ? phone.top : 0)
             .padding(.bottom, fullScreen ? phone.bottom : 0)
@@ -319,9 +312,9 @@ struct CardFillLayoutTests {
     }
 
     private func liveDetail(_ card: Card, on phone: Phone, fullScreen: Bool,
-                            photoFilename: String? = nil, fill: Bool = true) async throws -> Hosted {
+                            photoFilename: String? = nil) async throws -> Hosted {
         let hosted = try mountDetail(card, on: phone, fullScreen: fullScreen,
-                                     photoFilename: photoFilename, fill: fill)
+                                     photoFilename: photoFilename)
         await waitUntilSteady([hosted], settle: .milliseconds(400))
         return hosted
     }
@@ -460,10 +453,11 @@ struct CardFillLayoutTests {
         #expect(scroll.contentSize.height > scroll.bounds.height + 1, "the SE card should still scroll")
     }
 
-    /// The card Noah reported (TALLER). On the 6.1" phones and up, both
-    /// screens: the photo gives back just enough height that the turn-over
-    /// row ends inside the screen, and stays between its floor and its
-    /// usual height. On the SE it is at the floor and the screen scrolls.
+    /// The card Noah reported on the saved-catch screen (TALLER). On the
+    /// detail screen, 6.1" phones and up: the photo gives back just enough
+    /// height that the turn-over row ends inside the screen, and stays
+    /// between its floor and its usual height. On the SE it is at the floor
+    /// and the screen scrolls. On the reveal: see the note in the loop.
     @Test func tallerCardShrinksItsPhotoToFit() async throws {
         var lines: [String] = []
         defer {
@@ -552,173 +546,113 @@ struct CardFillLayoutTests {
         #expect(scroll.contentSize.height > scroll.bounds.height + 1, "the SE card should still scroll")
     }
 
-    /// Frames are reported snapped to the pixel grid where they sit on
-    /// screen, so the same text one pixel lower can measure a pixel
-    /// different. Text that changed size differs by a third or more of its
-    /// height (ALT is ~18 pt small, ~30 pt large).
-    static let pixel: CGFloat = 0.34
+    /// The text under the photo, on every phone and card, both screens
+    /// (Noah, 2026-11-22):
+    ///  - it is drawn at its DESIGNED size times the card's width scale
+    ///    (card width / 300) times ONE factor for the whole block;
+    ///  - the factor is 1 whenever the card fits with its photo above the
+    ///    floor (the photo gives way first), and never below 0.88;
+    ///  - a card that still scrolls has its photo at the floor and its
+    ///    factor at 0.88: it has given everything it can.
+    /// Before these rules the reveal drew ALT/SPD small on short cards and
+    /// on a 414-wide phone, and route codes small beside large ALT, by an
+    /// accident of its layout: some lines shrank and others did not.
+    ///
+    /// The designed size is measured, not written down: each screen hosted
+    /// 393 wide and far taller than any card, where nothing is under
+    /// pressure. A screen's factor is its block's height (the card less
+    /// its photo and the photo's padding) against that; each probed line
+    /// (callsign, ALT value, DIST value, route codes) must then be its
+    /// designed height × width scale × that same factor. Frames are
+    /// reported snapped to the pixel grid, so each measurement can be a
+    /// pixel out; a line that shrank on its own is a third smaller.
+    ///
+    /// Also here, since it hosts everything anyway: the photo stays between
+    /// its floor and its own width. Writes fill_measurements.txt.
+    @Test func textUnderThePhotoIsAtItsDesignedSize() async throws {
+        let tolerance: CGFloat = 0.7
+        let roomy = Phone(tag: "roomy", size: CGSize(width: 393, height: 1_700), top: 0, bottom: 0)
+        /// A screen's width scale, and the photo padding that is not part
+        /// of the block (18 pt at 300 wide, above and below the photo).
+        func metrics(_ screen: String, _ phone: Phone) -> (scale: CGFloat, base: CGFloat, floor: CGFloat) {
+            screen == "reveal"
+                ? (min(phone.safe.width - 28, 420) / 300, Self.revealBasePhotoHeight(phone), Self.revealPhotoFloor(phone))
+                : (min(phone.safe.width - 36, 420) / 300, Self.detailBasePhotoHeight(phone), Self.detailPhotoFloor(phone))
+        }
+        func block(_ frames: Frames, scale: CGFloat) -> CGFloat? {
+            frames.underPhoto.map { $0 - 36 * scale }
+        }
+        func mountAll(on phone: Phone) throws -> [(String, Card, Hosted)] {
+            try Card.allCases.flatMap { card in
+                [("reveal", card, mountReveal(card, on: phone)),
+                 ("detail", card, try mountDetail(card, on: phone, fullScreen: false))]
+            }
+        }
 
-    /// What each screen drew BEFORE the fill, per phone and card: the height
-    /// of everything under the photo, then the callsign line, the ALT value,
-    /// the DIST value and the route codes (0 = not on that card). Recorded
-    /// 2026-11-22 from the pre-fill layout (the parent of the fill commit:
-    /// its four source files with only the frame probes added), hosted live
-    /// by this same harness. The reveal's numbers are not a design: they
-    /// fell out of pixel rounding in the old layout (see
-    /// `SettledMinimumHeightLayout`), which is why ALT is large on one phone
-    /// and small on the next, and why the route codes are small where ALT
-    /// is large. The fill must reproduce them. Re-record (run with the fill
-    /// off and copy fill_measurements.txt) only when the card's own content
-    /// or type sizes change on purpose.
-    static let beforeTheFill: [String: [CGFloat]] = [
-        "reveal 375x667 plain": [381.02, 13.33, 17.33, 17.33, 0],
-        "detail 375x667 plain": [376.16, 15.00, 28.33, 28.33, 0],
-        "reveal 375x667 short": [408.27, 13.33, 17.33, 17.33, 0],
-        "detail 375x667 short": [402.83, 15.00, 28.33, 28.33, 0],
-        "reveal 375x667 typical": [412.82, 13.33, 29.00, 0, 17.33],
-        "detail 375x667 typical": [395.83, 15.00, 28.33, 0, 28.33],
-        "reveal 375x667 tall": [530.84, 15.33, 29.00, 0, 17.33],
-        "detail 375x667 tall": [511.16, 15.00, 28.33, 0, 28.33],
-        "reveal 375x812 plain": [381.02, 13.33, 17.33, 17.33, 0],
-        "detail 375x812 plain": [376.16, 15.00, 28.33, 28.33, 0],
-        "reveal 375x812 short": [408.27, 13.33, 17.33, 17.33, 0],
-        "detail 375x812 short": [402.83, 15.00, 28.33, 28.33, 0],
-        "reveal 375x812 typical": [412.82, 13.33, 29.00, 0, 17.33],
-        "detail 375x812 typical": [395.83, 15.00, 28.33, 0, 28.33],
-        "reveal 375x812 tall": [530.84, 15.33, 29.00, 0, 17.33],
-        "detail 375x812 tall": [511.16, 15.00, 28.33, 0, 28.33],
-        "reveal 390x844 plain": [397.90, 14.00, 18.33, 18.33, 0],
-        "detail 390x844 plain": [392.76, 15.67, 29.67, 29.67, 0],
-        "reveal 390x844 short": [426.55, 14.00, 18.33, 18.33, 0],
-        "detail 390x844 short": [420.43, 15.67, 29.67, 29.67, 0],
-        "reveal 390x844 typical": [430.85, 14.00, 30.33, 0, 18.33],
-        "detail 390x844 typical": [403.09, 15.67, 29.67, 0, 19.67],
-        "reveal 390x844 tall": [554.41, 16.00, 30.33, 0, 18.33],
-        "detail 390x844 tall": [523.43, 15.67, 29.67, 0, 19.67],
-        "reveal 393x852 plain": [401.07, 14.33, 18.33, 18.67, 0],
-        "detail 393x852 plain": [395.75, 15.67, 30.00, 30.00, 0],
-        "reveal 393x852 short": [429.81, 14.33, 18.33, 18.67, 0],
-        "detail 393x852 short": [424.08, 15.67, 30.00, 30.00, 0],
-        "reveal 393x852 typical": [434.39, 14.33, 30.67, 0, 18.33],
-        "detail 393x852 typical": [416.75, 15.67, 30.00, 0, 30.00],
-        "reveal 393x852 tall": [558.66, 16.00, 30.67, 0, 18.33],
-        "detail 393x852 tall": [538.41, 15.67, 30.00, 0, 30.00],
-        "reveal 402x874 plain": [411.60, 14.33, 19.33, 19.00, 0],
-        "detail 402x874 plain": [405.37, 16.33, 30.67, 30.67, 0],
-        "reveal 402x874 short": [440.91, 14.33, 19.00, 19.00, 0],
-        "detail 402x874 short": [434.04, 16.33, 30.67, 30.67, 0],
-        "reveal 402x874 typical": [445.34, 14.33, 31.33, 0, 19.00],
-        "detail 402x874 typical": [426.71, 16.33, 30.67, 0, 30.67],
-        "reveal 402x874 tall": [574.07, 16.67, 31.33, 0, 20.00],
-        "detail 402x874 tall": [551.37, 16.33, 30.67, 0, 30.67],
-        "reveal 414x896 plain": [424.30, 15.00, 20.00, 20.00, 0],
-        "detail 414x896 plain": [418.65, 16.67, 31.67, 31.67, 0],
-        "reveal 414x896 short": [454.26, 15.00, 20.00, 19.67, 0],
-        "detail 414x896 short": [448.32, 16.67, 31.67, 31.67, 0],
-        "reveal 414x896 typical": [446.16, 15.00, 19.67, 0, 19.67],
-        "detail 414x896 typical": [429.65, 16.67, 31.67, 0, 20.67],
-        "reveal 414x896 tall": [577.73, 17.00, 20.00, 0, 19.67],
-        "detail 414x896 tall": [558.32, 16.67, 31.67, 0, 20.67],
-        "reveal 428x926 plain": [438.46, 16.00, 20.00, 20.00, 0],
-        "detail 428x926 plain": [434.48, 17.33, 33.00, 33.00, 0],
-        "reveal 428x926 short": [470.13, 16.00, 20.00, 20.00, 0],
-        "detail 428x926 short": [465.15, 17.33, 33.00, 33.00, 0],
-        "reveal 428x926 typical": [475.46, 16.00, 33.67, 0, 20.00],
-        "detail 428x926 typical": [457.48, 17.33, 33.00, 0, 33.00],
-        "reveal 428x926 tall": [612.00, 17.67, 33.67, 0, 20.00],
-        "detail 428x926 tall": [590.81, 17.33, 33.00, 0, 33.00],
-        "reveal 430x932 plain": [441.24, 16.00, 20.33, 20.33, 0],
-        "detail 430x932 plain": [436.03, 17.33, 33.00, 33.00, 0],
-        "reveal 430x932 short": [472.96, 16.00, 20.33, 20.33, 0],
-        "detail 430x932 short": [467.36, 17.33, 33.00, 33.00, 0],
-        "reveal 430x932 typical": [477.93, 16.00, 33.67, 0, 20.33],
-        "detail 430x932 typical": [459.03, 17.33, 33.00, 0, 33.00],
-        "reveal 430x932 tall": [614.94, 17.67, 33.67, 0, 20.33],
-        "detail 430x932 tall": [593.36, 17.33, 33.00, 0, 33.00],
-        "reveal 440x956 plain": [451.16, 16.67, 20.67, 20.67, 0],
-        "detail 440x956 plain": [447.43, 18.00, 34.00, 34.00, 0],
-        "reveal 440x956 short": [483.48, 16.67, 20.67, 20.67, 0],
-        "detail 440x956 short": [479.09, 18.00, 34.00, 34.00, 0],
-        "reveal 440x956 typical": [488.95, 16.67, 34.67, 0, 20.67],
-        "detail 440x956 typical": [470.76, 18.00, 34.00, 0, 34.00],
-        "reveal 440x956 tall": [628.99, 18.33, 34.67, 0, 20.67],
-        "detail 440x956 tall": [608.09, 18.00, 34.00, 0, 34.00],
-    ]
+        // Designed sizes at scale 1, per screen and card.
+        var designedBlock: [String: CGFloat] = [:]
+        var designedText: [String: [CardFramePart: CGSize]] = [:]
+        let reference = try mountAll(on: roomy)
+        await waitUntilSteady(reference.map(\.2), settle: .milliseconds(600))
+        for (screen, card, hosted) in reference {
+            hosted.window.isHidden = true
+            let scale = metrics(screen, roomy).scale
+            let key = "\(screen) \(card.rawValue)"
+            designedBlock[key] = try #require(block(hosted.frames, scale: scale), "\(key): no reference frames") / scale
+            designedText[key] = hosted.frames.parts.mapValues {
+                CGSize(width: $0.width / scale, height: $0.height / scale)
+            }
+        }
 
-    /// Every phone and card, both screens, hosted twice: with the fill, and
-    /// with it switched off (the photo takes no spare height).
-    ///  - The text under the photo is the same size in both, and the size
-    ///    it was before the fill (`beforeTheFill`): the callsign line, the
-    ///    ALT and DIST values and the route codes (frame height, and width,
-    ///    which is what `minimumScaleFactor` changes), and the whole block
-    ///    under the photo.
-    ///  - The photo is never shorter than its base height and never taller
-    ///    than it is wide.
-    /// Also writes the numbers to fill_measurements.txt for a person.
-    @Test func textUnderThePhotoIsTheSameWithAndWithoutTheFill() async throws {
-        var lines = ["screen size card | photo fill (base, width) | under-photo fill/off | "
-                     + "text heights fill/off: callsign, ALT, DIST, route"]
+        var lines = ["screen size card | photo (floor, base, width) | factor | scrolls | "
+                     + "text height (designed at scale 1): callsign, ALT, DIST, route"]
         defer {
             try? FileManager.default.createDirectory(at: Self.dir, withIntermediateDirectories: true)
             try? lines.joined(separator: "\n").write(
                 to: Self.dir.appendingPathComponent("fill_measurements.txt"), atomically: true, encoding: .utf8)
         }
-        func check(_ screen: String, _ phone: Phone, _ card: Card,
-                   fill: Frames, off: Frames, base: CGFloat, floor: CGFloat) throws {
-            let name = "\(screen) \(phone.tag) \(card.rawValue)"
-            let photo = try #require(fill.photo, "\(name): no photo frame")
-            let offPhoto = try #require(off.photo, "\(name): no photo frame with the fill off")
-            #expect(abs(offPhoto.height - base) < 0.5, "\(name): fill off, photo \(offPhoto.height) vs base \(base)")
-            #expect(photo.height >= floor - 0.5, "\(name): \(photo.size)")
-            #expect(photo.height <= photo.width + 0.5, "\(name): \(photo.size)")
-            let under = try #require(fill.underPhoto), underOff = try #require(off.underPhoto)
-            #expect(abs(under - underOff) < Self.pixel, "\(name): under the photo \(under) vs \(underOff)")
-            // ... and both are what the screen drew before the fill existed.
-            // (TALLER was added after the fill, so it has no record: for it
-            // "before" is the fill-off screen compared just above.)
-            let recorded = Self.beforeTheFill[name]
-            #expect(recorded != nil || card == .taller, "\(name): no recorded size")
-            let was = recorded ?? [underOff] + Self.textParts.map { off.parts[$0.0]?.height ?? 0 }
-            #expect(abs(under - was[0]) < 2 * Self.pixel, "\(name): under the photo \(under), was \(was[0])")
-            var texts: [String] = []
-            for (index, (part, label)) in Self.textParts.enumerated() {
-                let a = fill.parts[part], b = off.parts[part]
-                let before = was[index + 1]
-                #expect((a == nil) == (before == 0), "\(name): \(label) present \(a != nil), was \(before)")
-                if let a {
-                    #expect(abs(a.height - before) < Self.pixel,
-                            "\(name): \(label) height \(a.height), before the fill \(before)")
-                }
-                #expect((a == nil) == (b == nil), "\(name): \(label) is on one card only")
-                guard let a, let b else { texts.append("\(label) -"); continue }
-                #expect(abs(a.height - b.height) < Self.pixel, "\(name): \(label) height \(a.height) vs \(b.height)")
-                #expect(abs(a.width - b.width) < Self.pixel, "\(name): \(label) width \(a.width) vs \(b.width)")
-                texts.append(String(format: "%@ %.2f/%.2f", label, a.height, b.height))
-            }
-            // The callsign line is on every card, so the comparison above
-            // can never pass by comparing nothing.
-            #expect(fill.parts[.callsign] != nil, "\(name): no callsign frame")
-            #expect(fill.parts[.altValue] != nil, "\(name): no ALT frame")
-            lines.append(String(format: "%@ | %.1f (%.1f, %.1f) | %.2f/%.2f | ",
-                                name, photo.height, base, photo.width, under, underOff)
-                         + texts.joined(separator: ", "))
-        }
-        // One phone at a time, its twenty screens side by side.
+        // One phone at a time, its ten screens side by side.
         for phone in Self.phones {
-            var mounted: [(String, Card, Hosted, Hosted, CGFloat, CGFloat)] = []
-            for card in Card.allCases {
-                mounted.append(("reveal", card, mountReveal(card, on: phone),
-                                mountReveal(card, on: phone, fill: false),
-                                Self.revealBasePhotoHeight(phone), Self.revealPhotoFloor(phone)))
-                mounted.append(("detail", card, try mountDetail(card, on: phone, fullScreen: false),
-                                try mountDetail(card, on: phone, fullScreen: false, fill: false),
-                                Self.detailBasePhotoHeight(phone), Self.detailPhotoFloor(phone)))
-            }
-            await waitUntilSteady(mounted.flatMap { [$0.2, $0.3] }, settle: .milliseconds(600))
-            for (screen, card, fill, off, base, floor) in mounted {
-                fill.window.isHidden = true
-                off.window.isHidden = true
-                try check(screen, phone, card, fill: fill.frames, off: off.frames, base: base, floor: floor)
+            let mounted = try mountAll(on: phone)
+            await waitUntilSteady(mounted.map(\.2), settle: .milliseconds(600))
+            for (screen, card, hosted) in mounted {
+                hosted.window.isHidden = true
+                let name = "\(screen) \(phone.tag) \(card.rawValue)"
+                let key = "\(screen) \(card.rawValue)"
+                let (scale, base, floor) = metrics(screen, phone)
+                let photo = try #require(hosted.frames.photo, "\(name): no photo frame")
+                #expect(photo.height >= floor - 0.5, "\(name): photo \(photo.size) under its floor \(floor)")
+                #expect(photo.height <= photo.width + 0.5, "\(name): photo \(photo.size) taller than wide")
+
+                let designed = try #require(designedBlock[key])
+                let factor = try #require(block(hosted.frames, scale: scale)) / (designed * scale)
+                let atFloor = photo.height < floor + 0.5
+                let scrolls = firstScrollView(in: hosted.view)
+                    .map { $0.contentSize.height > $0.bounds.height + 1 } ?? false
+                #expect(factor > CardPhotoFill.minTextScale - 0.005 && factor < 1.005, "\(name): factor \(factor)")
+                if !atFloor {
+                    #expect(abs(factor - 1) < 0.005, "\(name): factor \(factor) with the photo at \(photo.height), floor \(floor)")
+                }
+                if scrolls {
+                    #expect(atFloor, "\(name): scrolls with the photo at \(photo.height), floor \(floor)")
+                    #expect(factor < CardPhotoFill.minTextScale + 0.005, "\(name): scrolls at factor \(factor)")
+                }
+
+                var texts: [String] = []
+                for (part, label) in Self.textParts {
+                    let want = designedText[key]?[part]
+                    let got = hosted.frames.parts[part]?.height
+                    #expect((got == nil) == (want == nil), "\(name): \(label) on screen \(got != nil), designed \(want != nil)")
+                    guard let got, let want else { texts.append("\(label) -"); continue }
+                    // Every probed line is its designed height × the card's
+                    // width scale × the block's one factor.
+                    #expect(abs(got - want.height * scale * factor) < tolerance,
+                            "\(name): \(label) is \(got) pt; designed \(want.height) × \(scale) × \(factor)")
+                    texts.append(String(format: "%@ %.2f (%.2f)", label, got, want.height))
+                }
+                lines.append(String(format: "%@ | %.1f (%.1f, %.1f, %.1f) | %.3f | %@ | ", name, photo.height,
+                                    floor, base, photo.width, factor, scrolls ? "SCROLLS" : "fits")
+                             + texts.joined(separator: ", "))
             }
         }
     }
@@ -747,34 +681,31 @@ struct CardFillLayoutTests {
         let builds = CardBuildCounter.builds - before
         #expect(builds <= mounted.count * 2,
                 "\(builds) card builds in 2 s across \(mounted.count) settled screens")
-        // The reveal's pinned-height climb (`SettledMinimumHeightLayout`)
-        // ended by itself on every one of them, well inside its bound.
-        #expect(SettledMinimumHeightLayout.mostStepsTaken < SettledMinimumHeightLayout.maxSteps / 2,
-                "the climb took \(SettledMinimumHeightLayout.mostStepsTaken) steps")
         let allReported = mounted.allSatisfy { $0.frames.complete }
         #expect(allReported, "every screen should have laid its card out")
     }
 
-    /// With `fillsHeight`, the card's shortest is the plain card less what
-    /// the photo may give back (down to its floor); with the photo held
-    /// (`_photoFixed`, the fill switched off) it is the plain card exactly.
-    @Test func settledCardShrinksOnlyByItsPhoto() {
+    /// With `fillsHeight`, the card's shortest is the plain card (at its
+    /// ideal size) less exactly what the photo may give back and what the
+    /// block under it may scale away (12% of its height).
+    @Test func settledCardShrinksOnlyByItsPhotoAndTextScale() {
         for card in Card.allCases {
             let first = card == .tall || card == .taller
-            func height(_ view: SettledCatchCard, offered: CGFloat) -> CGFloat {
-                UIHostingController(rootView: view)
-                    .sizeThatFits(in: CGSize(width: 357, height: offered)).height
-            }
             let plane = Self.plane(card, photo: nil)
-            let was = height(SettledCatchCard(plane: plane, isFirstOfType: first, width: 357), offered: 2_500)
-            let held = height(SettledCatchCard(plane: plane, isFirstOfType: first, width: 357,
-                                               fillsHeight: true, _photoFixed: true), offered: 10)
-            let shortest = height(SettledCatchCard(plane: plane, isFirstOfType: first, width: 357,
-                                                   fillsHeight: true), offered: 10)
-            let photo: CGFloat = 168 * 357 / 300
-            #expect(abs(was - held) < 0.5, "\(card): \(was) vs \(held)")
-            #expect(abs(was - shortest - (photo - CardPhotoFill.minHeight(base: photo))) < 0.5,
-                    "\(card): \(was) vs \(shortest)")
+            let was = UIHostingController(rootView:
+                SettledCatchCard(plane: plane, isFirstOfType: first, width: 357).fixedSize())
+                .sizeThatFits(in: CGSize(width: 357, height: 2_500)).height
+            let shortest = UIHostingController(rootView:
+                SettledCatchCard(plane: plane, isFirstOfType: first, width: 357, fillsHeight: true))
+                .sizeThatFits(in: CGSize(width: 357, height: 10)).height
+            let scale: CGFloat = 357 / 300
+            let photo = 168 * scale
+            let block = was - photo - 36 * scale
+            let expected = was - (photo - CardPhotoFill.minHeight(base: photo))
+                - block * (1 - CardPhotoFill.minTextScale)
+            // Loose by a few points: laid out wider to be scaled down, a
+            // line that was width-limited can come out a little different.
+            #expect(abs(shortest - expected) < 3, "\(card): \(shortest) vs \(expected) (was \(was))")
         }
     }
 

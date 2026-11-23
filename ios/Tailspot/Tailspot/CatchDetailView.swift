@@ -93,10 +93,6 @@ struct CatchDetailView: View {
     /// bar (see the comment at its use). Internal for `CardFillLayoutTests`.
     static let columnTopInset: CGFloat = 8 + ChromeMetrics.disc + 16
     static let columnBottomInset: CGFloat = 8
-    /// Test hook: the photo stays at its usual height whatever the screen
-    /// has room for: the screen as it was before the fill.
-    /// `CardFillLayoutTests` compares the two.
-    var _fillDisabled = false
 
     var body: some View {
         GeometryReader { geo in
@@ -134,8 +130,7 @@ struct CatchDetailView: View {
                                 : "View photo on Planespotters.net",
                             heroZoom: hasCatchPhoto ? heroZoom : nil,
                             caughtAt: shown.caughtAt,
-                            fillsHeight: true,
-                            _photoFixed: _fillDisabled
+                            fillsHeight: true
                         )
                     } back: {
                         CatchCardBack(model: backModel, width: cardWidth,

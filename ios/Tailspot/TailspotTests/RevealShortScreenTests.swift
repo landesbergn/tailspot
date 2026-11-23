@@ -42,6 +42,20 @@ struct RevealShortScreenTests {
         rarity: .uncommon, type: .ga,
         altText: "1,975 ft", speedText: "65 kt", distText: "0.6 km")
 
+    /// The fullest card: the same airframe with a route, a first-of-type
+    /// row and a notable row. Since 2026-11-22 a card too tall for its
+    /// screen gives up photo height and then scales its text down (to 88%)
+    /// before it scrolls (CardPhotoFill.swift), and with that the tester's
+    /// card above FITS an SE. This one still does not, so it is the card
+    /// that proves an overflowing reveal scrolls with the CTA pinned.
+    private static let bell206Full = CardPlane(
+        callsign: "N217MH", model: "Bell 206 JetRanger / LongRanger", carrier: "Private",
+        rarity: .uncommon, type: .ga,
+        altText: "1,975 ft", speedText: "65 kt", distText: "0.6 km",
+        originIcao: "OAK", destIcao: "SQL", originName: "Oakland", destName: "San Carlos",
+        isFirstOfType: true,
+        notable: NotablePlane(kind: "team", label: "Team plane", name: "Golden State Warriors"))
+
     private struct Hosted {
         let host: UIViewController
         let window: UIWindow
@@ -58,9 +72,9 @@ struct RevealShortScreenTests {
     /// scrolls with the CTA pinned — but under the parallel full suite the
     /// chips never popped in the hosted window, so it was not a stable guard.
     /// The static mirror in `GuessRoundSnapshotTests` covers that state.
-    private func hostReveal(size: CGSize,
+    private func hostReveal(size: CGSize, plane: CardPlane = bell206,
                             settledWhen: @escaping (UIScrollView) -> Bool = { _ in true }) async -> Hosted {
-        var reveal = CatchRevealView(plane: Self.bell206, entryNumber: 4,
+        var reveal = CatchRevealView(plane: plane, entryNumber: 4,
                                      onDismiss: {}, onViewInHangar: {})
         reveal.streakDays = 1
         // Reduce Motion ends on the identical settled frame and skips the
@@ -109,10 +123,9 @@ struct RevealShortScreenTests {
     @Test func seSizedRevealScrollsAndKeepsCTAOnScreen() async throws {
         // iPhone SE (3rd gen) safe area: 375 × (667 − 20 status bar).
         let size = CGSize(width: 375, height: 647)
-        // The card gives the photo's spare height back before it scrolls
-        // (2026-11-22, CardPhotoFill.swift), so this card now overflows the
-        // SE by ~17 pt rather than ~80: still a scroll, by a smaller margin.
-        let hosted = await hostReveal(size: size) { $0.contentSize.height > $0.bounds.height + 5 }
+        let hosted = await hostReveal(size: size, plane: Self.bell206Full) {
+            $0.contentSize.height > $0.bounds.height + 5
+        }
         defer { hosted.window.isHidden = true }
         let bounds = CGRect(origin: .zero, size: size)
 

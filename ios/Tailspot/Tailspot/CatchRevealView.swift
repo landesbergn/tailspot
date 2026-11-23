@@ -735,43 +735,26 @@ func ledgerRow(_ label: String, _ amount: String, _ color: Color, _ opacity: Dou
 
 // MARK: - CatchRevealView
 
-/// Sizes its single child by offering it one fixed height, whatever the
-/// parent offers, and lays the child out in the size that came back. Two
-/// jobs in the card-fills-the-screen layout (2026-11-22, CardPhotoFill.swift):
-///  - around a catch card (`height` a number): it offers the height the
-///    card should fill. The card's only stretchy part is its photo, so a
-///    short card grows its photo to fit and a full one is left as it was.
-///  - inside `SettledCatchCard` (`height` nil): it pins everything under the
-///    photo at the size the detail screen always gave it, so the offer
-///    above can only ever reach the photo. That size is the content's ideal
-///    height offered back to it AS A NUMBER, which is how the stacks around
-///    it used to place it: at some card widths the number falls a hair
-///    short and the route codes drop to their small size, and the card was
-///    that much shorter. Reproduced here, not corrected.
-/// It is one layout pass with no measured state, so the card never changes
-/// size a frame after it appears and nothing can loop.
+/// Offers its single child `height`, whatever the parent offers, and takes
+/// the size the child comes back with. Each catch-card screen wraps its card
+/// column in one to offer the height the card should fill
+/// (CardPhotoFill.swift): the photo is the only part of the card that
+/// stretches or gives way, so the card fills that height when it can and
+/// is its own shortest when it cannot. One layout pass, no measured state.
 nonisolated struct ProposedHeightLayout: Layout {
-    var height: CGFloat?
+    var height: CGFloat
 
-    /// The height to place the child in, and the size it takes there.
-    private func placement(_ child: LayoutSubview, width: CGFloat?) -> (offer: CGFloat?, size: CGSize) {
-        if let height {
-            return (nil, child.sizeThatFits(ProposedViewSize(width: width, height: height)))
-        }
-        let ideal = child.sizeThatFits(ProposedViewSize(width: width, height: nil)).height
-        return (ideal, child.sizeThatFits(ProposedViewSize(width: width, height: ideal)))
+    private func offer(width: CGFloat?) -> ProposedViewSize {
+        ProposedViewSize(width: width, height: height)
     }
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        guard let child = subviews.first else { return .zero }
-        return placement(child, width: proposal.width).size
+        subviews.first?.sizeThatFits(offer(width: proposal.width)) ?? .zero
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        guard let child = subviews.first else { return }
-        let offer = placement(child, width: bounds.width).offer ?? bounds.height
-        child.place(at: CGPoint(x: bounds.midX, y: bounds.minY), anchor: .top,
-                    proposal: ProposedViewSize(width: bounds.width, height: offer))
+        subviews.first?.place(at: CGPoint(x: bounds.midX, y: bounds.minY), anchor: .top,
+                              proposal: offer(width: bounds.width))
     }
 }
 
@@ -1401,10 +1384,6 @@ struct CatchRevealView: View {
     /// The air left above the card and below its turn-over row when the
     /// photo grows to fill the viewport. Internal for `CardFillLayoutTests`.
     static let fillMargin: CGFloat = 8
-    @Environment(\.displayScale) private var displayScale
-    /// Test hook: the photo takes no spare height, the reveal as it was
-    /// before the fill. `CardFillLayoutTests` compares the two.
-    var _fillDisabled = false
 
     /// Measured height of the scroll viewport above the CTA strip; nil until
     /// the first layout pass reports it. It is the scroll content's MINIMUM
@@ -1434,34 +1413,22 @@ struct CatchRevealView: View {
         @ViewBuilder cta: () -> CTA
     ) -> some View {
         let viewport = cardViewportHeight ?? max(0, height - Self.ctaStripEstimate)
-        // Everything under the card's photo is pinned at the size it always
-        // had (`SettledMinimumHeightLayout`, inside `card`). The pre-scroll
-        // column was
-        // `VStack { Spacer; card; Spacer; cta }`: a VStack offers each child a
-        // share of the remaining space in order of flexibility, so the card
-        // was proposed about a third of the screen and always laid out at its
-        // compressed MINIMUM — route codes/names and the readouts (all
-        // `minimumScaleFactor` text) scaled down — on every device. That is
-        // the card every user has seen; a bare scroll view proposes unbounded
-        // height, which un-squeezes it and made cards that used to fit (a
-        // one-line name on the SE, a two-line one on a 6.1") start scrolling
-        // by a few points. (Whether the design should render at its intended
-        // sizes is a separate call — see the PR.)
+        // The card is offered the viewport's height less a small margin top
+        // and bottom (2026-11-22, CardPhotoFill.swift). The photo is the only
+        // part of it that takes or gives height (see `card`), so a short
+        // card grows its photo until the card and its turn-over row fill
+        // the space, a tall one shrinks its photo until they fit, and one
+        // too tall even then lays out at its shortest and scrolls.
         //
-        // Around it, a min-height frame does what the two Spacers did: a card
-        // that fits is centered; a taller card sets the content height and
-        // scrolls. No padding or Spacers here: under the scroll view's
-        // unbounded proposal even `Spacer(minLength: 0)` reports 8 pt, a
-        // phantom scroll where a card just fits.
+        // Around it, a min-height frame centers a card that stops short of
+        // the viewport (the photo reached square). No padding or Spacers
+        // here: under the scroll view's unbounded proposal even
+        // `Spacer(minLength: 0)` reports 8 pt, a phantom scroll where a card
+        // just fits.
         //
-        // The card fills the viewport (2026-11-22). It is offered the
-        // viewport's height less a small margin top and bottom, and the only
-        // part of it that can take up height is the photo (see `card`), so:
-        // a short card grows its photo until the card and its turn-over row
-        // fill the space; a card that already fills or overflows it gets an
-        // offer below its minimum and lays out at that minimum, the same
-        // card as before; and once the photo is square the rest stays empty
-        // and the min-height frame below centers the card, as before.
+        // (Until 2026-11-22 the card was offered ZERO height here, to keep
+        // the squeezed text the first reveal happened to ship with. Noah
+        // retired that: the text is at its designed size now, see `card`.)
         let content = ProposedHeightLayout(height: max(0, viewport - 2 * Self.fillMargin)) { card() }
             .frame(maxWidth: .infinity)
             .frame(minHeight: viewport)
@@ -1784,13 +1751,13 @@ struct CatchRevealView: View {
         // more room than it needs. Not while the chips are up: that card is
         // as short as it can be made. Both states go through the same frame
         // modifier, so the chips' pop and collapse still animate one height.
-        let photoMaxHeight = (render?.chipsInLayout ?? false) || _fillDisabled
+        let photoMaxHeight = (render?.chipsInLayout ?? false)
             ? photoHeight : CardPhotoFill.maxHeight(cardWidth: width, base: photoHeight)
         // And the one part that gives height back when the card is too tall
         // for the viewport (three-line name, several ledger rows): down to
         // the height it already takes while the chips are up, never below.
         // (60% of 152 is 91, under that, so the chip height is the floor.)
-        let photoMinHeight = (render?.chipsInLayout ?? false) || _fillDisabled
+        let photoMinHeight = (render?.chipsInLayout ?? false)
             ? photoHeight : min(photoHeight, max(100 * scale, CardPhotoFill.minHeight(base: photoHeight)))
         // The reveal's own count-up climbs to the pre-bonus total; a correct
         // in-card guess then rolls its route bonus in on the separate `bt` clock.
@@ -1866,15 +1833,6 @@ struct CatchRevealView: View {
                     .opacity(ss(0.0, 0.18, t))
                     .padding(18 * scale)
 
-                // Everything under the photo stays at the size it has always
-                // had (see `SettledMinimumHeightLayout`), whatever height the
-                // card is offered: only the photo above may grow.
-                SettledMinimumHeightLayout(above: photoHeight + 36 * scale,
-                                           // FlipCard's turn row: 44 pt less its
-                                           // 16 pt overhang, plus its top gap.
-                                           below: 28 + 4 * scale,
-                                           viewport: cardViewportHeight,
-                                           pixel: 1 / max(displayScale, 1)) {
                 VStack(alignment: .leading, spacing: 11 * scale) {
                     VStack(alignment: .leading, spacing: 4 * scale) {
                         ForEach(flapLines) { fl in
@@ -1967,7 +1925,14 @@ struct CatchRevealView: View {
                 // 16, not 22 (2026-10-28): the turn row under the card
                 // needs the room on a 6.1" phone.
                 .padding(.bottom, 16 * scale)
-                }
+                // Everything under the photo is at its designed size (times
+                // the card's width scale) while the photo can still give
+                // way; past the photo's floor the whole block scales down
+                // together, to 88% at most (CardPhotoFill.swift). Not while
+                // the chips are up: that card keeps full-size, tappable
+                // chips and scrolls, as it always has.
+                .shrinksToFit(width: width,
+                              minScale: (render?.chipsInLayout ?? false) ? 1 : CardPhotoFill.minTextScale)
             }
             .frame(width: width)
             .reportsCardFrame(.card)
