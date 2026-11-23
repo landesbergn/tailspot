@@ -290,11 +290,17 @@ final class Catch {
     /// catch recorded as notable at catch time. The server pays the bonus
     /// only when this is sent and its own list confirms the airframe, so a
     /// catch from before the feature, re-uploaded by this build, earns none.
-    var claimsNotable: Bool { notableKind != nil }
+    /// A Debug test flag never claims: it would look like a forged claim.
+    var claimsNotable: Bool { notableKind != nil && notableKind != NotablePlane.testKind }
 
     /// The notable flag as one value, or nil for an ordinary plane.
     var notableInfo: NotablePlane? {
-        NotablePlane(kind: notableKind, label: notableLabel, name: notableName)
+        let info = NotablePlane(kind: notableKind, label: notableLabel, name: notableName)
+        #if !DEBUG
+        // A test flag left by a Debug build is not a notable plane.
+        if info?.isDebugTest == true { return nil }
+        #endif
+        return info
     }
 
     /// Write (or clear, with nil) the notable flag. Returns true when the

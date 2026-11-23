@@ -2988,7 +2988,11 @@ struct ContentView: View {
                 // the press. This is the only place a catch becomes notable
                 // on the phone; the upload sends it as `notableClaim` and the
                 // response can only confirm or clear it.
+                #if DEBUG
+                row.setNotable(NotableDebug.catchFlag(observed?.aircraft.notable))
+                #else
                 row.setNotable(observed?.aircraft.notable)
+                #endif
                 modelContext.insert(row)
                 newCatches.append(row)
             }
@@ -3044,7 +3048,11 @@ struct ContentView: View {
             // Catch-confirmation telemetry (north-star). One event per
             // processed target: new catches carry rarity/type/slant,
             // duplicates record the dedup hit. Fire-and-forget.
-            let notableInView = visibleByIcao.values.count { $0.aircraft.notable != nil }
+            // Planes the visibility filter was showing, not everything in
+            // the fetch box; Debug test stamps do not count.
+            let notableInView = visibleByIcao.values.count {
+                $0.isLikelyVisibleToObserver && $0.aircraft.notable?.isDebugTest == false
+            }
             for row in newCatches {
                 CatchTelemetry.firePerformed(
                     row,

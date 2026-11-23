@@ -409,7 +409,7 @@ nonisolated enum CatchTelemetry {
         addNonBlank("dest_icao", destIcao, to: &props)
         addNonBlank("notable_kind", notableKind, to: &props)
         if notableClaimed { props["notable_claimed"] = .bool(true) }
-        if let notableConfirmed, notableClaimed || notableConfirmed {
+        if let notableConfirmed, notableClaimed {
             props["notable_confirmed"] = .bool(notableConfirmed)
         }
         addNonBlank("registration", registration, to: &props)
@@ -568,7 +568,7 @@ nonisolated enum CatchTelemetry {
             catchMode: catchMode,
             // Minted by runCatch before the save.
             catchUuid: row.serverUuid,
-            notableKind: row.notableInfo?.kind,
+            notableKind: row.claimsNotable ? row.notableInfo?.kind : nil,
             notableInView: notableInView
         ))
     }

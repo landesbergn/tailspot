@@ -458,6 +458,12 @@ struct NotablePlaneTests {
     @Test func debugTestFlagSurvivesTheServersNoAndIsClearedBySwitchOff() {
         let test = makeCatch(icao: "aaa001", notable: NotableDebug.testPlane)
         let real = makeCatch(icao: "aaa002", notable: Self.team)
+        // A test flag never claims (it would read as a forged claim) and
+        // stays out of the catch event; a real one claims.
+        #expect(test.claimsNotable == false)
+        #expect(real.claimsNotable)
+        #expect(NotableDebug.catchFlag(NotableDebug.testPlane) == (NotableDebug.isForced ? NotableDebug.testPlane : nil))
+        #expect(NotableDebug.catchFlag(Self.team) == Self.team)
         // The server never confirms a test plane; the flag stays to be seen.
         #expect(test.applyNotable(.notNotable) == false)
         #expect(test.notableInfo == NotableDebug.testPlane)

@@ -390,29 +390,31 @@ struct CatchShareCompactCard: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             // The notable caption rides the photo's bottom edge.
             .overlay(alignment: .bottom) {
-                if let notable = plane.notable {
-                    NotablePlate(notable: notable, scale: 0.9)
+                // One stack, so the badge clears the caption whether it
+                // takes one line or two.
+                VStack(alignment: .leading, spacing: 0) {
+                    if plane.isFirstOfType { firstOfTypeBadge.padding(8) }
+                    if let notable = plane.notable {
+                        NotablePlate(notable: notable, scale: 0.9)
+                    }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .clipShape(RoundedRectangle(cornerRadius: Self.heroRadius))
             .overlay(
                 CatchRarityBorder(rarity: plane.rarity,
                                   cornerRadius: Self.heroRadius, emphasis: 0.55)
             )
-            .overlay(alignment: .bottomLeading) {
-                if plane.isFirstOfType {
-                    Text("FIRST OF TYPE")
-                        .font(.system(size: 9, weight: .bold, design: .monospaced))
-                        .tracking(1.2)
-                        .foregroundColor(RP.bg)
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 4)
-                        .background(RP.gold, in: .rect(cornerRadius: Brand.Radius.chip))
-                        .padding(8)
-                        // Clear of the notable caption on the same edge.
-                        .padding(.bottom, plane.notable == nil ? 0 : 26)
-                }
-            }
+    }
+
+    private var firstOfTypeBadge: some View {
+        Text("FIRST OF TYPE")
+            .font(.system(size: 9, weight: .bold, design: .monospaced))
+            .tracking(1.2)
+            .foregroundColor(RP.bg)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 4)
+            .background(RP.gold, in: .rect(cornerRadius: Brand.Radius.chip))
     }
 
     /// Settled split-flap name, capped at two lines — a third line would

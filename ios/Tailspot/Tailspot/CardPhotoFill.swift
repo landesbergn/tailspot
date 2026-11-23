@@ -82,7 +82,12 @@ nonisolated struct ShrinkToFitLayout: Layout {
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         guard let child = subviews.first else { return }
-        let scale = scale(designed: ideal(child, width: bounds.width).height, into: bounds.height)
+        // The same inputs as `sizeThatFits`, so the block is drawn at the
+        // factor it was sized for (the bounds' own height is that size,
+        // not the offer, and would give a slightly different factor).
+        let width = proposal.width ?? bounds.width
+        let scale = scale(designed: ideal(child, width: width).height,
+                          into: proposal.height ?? bounds.height)
         child.place(at: bounds.origin, anchor: .topLeading,
                     proposal: ProposedViewSize(width: bounds.width / scale, height: nil))
     }

@@ -56,6 +56,13 @@ nonisolated struct NotablePlane: Equatable, Hashable, Sendable {
     }
 
     /// The gold plate's headline: "NOTABLE · TEAM PLANE".
+    /// The kind the Debug wrench switch stamps (`NotableDebug`). Declared
+    /// in every build so a test flag left on a catch by a Debug build is
+    /// inert in a Release build installed over it: never shown, never
+    /// claimed, never counted toward a trophy.
+    static let testKind = "test"
+    var isDebugTest: Bool { kind == Self.testKind }
+
     var plateTitle: String { "NOTABLE · \(label.uppercased())" }
 
     /// One line for secondary text (Hangar row, card back): the name when
@@ -162,7 +169,7 @@ nonisolated extension KeyedDecodingContainer {
 nonisolated enum NotableDebug {
     static let forceKey = "tailspot.debug.notable.forceAll"
     /// Marks a fake entry. Never sent by the server.
-    static let testKind = "test"
+    static let testKind = NotablePlane.testKind
     static let testPlane = NotablePlane(kind: testKind, label: "Team plane", name: "Wrench Test Team")
 
     static var isForced: Bool { UserDefaults.standard.bool(forKey: forceKey) }
@@ -175,6 +182,14 @@ nonisolated enum NotableDebug {
             copy.notable = testPlane
             return copy
         }
+    }
+
+    /// What a new catch records: the test stamp only while the switch is
+    /// on. The feed keeps stamped planes until its next poll, so a catch
+    /// made just after switching off must not pick one up.
+    static func catchFlag(_ plane: NotablePlane?) -> NotablePlane? {
+        guard let plane, plane.isDebugTest, !isForced else { return plane }
+        return nil
     }
 
     /// Remove the fake flag from every catch that carries it. Returns how

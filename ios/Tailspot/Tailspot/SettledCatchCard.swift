@@ -112,6 +112,9 @@ struct SettledCatchCard: View {
                     } label: { hero }
                         .buttonStyle(.plain)
                         .accessibilityLabel(photoTapAccessibilityLabel)
+                        // The caption is drawn on the photo, inside this
+                        // button, so say it here.
+                        .accessibilityValue(plane.notable?.accessibilityText ?? "")
                 } else {
                     hero
                 }
