@@ -314,6 +314,8 @@ struct SetsCoverageTests {
         ("SLH4", "Sling Aircraft", "4 High Wing"),
         // Public catalog coverage addition validated 2026-11-01.
         ("GLF2", "Gulfstream", "II"),
+        // Public catalog coverage addition validated 2026-11-24.
+        ("SH33", "Short", "330"),
     ]
 
     private func mk(_ row: (String, String, String)) -> Catch {
@@ -481,6 +483,7 @@ struct SetsCoverageTests {
             (("C337", "Cessna", "337 Super Skymaster"), "fam-cessna", "fc337"),
             (("SLH4", "Sling Aircraft", "4 High Wing"), "fam-sport-classics", "fsc-sling-high-wing"),
             (("GLF2", "Gulfstream", "II"), "fam-gulfstream", "fg-ii"),
+            (("SH33", "Short", "330"), "fam-commuter-props", "fcp-short330"),
         ]
 
         for (row, setID, entryID) in assignments {
@@ -651,6 +654,18 @@ struct SetsCoverageTests {
         let mx2 = mk(("MX2", "Mx Aircraft", "MX-2"))
         #expect(!CardSets.matches(key: CardSets.matchKey(for: mx2), entry: mauleEntry),
                 "An MX Aircraft MX-2 must not fill the Maule M-7 slot")
+
+        // The Short 330 slot is exact and manufacturer-qualified so neither
+        // the larger Short 360 nor Schweizer's 330 helicopter can fill it.
+        let short330Entry = CardSets.families.first { $0.id == "fam-commuter-props" }!
+            .entries.first { $0.id == "fcp-short330" }!
+        for lookalike in [
+            mk(("SH36", "Short", "360")),
+            mk(("S330", "Schweizer", "269D 330")),
+        ] {
+            #expect(!CardSets.matches(key: CardSets.matchKey(for: lookalike), entry: short330Entry),
+                    "Adjacent 330/360 types must not fill the Short 330 slot")
+        }
 
         // The new exact designators and manufacturer-qualified tokens must not
         // absorb adjacent codes or similarly abbreviated aircraft names.

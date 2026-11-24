@@ -1236,6 +1236,10 @@ nonisolated enum CardSets {
                                 "fairchild dornier sa-227 metro", "swearingen sa-227 metro"],
                   summary: "Twin-turboprop Metro and Expediter family built for short commuter and cargo routes.",
                   representativeTypecode: "SW4"),
+            .init(id: "fcp-short330", canonicalName: "Short 330", rarity: .rare,
+                  modelTokens: ["short 330"],
+                  summary: "Thirty-seat twin-turboprop commuter and cargo aircraft, also flown as the C-23 Sherpa.",
+                  representativeTypecode: "SH33"),
         ]),
         .init(id: "fam-military", type: .mil, title: "Military", entries: [
             .init(id: "fm-p8", canonicalName: "Boeing P-8 Poseidon", rarity: .epic,
