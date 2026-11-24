@@ -5,6 +5,14 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-11-23 — Notable planes merged; 1.2.7 build 126 on TestFlight
+
+- [PR #438](https://github.com/landesbergn/tailspot/pull/438) squash-merged to `main` (69aa7ae) on green CI, after Noah's device checks. `main` now matches the deployed server (API v67).
+- Xcode Cloud run #126 (69aa7ae) succeeded. Build 126 adds to 125: notable planes (gold star, caption on the photo, +50% going forward), the catch card that fills the phone with consistent text sizes, and the notable analytics.
+- Test cleanup: the server holds no catch stored as notable (checked read-only; 28,852 catches, 471 uploaded since the v67 deploy). PostHog keeps 13 test events from Noah's device (9 `catch_performed` with `notable_kind = test`, 4 `catch_uploaded` claimed and unconfirmed, 2026-11-22 to 2026-11-23); single events cannot be deleted, and the Notable planes dashboard excludes them. Leave them out of any claimed-versus-confirmed rate.
+- Not yet seen on a device: a real notable catch paid by the server; Share-button taps on a card whose text is scaled.
+- Next: check App Store Connect crashes for 126, catch a real notable plane and confirm the row stores `notable_kind`, then decide on submitting 1.2.7 (Noah's call).
+
 ## 2026-11-22 — Notable planes live on the server (API v67, migration 0014)
 
 - Noah gave the go for the server rollout. In order: volume snapshot `vs_DRbmgZ2Mg0pU9RjqbbG3zB` of `tailspot-db`; migration 0014 through the tracked `db:migrate` path (journal now 15; `catches.notable_kind` and `notable_name` exist, nullable); `fly deploy` of the branch at c0c4e2a, both machines on v67.
