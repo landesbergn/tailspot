@@ -347,6 +347,8 @@ struct ContentView: View {
     /// catches and had never retired it. DEBUG-only; read through
     /// `steeringEligible`, and keeps the pill out of telemetry.
     @AppStorage(SteeringPill.debugForceKey) private var steeringDebugForce = false
+    /// Wrench override: treat every plane as notable (NotableDebug).
+    @AppStorage(NotableDebug.forceKey) private var notableDebugForce = false
     #endif
     /// The plane the pill points at, carried across ticks for hysteresis.
     /// Written only by the 1 Hz `steeringPillTick`, never from `body`.
@@ -2982,6 +2984,15 @@ struct ContentView: View {
                 // Minted before the save so `catch_performed` and every later
                 // event about this catch carry the same persisted `catch_uuid`.
                 row.ensureServerUuid()
+                // The server's notable flag, as the live feed carried it at
+                // the press. This is the only place a catch becomes notable
+                // on the phone; the upload sends it as `notableClaim` and the
+                // response can only confirm or clear it.
+                #if DEBUG
+                row.setNotable(NotableDebug.catchFlag(observed?.aircraft.notable))
+                #else
+                row.setNotable(observed?.aircraft.notable)
+                #endif
                 modelContext.insert(row)
                 newCatches.append(row)
             }
@@ -3037,6 +3048,11 @@ struct ContentView: View {
             // Catch-confirmation telemetry (north-star). One event per
             // processed target: new catches carry rarity/type/slant,
             // duplicates record the dedup hit. Fire-and-forget.
+            // Planes the visibility filter was showing, not everything in
+            // the fetch box; Debug test stamps do not count.
+            let notableInView = visibleByIcao.values.count {
+                $0.isLikelyVisibleToObserver && $0.aircraft.notable?.isDebugTest == false
+            }
             for row in newCatches {
                 CatchTelemetry.firePerformed(
                     row,
@@ -3051,7 +3067,8 @@ struct ContentView: View {
                     // legacy zone cluster, or no photo).
                     detectorVerdict: detectorVerdicts[row.icao24],
                     catchMode: pressCatchMode,
-                    skyVerdict: skyVerdict
+                    skyVerdict: skyVerdict,
+                    notableInView: notableInView
                 )
             }
             for icao in duplicates { CatchTelemetry.fireDuplicate(icao24: icao) }
@@ -3682,6 +3699,9 @@ struct ContentView: View {
             guessKind: guessKind,
             guessBonusPoints: guessBonusPoints,
             pressSize: row.pressSize ?? 1,
+            // The row's own flag only, never the live feed: a catch that
+            // was not recorded (or not paid) as notable shows no plate.
+            notable: row.notableInfo,
             icao24: row.icao24
         )
     }
@@ -3752,6 +3772,7 @@ struct ContentView: View {
             distText: CardPlane.distText(fromMeters: observed.slantDistanceMeters),
             isFirstOfType: isFirstOfType,
             pressSize: pressSize,
+            notable: aircraft.notable,
             icao24: aircraft.icao24
         )
     }
@@ -4335,6 +4356,7 @@ struct ContentView: View {
                         #if DEBUG
                         catchModeRow
                         steeringDebugRow
+                        notableDebugRow
                         #endif
                     }
                     .font(Brand.Font.mono(size: 12))
@@ -4610,6 +4632,24 @@ struct ContentView: View {
             title: "Act like a first-timer",
             detail: "On: the camera treats this phone as if it had never caught a plane, so the \"turn left / behind you\" pill shows. Off: normal behavior, where the pill only shows for someone with no catches yet.",
             isOn: $steeringDebugForce
+        )
+    }
+
+    /// Wrench row: see notable planes without waiting for a real one.
+    /// Turning it off removes the test star from every catch made with it.
+    private var notableDebugRow: some View {
+        debugFlagRow(
+            title: "Every plane is notable",
+            detail: "On: every plane gets the gold star, and a catch shows a test plate (\"Wrench Test Team\") and the +50% on this phone only. The leaderboard does not pay it. Off: only real notable planes, and the test star is removed from catches made while this was on.",
+            isOn: Binding(
+                get: { notableDebugForce },
+                set: { on in
+                    notableDebugForce = on
+                    if !on, NotableDebug.clearTestFlags(in: catches) > 0 {
+                        try? modelContext.save()
+                    }
+                }
+            )
         )
     }
 
@@ -4903,6 +4943,8 @@ struct ContentView: View {
         var parts = [callsign]
         if let model = metadata?.model?.nonEmpty { parts.append(model) }
         parts.append(rarity.label.capitalized)
+        // Only that it is notable, like the gold star: never who it is.
+        if obs.aircraft.notable != nil { parts.append("Notable plane") }
         parts.append("\(distance) \(unit.spokenName) away")
         return parts.joined(separator: ", ")
     }
@@ -5587,7 +5629,13 @@ nonisolated func resolveAROverlayRarity(
 /// `.allowsHitTesting(false)` so taps fall through to the underlying
 /// gesture layer in ContentView (which handles pin/unpin). The
 /// dim/bright pin contrast is the only signal that a tap landed.
-private struct PlaneLabel: View {
+///
+/// A plane the server flags as notable (NotablePlane.swift) gets a small
+/// gold star at the front of its pill, and nothing else: no name and no
+/// category before the catch. Who it is stays the reveal's surprise.
+///
+/// Internal (not private) only so the label snapshot tests can render it.
+struct PlaneLabel: View {
     /// Label states under frame-is-the-catch (D3·2):
     ///   `chosen` — in the press: full-bright brackets, expanded label
     ///              with points. What you see full-bright is exactly
@@ -5646,6 +5694,11 @@ private struct PlaneLabel: View {
                 lineWidth: bracketLineWidth
             )
             HStack(spacing: 4) {
+                if aircraft.aircraft.notable != nil {
+                    Image(systemName: "star.fill")
+                        .font(.system(size: isChosen ? 9 : 8, weight: .bold))
+                        .foregroundStyle(Brand.Color.ledgerGold)
+                }
                 Text(callsign)
                     .font(Brand.Font.mono(size: isChosen ? 11 : 9, weight: .bold))
                     .foregroundStyle(Brand.Color.cyan)

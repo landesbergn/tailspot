@@ -80,10 +80,13 @@ RARITY_POINTS = {"common": 10, "uncommon": 20, "rare": 50, "epic": 100, "legenda
 # the ladder: edit here, regenerate, bump CURRENT_SCORING_VERSION, re-score.
 # multiCatchDouble / multiCatchTriple (scoring v10, 2026-11-13): each plane in
 # a 2-plane press earns +25% of its base, each in a press of 3 or more +50%.
+# notable (scoring v11, 2026-11-21): a catch of an individually notable
+# airframe (backend/src/notable/) earns +50% of its base.
 SCORING_BONUSES = {
     "firstOfType": 0.5,
     "multiCatchDouble": 0.25,
     "multiCatchTriple": 0.5,
+    "notable": 0.5,
     "routeGuess": 0.25,
     "routeGuessCutover": 1786579200,
     "routeGuessLegacy": 0.1,

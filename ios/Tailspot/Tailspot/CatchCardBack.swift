@@ -140,6 +140,9 @@ nonisolated struct CardBackModel: Equatable, Sendable {
     var history: TypeHistory?
     var summary: WikipediaSummary?
     var summaryLoading: Bool
+    /// The airframe's notable flag, when it has one. The back is otherwise
+    /// about the TYPE; this one line is about this exact plane.
+    var notable: NotablePlane? = nil
 }
 
 // MARK: - Formatting (unit-tested)
@@ -371,6 +374,11 @@ struct CatchCardBack: View {
                     .minimumScaleFactor(0.7)
                     .accessibilityAddTraits(.isHeader)
 
+                if let notable = model.notable {
+                    notableLine(notable, scale: scale)
+                        .layoutPriority(1)
+                }
+
                 if hasHistory {
                     Rectangle().fill(RP.rule).frame(height: 1)
                     VStack(spacing: 6 * scale) {
@@ -564,6 +572,31 @@ struct CatchCardBack: View {
                 .minimumScaleFactor(0.75)
         }
         .accessibilityElement(children: .combine)
+    }
+
+    /// The notable line under the model name: a gold star and "NOTABLE" on
+    /// the left (the ledger line's label, in gold), who or what it is on
+    /// the right. Category when the server has no name.
+    private func notableLine(_ notable: NotablePlane, scale: CGFloat) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10 * scale) {
+            HStack(alignment: .firstTextBaseline, spacing: 4 * scale) {
+                Image(systemName: "star.fill")
+                    .font(.system(size: 8.5 * scale, weight: .bold))
+                Text("NOTABLE")
+                    .font(.system(size: 10 * scale, weight: .semibold, design: .monospaced))
+            }
+            .foregroundStyle(RP.gold)
+            .fixedSize()
+            Spacer(minLength: 0)
+            Text(notable.shortText)
+                .font(.system(size: 11.5 * scale, weight: .semibold))
+                .foregroundStyle(RP.ink)
+                .multilineTextAlignment(.trailing)
+                .lineLimit(2)
+                .minimumScaleFactor(0.75)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(notable.accessibilityText)
     }
 
     /// The catch log: who was flying the ones you caught. No header on the

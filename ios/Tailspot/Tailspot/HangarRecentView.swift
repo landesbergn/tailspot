@@ -59,6 +59,7 @@ struct HangarRecentView: View {
         let rows = showsSearch
             ? HangarGrouping.search(allRows, index: searchIndex, query: query)
             : allRows
+        let trimmedQuery = query.trimmingCharacters(in: .whitespaces)
         return VStack(spacing: 0) {
             if showsSearch {
                 searchField
@@ -70,7 +71,7 @@ struct HangarRecentView: View {
                         .foregroundStyle(Brand.Color.textTertiary)
                         .padding(.top, 32)
                 } else if rows.isEmpty {
-                    Text("No catches match \u{201C}\(query.trimmingCharacters(in: .whitespaces))\u{201D}")
+                    Text(HangarRecentView.emptyMessage(query: trimmedQuery))
                         .font(Brand.Font.body)
                         .foregroundStyle(Brand.Color.textTertiary)
                         .multilineTextAlignment(.center)
@@ -123,6 +124,15 @@ struct HangarRecentView: View {
         } message: {
             Text("This can't be undone.")
         }
+    }
+
+    /// What the list says when the search leaves nothing to show. The
+    /// word "notable" alone is a filter, not text to match, so it gets its
+    /// own line.
+    static func emptyMessage(query: String) -> String {
+        query.lowercased() == HangarGrouping.notableTerm
+            ? "No notable planes caught yet"
+            : "No catches match \u{201C}\(query)\u{201D}"
     }
 
     /// Custom field rather than `.searchable`: that modifier attaches to the

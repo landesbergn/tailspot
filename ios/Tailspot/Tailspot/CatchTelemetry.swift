@@ -175,7 +175,9 @@ nonisolated enum CatchTelemetry {
         originIcao: String? = nil,
         destIcao: String? = nil,
         catchMode: CatchMode? = nil,
-        catchUuid: String? = nil
+        catchUuid: String? = nil,
+        notableKind: String? = nil,
+        notableInView: Int? = nil
     ) -> [String: AnalyticsValue] {
         var props: [String: AnalyticsValue] = [
             "icao24": .string(icao24),
@@ -229,6 +231,14 @@ nonisolated enum CatchTelemetry {
         // every build before the flag (2026-10-25) means the SHIPPED rule —
         // all pre-flag App Store traffic is legacy, never "frame".
         if let catchMode { props["catch_mode"] = .string(catchMode.rawValue) }
+        // The server's notable-airframe category ("team", "government", ...)
+        // when the caught plane carried the flag at the press. Absent for an
+        // ordinary plane.
+        addNonBlank("notable_kind", notableKind, to: &props)
+        // How many starred (notable) planes were on screen at the press,
+        // caught or not. With `notable_kind` this says whether a star in
+        // view was the plane that got caught.
+        if let notableInView { props["notable_in_view"] = .int(notableInView) }
         return props
     }
 
@@ -377,7 +387,12 @@ nonisolated enum CatchTelemetry {
         firstOfType: Bool? = nil,
         guessKind: String? = nil,
         guessCorrect: Bool? = nil,
-        catchUuid: String? = nil
+        catchUuid: String? = nil,
+        notableKind: String? = nil,
+        notableClaimed: Bool = false,
+        notableConfirmed: Bool? = nil,
+        originIcao: String? = nil,
+        destIcao: String? = nil
     ) -> [String: AnalyticsValue] {
         var props: [String: AnalyticsValue] = [
             "icao24": .string(icao24),
@@ -385,6 +400,18 @@ nonisolated enum CatchTelemetry {
             "points": .int(points),
             "duplicate": .bool(duplicate),
         ]
+        // Notable planes: the category the server stored, whether the app
+        // claimed the catch as notable, and the server's answer to that
+        // claim (absent on a server that predates the feature). Keys are
+        // absent on an ordinary catch.
+        // The flight's route, so one event answers "which flight was it".
+        addNonBlank("origin_icao", originIcao, to: &props)
+        addNonBlank("dest_icao", destIcao, to: &props)
+        addNonBlank("notable_kind", notableKind, to: &props)
+        if notableClaimed { props["notable_claimed"] = .bool(true) }
+        if let notableConfirmed, notableClaimed {
+            props["notable_confirmed"] = .bool(notableConfirmed)
+        }
         addNonBlank("registration", registration, to: &props)
         addNonBlank("typecode", typecode, to: &props)
         addNonBlank("manufacturer", manufacturer, to: &props)
@@ -514,7 +541,8 @@ nonisolated enum CatchTelemetry {
         angularSizeArcmin: Double? = nil,
         detectorVerdict: DetectorGateVerdict? = nil,
         catchMode: CatchMode? = nil,
-        skyVerdict: SkyVerdict? = nil
+        skyVerdict: SkyVerdict? = nil,
+        notableInView: Int? = nil
     ) {
         Analytics.capture(performedEvent, performedProperties(
             icao24: row.icao24,
@@ -539,7 +567,9 @@ nonisolated enum CatchTelemetry {
             destIcao: row.destIcao,
             catchMode: catchMode,
             // Minted by runCatch before the save.
-            catchUuid: row.serverUuid
+            catchUuid: row.serverUuid,
+            notableKind: row.claimsNotable ? row.notableInfo?.kind : nil,
+            notableInView: notableInView
         ))
     }
 
@@ -607,7 +637,8 @@ nonisolated enum CatchTelemetry {
     /// and the rarity/points/duplicate off the server response. Rarity prefers
     /// the server value (authoritative re-tiering) and falls back to the
     /// locally resolved tier when the response omits it.
-    @MainActor static func fireUploaded(_ row: Catch, response: UploadCatchResponse) {
+    @MainActor static func fireUploaded(_ row: Catch, response: UploadCatchResponse,
+                                        notableClaimed: Bool = false) {
         Analytics.capture(uploadedEvent, uploadedProperties(
             icao24: row.icao24,
             rarity: response.rarity ?? row.resolvedRarity.rawValue,
@@ -630,7 +661,12 @@ nonisolated enum CatchTelemetry {
             // preferred; frozen local verdict as fallback (old backend).
             guessCorrect: row.guessKind != nil
                 ? (response.guessCorrect ?? row.guessCorrect) : nil,
-            catchUuid: row.serverUuid
+            catchUuid: row.serverUuid,
+            notableKind: response.notable.plane?.kind,
+            notableClaimed: notableClaimed,
+            notableConfirmed: response.notable == .unknown ? nil : response.notable.plane != nil,
+            originIcao: row.originIcao,
+            destIcao: row.destIcao
         ))
     }
 

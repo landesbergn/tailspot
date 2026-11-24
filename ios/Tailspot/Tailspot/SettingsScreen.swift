@@ -209,6 +209,9 @@ struct SettingsScreen: View {
                 creditRow("Photos", value: "Planespotters.net · Wikimedia Commons")
                 // The card backs (2026-10-25): Wikipedia summaries + Wikidata specs.
                 creditRow("Aircraft info", value: "Wikipedia · Wikidata")
+                // Which airframes are notable (NotablePlane.swift). ODbL
+                // asks for attribution wherever the data is used.
+                creditRow("Notable aircraft data", value: "plane-alert-db contributors (ODbL)")
             } header: {
                 Text("DATA SOURCES")
                     .font(Brand.Font.mono(size: 10, weight: .semibold, relativeTo: .caption2))

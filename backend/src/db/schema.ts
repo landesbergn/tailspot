@@ -285,6 +285,21 @@ export const catches = pgTable(
      * lowers one: a later delete of a sibling does not take the bonus back.
      */
     pressSize: integer("press_size").notNull().default(1),
+    /**
+     * Notable planes (migration 0014, scoring v11). Set at INSERT, and only
+     * when the uploading app claimed the catch as notable (`notableClaim`,
+     * which only 1.2.7+ sends, and only for a catch it showed as notable) AND
+     * the airframe was in the notable directory (src/notable/) at that moment.
+     * FROZEN like `first_of_type`: the scorer pays the bonus when
+     * `notable_kind` is non-null and never asks the directory again, so a
+     * later change to the list neither grants nor takes back a bonus, and
+     * every catch made before 1.2.7 stays as it was (both columns null).
+     * `notable_kind` is one of the six kinds in src/notable/mapping.ts (plain
+     * text, like `guess_kind`); `notable_name` is the operator or owner, when
+     * the list named one.
+     */
+    notableKind: text("notable_kind"),
+    notableName: text("notable_name"),
     /** When the client says it was caught. */
     caughtAt: timestamp("caught_at", { withTimezone: true }).notNull(),
     observerLat: doublePrecision("observer_lat").notNull(),

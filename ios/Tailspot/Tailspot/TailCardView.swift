@@ -115,9 +115,13 @@ struct TailCard: View {
         let guessKind: GuessKind? = (c.guessCorrect == true)
             ? c.guessKind.flatMap(GuessKind.init(rawValue:))
             : nil
+        // The star, the name line and the bonus all come from the catch
+        // shown, so they always appear together.
+        let notable = c.notableInfo
         let points = ScoringBonuses.displayPoints(
             base: base, isFirstOfType: isFirstOfType, guessKind: guessKind, caughtAt: c.caughtAt,
-            pressSize: c.pressSize ?? 1
+            pressSize: c.pressSize ?? 1,
+            isNotablePlane: c.notableInfo != nil
         )
 
         // One spoken line for the whole row — otherwise VoiceOver walks the
@@ -125,6 +129,7 @@ struct TailCard: View {
         // route arrow as "right arrow".
         let a11yLabel: String = {
             var parts = [tailNumber, airline]
+            if let notable { parts.append(notable.accessibilityText) }
             if showPoints, let model { parts.append(model) }
             // On screen the tier is only a color (score column + route
             // arrow), so say it. Recent feed only: in the compact Sets
@@ -161,7 +166,18 @@ struct TailCard: View {
         let info = VStack(alignment: .leading, spacing: 5) {
             // Line 1 — cyan callsign · airline. The callsign is the lead
             // identifier (never truncated); a long airline tail-truncates.
+            // A notable airframe leads with a solid gold star, and gets a
+            // gold line of its own just below saying who it is (or its
+            // category). The star is solid and on this line; the
+            // first-of-type sparkle is ringed and on the model line, so
+            // a row carrying both shows two different marks.
             HStack(spacing: 6) {
+                if notable != nil {
+                    Image(systemName: "star.fill")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(Brand.Color.ledgerGold)
+                        .fixedSize()
+                }
                 Text(tailNumber)
                     .font(Brand.Font.mono(size: 15, weight: .bold, relativeTo: .subheadline))
                     .foregroundStyle(Brand.Color.cyan)
@@ -171,6 +187,18 @@ struct TailCard: View {
                 Text(airline)
                     .font(.footnote)
                     .foregroundStyle(Brand.Color.textSecondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+
+            // Notable rows only: the name (or category) on its own line.
+            // Line 1 has no room for it beside the callsign and airline
+            // ("Golden State Warriors" cut to "Golden..."), and a line of
+            // its own also sets the few notable rows apart in the feed.
+            if let notable {
+                Text(notable.shortText)
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(Brand.Color.ledgerGold)
                     .lineLimit(1)
                     .truncationMode(.tail)
             }

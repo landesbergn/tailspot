@@ -197,6 +197,11 @@ nonisolated struct UploadCatchRequest: Encodable {
     /// the backend treats an absent `guess` key as "no guess" — so nil here
     /// is correctly OMITTED, not encoded as null.
     let guess: Guess?
+    /// True only for a catch the phone recorded as notable at catch time
+    /// (`Catch.claimsNotable`). Sent as `"notableClaim": true`, and the key
+    /// is OMITTED otherwise. The server pays the notable bonus only when the
+    /// claim is present and its own list confirms the airframe.
+    var notableClaim = false
 
     // Custom Encodable so `aircraft` is either a full object or an EXPLICIT
     // JSON null — never an absent key (the backend 422s that).
@@ -219,10 +224,11 @@ nonisolated struct UploadCatchRequest: Encodable {
         // Guess is the opposite: absent key = "no guess" (the common case);
         // present only when the user actually answered a bonus round.
         try container.encodeIfPresent(guess, forKey: .guess)
+        if notableClaim { try container.encode(true, forKey: .notableClaim) }
     }
 
     enum CodingKeys: String, CodingKey {
-        case catchUuid, icao24, callsign, caughtAt, observer, aircraft, guess
+        case catchUuid, icao24, callsign, caughtAt, observer, aircraft, guess, notableClaim
     }
 }
 
@@ -248,6 +254,13 @@ nonisolated struct UploadCatchResponse: Decodable {
     /// false for guess-less catches, which is fine: the local ledger reads
     /// the frozen `Catch.guessCorrect`, not this).
     let guessCorrect: Bool?
+    /// What the server stored for this catch's notable flag (scoring v11:
+    /// `points` already includes its +50% of base). Three states (see
+    /// `NotableVerdict`): an object (claim confirmed, bonus paid), an
+    /// explicit null (no claim or not confirmed, no bonus), or no key at
+    /// all (a backend that predates the feature). The uploader makes the
+    /// row's notable fields match it.
+    var notable: NotableVerdict = .unknown
 }
 
 /// One catch record from GET /v1/catches — the server's copy of a catch this
@@ -279,6 +292,11 @@ nonisolated struct RestoredCatchRow: Decodable {
     let registration: String?
     let manufacturer: String?
     let model: String?
+    /// The notable flag the server stored when this catch was uploaded:
+    /// an object, or null / no key (decoded like the upload response, see
+    /// `NotableVerdict`). The Hangar restore applies the object and treats
+    /// the rest as "not notable".
+    var notable: NotableVerdict = .unknown
 }
 
 /// Response from GET /v1/catches.
@@ -628,7 +646,8 @@ nonisolated struct TailspotAccountClient {
         headingAccuracyDeg: Double?,
         aircraft: UploadCatchRequest.Aircraft? = nil,
         guessKind: String? = nil,
-        guessValue: String? = nil
+        guessValue: String? = nil,
+        notableClaim: Bool = false
     ) async throws -> UploadCatchResponse {
         guard let token = storedToken else { throw AccountError.notRegistered }
 
@@ -657,7 +676,8 @@ nonisolated struct TailspotAccountClient {
                 headingAccuracyDeg: headingAccuracyDeg
             ),
             aircraft: aircraft,
-            guess: guess
+            guess: guess,
+            notableClaim: notableClaim
         )
         request.httpBody = try JSONEncoder().encode(payload)
 

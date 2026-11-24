@@ -101,7 +101,9 @@ struct MultiCatchReveal: View {
         var basePoints = 0
         var firstOfTypePoints = 0
         var multiCatchPoints = 0
-        var awarded: Int { basePoints + firstOfTypePoints + multiCatchPoints }
+        /// The notable-airframe bonus across the run's fresh planes.
+        var notablePoints = 0
+        var awarded: Int { basePoints + firstOfTypePoints + multiCatchPoints + notablePoints }
     }
 
     /// The press size the server will count for this run: its fresh planes.
@@ -116,6 +118,7 @@ struct MultiCatchReveal: View {
         return base
             + (e.plane.isFirstOfType ? ScoringBonuses.firstOfTypeBonus(base: base) : 0)
             + ScoringBonuses.multiCatchBonus(base: base, pressSize: pressSize(entries))
+            + (e.plane.notable != nil ? ScoringBonuses.notableBonus(base: base) : 0)
     }
 
     static func tally<C: Collection>(_ entries: C) -> Tally where C.Element == Entry {
@@ -130,6 +133,9 @@ struct MultiCatchReveal: View {
                 t.firstOfTypePoints += ScoringBonuses.firstOfTypeBonus(base: base)
             }
             t.multiCatchPoints += ScoringBonuses.multiCatchBonus(base: base, pressSize: size)
+            if e.plane.notable != nil {
+                t.notablePoints += ScoringBonuses.notableBonus(base: base)
+            }
         }
         return t
     }
@@ -181,6 +187,7 @@ struct MultiCatchReveal: View {
         if t.multiCatchPoints > 0 {
             parts.append("\(ScoringBonuses.multiCatchLabel(pressSize: t.freshCount).lowercased()) plus \(t.multiCatchPoints)")
         }
+        if t.notablePoints > 0 { parts.append("notable plane plus \(t.notablePoints)") }
         parts.append("\(t.awarded) points awarded")
         return parts.joined(separator: ", ")
     }
@@ -389,6 +396,9 @@ struct MultiCatchReveal: View {
                     ledgerRow(ScoringBonuses.multiCatchLabel(pressSize: tally.freshCount),
                               "+\(tally.multiCatchPoints)", RP.gold, 1, scale: scale)
                 }
+                if tally.notablePoints > 0 {
+                    ledgerRow("NOTABLE PLANE", "+\(tally.notablePoints)", RP.gold, 1, scale: scale)
+                }
                 if tally.duplicateCount > 0 {
                     ledgerRow("ALREADY CAUGHT", "×\(tally.duplicateCount)",
                               Brand.Color.duplicateRose, 1, scale: scale)
@@ -426,6 +436,12 @@ struct MultiCatchReveal: View {
                         Text(cs).foregroundColor(RP.muted)
                     }
                     Text(p.rarity.label).foregroundColor(p.rarity.tint)
+                    if p.notable != nil {
+                        Image(systemName: "star.fill")
+                            .font(.system(size: 8.5 * scale, weight: .bold))
+                            .foregroundStyle(RP.gold)
+                            .accessibilityLabel("Notable plane")
+                    }
                 }
                 .font(.system(size: 10 * scale, weight: .semibold, design: .monospaced))
                 .tracking(1)

@@ -32,7 +32,8 @@
 //     the card turns like a page; `perspective` controls how strongly the
 //     near edge grows and the far edge shrinks (0 = flat, 1 = extreme).
 //     A positive angle sends the right edge away from you.
-//   - Both faces sit in one ZStack and rotate together. The back is
+//   - The back is an overlay on the front (so only the front sizes the
+//     card) and both rotate together. The back is
 //     PRE-ROTATED by 180° (its rotation is `angle − 180`), so when the card
 //     has turned 180° (either way) the back reads the right way round
 //     instead of mirrored.
@@ -301,19 +302,22 @@ struct FlipCard<Front: View, Back: View>: View {
     var body: some View {
         let shownAngle = self.shownAngle
         VStack(spacing: 0) {
-            ZStack {
-                front
-                    .onGeometryChange(for: CGSize.self) { $0.size } action: { frontSize = $0 }
-                    .modifier(FlipFace(angle: shownAngle, isBack: false))
-
-                // Not laid out until the front has been measured — otherwise a
-                // back that fills its proposal would size the ZStack to it.
-                if frontSize.width > 0, frontSize.height > 0 {
-                    back
-                        .frame(width: frontSize.width, height: frontSize.height)
-                        .modifier(FlipFace(angle: shownAngle, isBack: true))
+            front
+                .onGeometryChange(for: CGSize.self) { $0.size } action: { frontSize = $0 }
+                .modifier(FlipFace(angle: shownAngle, isBack: false))
+                // The back rides on the front as an overlay, so only the front
+                // sizes the card (2026-11-22). As a sibling in a ZStack its
+                // fixed frame held the stack at the front's LAST size: a front
+                // whose photo fills the height it is offered could then grow
+                // but never shrink back (after the bonus-round chips, say).
+                .overlay {
+                    // Not laid out until the front has been measured.
+                    if frontSize.width > 0, frontSize.height > 0 {
+                        back
+                            .frame(width: frontSize.width, height: frontSize.height)
+                            .modifier(FlipFace(angle: shownAngle, isBack: true))
+                    }
                 }
-            }
 
             // Under the card, not on either face. Scaled like the card (its
             // design width is 300 pt); `isFlipped` is where the card is going,
@@ -482,6 +486,7 @@ struct CardTurnRow: View {
             // the tappable one), so it costs the column ~28 pt + the gap.
             .padding(.vertical, -8)
             .padding(.top, 4 * scale)
+            .reportsCardFrame(.turnRow)
     }
 
     /// Where the next turn goes: the back's contents, or home to the front.

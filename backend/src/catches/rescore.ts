@@ -20,12 +20,17 @@
  *   - IDEMPOTENT — a second run over settled data changes nothing.
  *   - DRY-RUNNABLE — `{ dryRun: true }` computes the full delta and writes nothing,
  *     so a public-leaderboard re-score's blast radius is reviewable before it lands.
- *   - BATCHED — resolves each (icao24, first-of-type, guess, guess-era)
- *     variant once, writes once per variant (the first-of-type and
+ *   - BATCHED — resolves each (icao24, first-of-type, guess, guess-era,
+ *     press-size) variant once, writes once per variant (the first-of-type and
  *     correct-guess bonuses float with the re-derived base, so two catches of
  *     one airframe can land on different points; the guess ERA — the row's
  *     caughtAt vs. the 2026-08-13 route re-balance cutover — keeps
  *     pre-cutover route guesses at their legacy +10% forever).
+ *
+ * NOTABLE PLANES (scoring v11). Read like the other flags: a row whose
+ * `notable_kind` was frozen at upload keeps its bonus, every other row gets
+ * none. The script never consults the notable directory, so a rescore
+ * cannot hand the bonus to a past catch or take one back.
  *
  * Run as a script:  npm run rescore -- [--all] [--dry-run]
  *   (default targets only stale rows: unresolved OR older-regime.)
@@ -103,6 +108,7 @@ export async function rescoreCatches(
       pressSize: catches.pressSize,
       guessKind: catches.guessKind,
       guessCorrect: catches.guessCorrect,
+      notableKind: catches.notableKind,
       caughtAt: catches.caughtAt,
     })
     .from(catches);
@@ -174,7 +180,8 @@ export async function rescoreCatches(
     // `press_size` is read like the flags (counted at insert, backfilled by
     // migration 0013, raised above when a press was missed): two rows of one airframe score differently when one
     // was a lone catch and the other half of a double.
-    return `${row.icao24}:${row.firstOfType ? 1 : 0}:${guessPart}:${row.pressSize}`;
+    // `notable_kind` is frozen at upload and read the same way.
+    return `${row.icao24}:${row.firstOfType ? 1 : 0}:${guessPart}:${row.pressSize}:${row.notableKind === null ? 0 : 1}`;
   };
   const scoredByKey = new Map<string, ScoredCatch>();
   for (const row of rows) {
@@ -187,6 +194,7 @@ export async function rescoreCatches(
           guess: rowGuess(row),
           caughtAt: row.caughtAt,
           pressSize: row.pressSize,
+          notable: row.notableKind !== null,
         }),
       );
     }

@@ -50,11 +50,19 @@ struct SettledCatchCard: View {
     /// (CatchDetailView, 2026-10-26 — it replaced the CAUGHT block that
     /// floated under the card). nil (the share card) leaves it out.
     var caughtAt: Date? = nil
+    /// The Hangar detail screen sets this (2026-11-22): when the card is
+    /// offered more height than it needs, the photo takes it, up to square,
+    /// and everything under the photo keeps its size. Off (the share cards
+    /// and every fixed render), the card is exactly what it was.
+    var fillsHeight: Bool = false
 
     private var base: Int { plane.rarity.basePoints }
     private var bonus: Int { isFirstOfType ? ScoringBonuses.firstOfTypeBonus(base: base) : 0 }
     private var multiCatchBonus: Int {
         ScoringBonuses.multiCatchBonus(base: base, pressSize: plane.pressSize)
+    }
+    private var notableBonus: Int {
+        plane.notable != nil ? ScoringBonuses.notableBonus(base: base) : 0
     }
 
     @Environment(\.cardSwipeGuard) private var swipeGuard
@@ -85,6 +93,9 @@ struct SettledCatchCard: View {
         }()
 
         let hero = heroView(scale: scale, accent: accent)
+        let details = detailsView(scale: scale, accent: accent, flapLines: flapLines,
+                                  fs: fs, cw: cw, flapGap: flapGap,
+                                  totalFlapChars: totalFlapChars)
 
         return VStack(alignment: .leading, spacing: 0) {
             Group {
@@ -101,13 +112,35 @@ struct SettledCatchCard: View {
                     } label: { hero }
                         .buttonStyle(.plain)
                         .accessibilityLabel(photoTapAccessibilityLabel)
+                        // The caption is drawn on the photo, inside this
+                        // button, so say it here.
+                        .accessibilityValue(plane.notable?.accessibilityText ?? "")
                 } else {
                     hero
                 }
             }
             .padding(18 * scale)
 
-            VStack(alignment: .leading, spacing: 11 * scale) {
+            if fillsHeight {
+                // At its designed size while the photo can still give way;
+                // past the photo's floor the whole block scales down
+                // together, to 88% at most (CardPhotoFill.swift).
+                details.shrinksToFit(width: width, minScale: CardPhotoFill.minTextScale)
+            } else {
+                details
+            }
+        }
+        .frame(width: width)
+        .reportsCardFrame(.card)
+        .modifier(CatchRarityFrame(rarity: plane.rarity, scale: scale))
+    }
+
+    /// Everything under the photo: name, callsign line, stats, route, ledger.
+    private func detailsView(scale: CGFloat, accent: Color, flapLines: [FlapLine],
+                             fs: CGFloat, cw: CGFloat, flapGap: CGFloat,
+                             totalFlapChars: Int) -> some View {
+        let hPad = 22 * scale
+        return VStack(alignment: .leading, spacing: 11 * scale) {
                 VStack(alignment: .leading, spacing: 4 * scale) {
                     ForEach(flapLines) { fl in
                         // t=1 / spanT=0 → every cell settled; the flap frame
@@ -153,8 +186,11 @@ struct SettledCatchCard: View {
                         ledgerRow(ScoringBonuses.multiCatchLabel(pressSize: plane.pressSize),
                                   "+\(multiCatchBonus)", RP.gold, 1, scale: scale)
                     }
+                    if notableBonus > 0 {
+                        ledgerRow("NOTABLE PLANE", "+\(notableBonus)", RP.gold, 1, scale: scale)
+                    }
                     Rectangle().fill(RP.rule).frame(height: 1)
-                    ledgerRow("TOTAL", "+\(base + bonus + multiCatchBonus)", accent, 1, scale: scale, big: true)
+                    ledgerRow("TOTAL", "+\(base + bonus + multiCatchBonus + notableBonus)", accent, 1, scale: scale, big: true)
                 }
             }
             .padding(.horizontal, hPad)
@@ -163,9 +199,6 @@ struct SettledCatchCard: View {
             // stats, route, ledger). The hero stays OUTSIDE the combine so
             // its Planespotters link remains an actionable element.
             .accessibilityElement(children: .combine)
-        }
-        .frame(width: width)
-        .modifier(CatchRarityFrame(rarity: plane.rarity, scale: scale))
     }
 
     /// The photo hero — its own function, not inline in `body`, both to
@@ -176,9 +209,24 @@ struct SettledCatchCard: View {
     /// no live card ever flips identity.
     @ViewBuilder
     private func heroView(scale: CGFloat, accent: Color) -> some View {
+        let photoHeight = 168 * scale
         let base = RevealPhoto(url: plane.photoURL, focus: plane.photoFocus)
-            .frame(height: 168 * scale)
+            // With `fillsHeight` the photo takes spare height (up to square)
+            // and gives height back when the card is too tall for its
+            // screen (down to `CardPhotoFill.minHeight`).
+            .frame(minHeight: fillsHeight
+                       ? CardPhotoFill.minHeight(base: photoHeight) : photoHeight,
+                   maxHeight: fillsHeight
+                       ? CardPhotoFill.maxHeight(cardWidth: width, base: photoHeight)
+                       : photoHeight)
             .frame(maxWidth: .infinity)
+            .reportsCardFrame(.photo)
+            // The notable caption rides the photo's bottom edge.
+            .overlay(alignment: .bottom) {
+                if let notable = plane.notable {
+                    NotablePlate(notable: notable, scale: scale)
+                }
+            }
             .clipShape(RoundedRectangle(cornerRadius: Brand.Radius.card))
         Group {
             if let heroZoom {
@@ -244,6 +292,7 @@ struct SettledCatchCard: View {
                 }
             }
             .lineLimit(1).minimumScaleFactor(0.6)
+            .reportsCardFrame(.routeCodes)
             routeCityLine(origin: plane.originName, dest: plane.destName, scale: scale)
         }
     }

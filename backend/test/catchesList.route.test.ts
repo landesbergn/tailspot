@@ -136,6 +136,7 @@ describe("GET /v1/catches", () => {
       registration: "N12345", // joined from registry
       manufacturer: "Boeing", // joined from typecodes (clean DOC 8643 names)
       model: "737-800",
+      notable: null, // always present; null for an ordinary airframe
     });
   });
 

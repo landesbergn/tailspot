@@ -11,6 +11,8 @@
  * Lossy-but-resilient beats all-or-nothing for live air traffic.
  */
 
+import type { Notable } from "../notable/mapping.js";
+
 /**
  * Origin → destination for a flight, as airport ICAO codes (e.g. "KSFO",
  * "EGLL"). Resolved from the callsign via adsb.lol's route DB; either side may
@@ -100,6 +102,13 @@ export interface NormalizedAircraft {
    * normalizer; attached at serve time from the route cache.
    */
   route?: AircraftRoute;
+  /**
+   * Present when this individual airframe is in the notable-planes directory
+   * (src/notable/): `{ kind, label, name? }`. Optional, same omit-when-absent
+   * semantics as `route`, and likewise attached at serve time (never by the
+   * position normalizer). Additive 2026-11-21.
+   */
+  notable?: Notable;
 }
 
 /**
