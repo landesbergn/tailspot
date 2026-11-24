@@ -1293,6 +1293,21 @@
       "wikipediaTitle": "Saab 340",
       "wingspanMeters": 21.44
     },
+    "fcp-short330": {
+      "entryId": "fcp-short330",
+      "firstFlightYear": 1974,
+      "lengthMeters": 17.69,
+      "numberBuilt": 141,
+      "photo": {
+        "artist": "Eduard Marmet",
+        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/1/11/MVA_Shorts_330_at_Minneapolis_-_9_Sept_1983.jpg/960px-MVA_Shorts_330_at_Minneapolis_-_9_Sept_1983.jpg",
+        "license": "CC BY-SA 3.0",
+        "pageURL": "https://commons.wikimedia.org/wiki/File:MVA_Shorts_330_at_Minneapolis_-_9_Sept_1983.jpg"
+      },
+      "wikidataId": "Q2140283",
+      "wikipediaTitle": "Short 330",
+      "wingspanMeters": 22.76
+    },
     "fcp-twinotter": {
       "entryId": "fcp-twinotter",
       "firstFlightYear": 1965,
@@ -11971,21 +11986,6 @@
       },
       "wikidataId": "Q58219",
       "wikipediaTitle": "Aero Spacelines Super Guppy"
-    },
-    "SH33": {
-      "entryId": "",
-      "firstFlightYear": 1974,
-      "lengthMeters": 17.69,
-      "numberBuilt": 141,
-      "photo": {
-        "artist": "Eduard Marmet",
-        "imageURL": "https://thumb.wikimedia.org/wikipedia/commons/thumb/1/11/MVA_Shorts_330_at_Minneapolis_-_9_Sept_1983.jpg/960px-MVA_Shorts_330_at_Minneapolis_-_9_Sept_1983.jpg",
-        "license": "CC BY-SA 3.0",
-        "pageURL": "https://commons.wikimedia.org/wiki/File:MVA_Shorts_330_at_Minneapolis_-_9_Sept_1983.jpg"
-      },
-      "wikidataId": "Q2140283",
-      "wikipediaTitle": "Short 330",
-      "wingspanMeters": 22.76
     },
     "SH36": {
       "entryId": "",
