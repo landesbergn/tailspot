@@ -166,18 +166,7 @@ struct TailCard: View {
         let info = VStack(alignment: .leading, spacing: 5) {
             // Line 1 — cyan callsign · airline. The callsign is the lead
             // identifier (never truncated); a long airline tail-truncates.
-            // A notable airframe leads with a solid gold star, and gets a
-            // gold line of its own just below saying who it is (or its
-            // category). The star is solid and on this line; the
-            // first-of-type sparkle is ringed and on the model line, so
-            // a row carrying both shows two different marks.
             HStack(spacing: 6) {
-                if notable != nil {
-                    Image(systemName: "star.fill")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(Brand.Color.ledgerGold)
-                        .fixedSize()
-                }
                 Text(tailNumber)
                     .font(Brand.Font.mono(size: 15, weight: .bold, relativeTo: .subheadline))
                     .foregroundStyle(Brand.Color.cyan)
@@ -195,12 +184,21 @@ struct TailCard: View {
             // Line 1 has no room for it beside the callsign and airline
             // ("Golden State Warriors" cut to "Golden..."), and a line of
             // its own also sets the few notable rows apart in the feed.
+            // The solid gold star leads that line (Noah, 2026-11-24), so
+            // the callsign column stays aligned with every other row. The
+            // first-of-type sparkle is ringed and on the model line, so a
+            // row carrying both shows two different marks.
             if let notable {
-                Text(notable.shortText)
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(Brand.Color.ledgerGold)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+                HStack(spacing: 5) {
+                    Image(systemName: "star.fill")
+                        .font(.system(size: 10, weight: .bold))
+                        .fixedSize()
+                    Text(notable.shortText)
+                        .font(.footnote.weight(.semibold))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+                .foregroundStyle(Brand.Color.ledgerGold)
             }
 
             // Line 2 — make/model as the card's HERO line (the reveal
