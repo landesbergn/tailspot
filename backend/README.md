@@ -87,7 +87,12 @@ degrees and returns a normalized, SI-unit snapshot of aircraft inside it:
       "velocityMps": 150.1,        // ground speed; null if unknown
       "trackDeg": 311.94,          // degrees true; null if unknown
       "onGround": false,
-      "positionTimestamp": 1781116525  // unix seconds of last position update; null if unknown
+      "positionTimestamp": 1781116525, // unix seconds of last position update; null if unknown
+      "notable": {                 // ONLY on a notable airframe (see "Notable planes"); additive
+        "kind": "celebrity",       // 2026-11-21, the key is absent for every other plane
+        "label": "Celebrity",
+        "name": "George Lucas"     // omitted when the source names nobody
+      }
     }
   ]
 }
@@ -128,6 +133,128 @@ Behind the route:
 Every JSON response over 1 KB is gzipped when the client sends
 `Accept-Encoding: gzip` (URLSession always does). The aircraft list shrinks
 about 5×.
+
+### Notable planes (`notable` on `/v1/aircraft` and `/v1/catches`)
+
+Some individual airframes are worth more than their type: a head-of-state
+transport, a celebrity's or a company's jet, a team plane, a warbird, a
+firefighting tanker. The API recognises them by ICAO hex and says so with one
+object, the same shape everywhere it appears:
+
+```jsonc
+"notable": { "kind": "celebrity", "label": "Celebrity", "name": "George Lucas" }
+"notable": { "kind": "special", "label": "Historic and special" }   // no name known
+```
+
+| `kind` | `label` (fixed) | What it covers |
+|---|---|---|
+| `government` | Head of state and government | Government, head-of-state and royal flights |
+| `celebrity` | Celebrity | Named individuals' aircraft |
+| `business` | Business jet | Corporate jets, business-jet operators, vanity registrations, and the jets of business magnates and their companies (upstream's `Oligarch`) |
+| `team` | Team plane | Sports team and club aircraft |
+| `special` | Historic and special | Warbirds and vintage types, display teams, one-offs (Beluga, Dreamlifter, NASA), airships and balloons, heavy-lift helicopters |
+| `working` | Special mission | Coast guard, aerial firefighting, survey, surveillance, contract air services, UN, Civil Air Patrol |
+
+Where it appears:
+
+| Route | Notable | Not notable |
+|---|---|---|
+| `GET /v1/aircraft`, each aircraft | the object | key **omitted** |
+| `POST /v1/catches`, the response | the object | `"notable": null` |
+| `GET /v1/catches`, each item | the object | `"notable": null` |
+
+- `/v1/aircraft` answers "is this airframe on the list?". The key is omitted
+  for ordinary planes (nearly all of a list of hundreds) and stamped on every
+  serve, including tile-cache hits.
+- The catch routes answer a different question: "was this **catch** recorded
+  as notable?". The key is always present, an object or an explicit `null`.
+  The app reads a missing key as "this server predates notable planes".
+
+**Going forward only: claim and confirm.** A catch is notable only if the app
+said so when it uploaded it and the server agreed:
+
+```jsonc
+// POST /v1/catches request, from an app that showed this catch as notable
+{ "catchUuid": "…", "icao24": "a4d2ab", …, "notableClaim": true }
+```
+
+- The app sends `notableClaim: true` only for a catch it recorded as notable
+  at catch time (it saw `notable` on `/v1/aircraft`). App versions before
+  1.2.7 never send it.
+- The claim is a request, not a verdict. The server looks the airframe up in
+  its own directory; if it is listed, the row stores `notable_kind` and
+  `notable_name` (migration 0014) and the points include the bonus. A claim on
+  an unlisted airframe earns nothing and the response says `"notable": null`.
+- No claim, no bonus. Every catch stored before this shipped, and every catch
+  from an older app version, has both columns null and stays that way.
+- The stored decision is frozen, like `first_of_type`. A replay
+  (`200`, `duplicate: true`) and `GET /v1/catches` report what the row stores.
+  Regenerating the snapshot later never adds or removes a bonus on a catch
+  that already exists.
+
+```jsonc
+// POST /v1/catches response, an ordinary catch
+{ "catchId": "…", "points": 75, "rarity": "rare", "typecode": "B738", "firstOfType": true,
+  "guessCorrect": false, "pressSize": 1, "notable": null, "duplicate": false }
+```
+
+**Scoring (version 11).** A notable catch earns +50% of its base, additive
+with first-of-type, the guess bonuses and the multi-catch bonus
+(`notableBonus` in `src/catches/points.ts`; the fraction is `notable` in
+`scoring-bonuses.json`). The scorer is told whether the catch is notable (the
+confirmed claim at upload, the stored `notable_kind` everywhere else) and
+never looks the airframe up itself.
+
+**Source and licence.** [plane-alert-db](https://github.com/sdr-enthusiasts/plane-alert-db),
+a community-maintained CSV of about 17,000 airframes, under the Open Database
+License 1.0. Attribution is in `data/NOTICE.md`. About 5,100 of its rows pass
+our rules. `src/notable/mapping.ts` holds those rules and is the only place
+they live:
+
+- Each upstream `Category` maps to one kind through an allow-list. **A
+  category that is not on the list is excluded**, so a category upstream adds
+  later changes nothing until someone maps it.
+- Military and police rows (`#CMPG` of `Mil` or `Pol`) are dropped, except in
+  the government categories, `Historic` and `Aerobatic Teams`.
+- `name` is the upstream Operator, omitted for placeholders such as
+  "Private". It comes from a file anyone can send a pull request to, so it is
+  cleaned before it is served: control characters, bidirectional overrides
+  (U+202A–202E, U+2066–2069) and zero-width characters are stripped,
+  whitespace is collapsed and trimmed, and the result is capped at 60 code
+  points (never cutting a surrogate pair). The upstream tag columns and the
+  raw category never leave the server: they are the maintainers' in-jokes and
+  editorial labels.
+
+**Few moving parts.** The list itself has no table, no ingest step and no
+network call. At boot the server loads the committed snapshot,
+`data/notable-airframes.json` (already filtered and mapped), and serves it
+until the next deploy. If the file is missing or corrupt the server logs an
+error and starts with nothing notable. The only database change is the two
+nullable columns on `catches` (migration 0014).
+
+**Regenerating the snapshot.** The list changes slowly. Regenerate it when a
+release train opens, or when the rules in `mapping.ts` change:
+
+```sh
+npm run notable:snapshot                       # fetch upstream, rewrite data/notable-airframes.json
+npm run notable:snapshot -- --input file.csv   # from a saved copy
+```
+
+Read the diff before committing it: every added line is a name that will
+appear in the app, and a category that lost most of its rows means upstream
+renamed something. The Docker image copies `data/notable-airframes.json`, so
+a new snapshot reaches production with the next deploy. It affects only
+catches made after that deploy.
+
+**Rescore.** Scoring version 11 needs **no rescore**. `npm run rescore` reads
+each row's stored `notable_kind` the way it reads `first_of_type`, so a pass
+over existing rows restamps their version and moves no points. Apply migration
+0014 **before** deploying the server (the server reads and writes the new
+columns; without them every catch upload and Hangar restore returns 500, for
+every app version). Once a notable catch exists, roll forward rather than back:
+the previous server knows nothing of the flag and would drop the bonus the next
+time it re-scores that row. Keep "server before client" for TestFlight builds
+too, or a phone shows a bonus the server never paid.
 
 ### `GET /v1/metadata/{icao24}` (WP 1.4)
 
@@ -183,6 +310,28 @@ Postgres at most once a minute.
 ```json
 { "catches": 5812, "asOf": "2026-09-05T23:41:07.000Z" }
 ```
+
+### `GET /v1/streak-forgiveness`
+
+The public list of **forgiven streak days**. Catch streaks are computed on the
+phone; when the operator declares a day forgiven (an FAA ground stop, say), the
+app reads this list and a missed catch on that day does not break a streak. The
+server has no streak concept — it only publishes the list.
+
+No auth and no `Origin` gate, so old and anonymous clients can read it. Rate
+limited at 120/min per IP, and the list is memoised in-process for 60 s and
+served with `Cache-Control: public, max-age=60`, so traffic reaches Postgres at
+most once a minute per machine and a new day shows up within a minute. If a
+refresh fails, the last good list is served instead of a `500`.
+
+```json
+{ "days": [ { "day": "2026-11-13", "reason": "FAA ground stop" } ] }
+```
+
+`days` is every row, ascending by `day`; `{ "days": [] }` is the normal answer.
+`day` is a zone-free `yyyy-MM-dd` label that each phone reads as its own local
+calendar day, and `reason` is a short user-facing phrase. Rows are written only
+by `npm run streak:forgive` (see **Operator tools**).
 
 ### `POST /v1/catches/:catchUuid/guess` (one-time guess re-credit)
 
@@ -259,7 +408,7 @@ challenges at once can only claim the growth-attribution credit once.
 
 | Route | Auth | Limit | Notes |
 |---|---|---|---|
-| `POST /v1/devices/push-token` | bearer | 30/h/device (per-IP metered first) | body `{ token, environment, build? }` → `204`. `token` is 64–200 hex characters (stored lowercased), `environment` is `"sandbox"` or `"production"`, `build` is accepted for triage and not stored (`null` counts as absent). `422` on any other shape. |
+| `POST /v1/devices/push-token` | bearer | 30/h/device (per-IP metered first) | body `{ token, environment, build? }` → `204`. `token` is 64–200 hex characters (stored lowercased), `environment` is `"sandbox"` or `"production"`, `build` (the app's Int `CFBundleVersion`) is stored as `devices.app_build` so a broadcast push can be limited to new enough clients; `null`, absent, or a number that isn't a non-negative 32-bit integer is stored as unknown. `422` on any other shape. |
 | `DELETE /v1/devices/push-token` | bearer | 30/h/device | `204`. Clears the caller's token; pushes silently stop. Clearing a device that has none is a no-op `204`. |
 
 **A token belongs to one install.** Registering a token that another `devices`
@@ -594,6 +743,97 @@ DATABASE_URL=… npm run device:disable -- <uuid|handle> --enable --apply # undo
 Re-disabling an already-disabled device is a reported no-op, so the original
 `disabled_at` timestamp (the audit trail) is never stomped.
 
+### Forgiving a streak day (`npm run streak:forgive`)
+
+Declares a day forgiven for everyone: it upserts one row in
+`streak_forgiveness`, which `GET /v1/streak-forgiveness` serves and the app
+applies locally. **The row is what protects streaks.** The optional push is
+only the announcement, so a phone that never gets it is still protected the
+next time it reads the list.
+
+**Before running it:** the server must already be deployed with this feature
+and migration **`0012_streak-forgiveness`** applied (see the migration note
+below). Without the table the script fails; without the deploy nothing serves
+the row.
+
+The no-push forms (`--dry-run`, row only, `--remove`) run from a laptop
+through `fly proxy 15432:5432 -a tailspot-db` with `DATABASE_URL` pointed at
+`localhost:15432`. The push forms run on the Fly machine, as shown.
+
+```sh
+# Show what would happen. Writes nothing, sends nothing; with the push flags it
+# also prints how many devices would be pushed, split by production / sandbox.
+DATABASE_URL=… npm run streak:forgive -- --day 2026-11-13 --reason "FAA ground stop" --dry-run
+
+# Write the row only (re-running with a new --reason updates it).
+DATABASE_URL=… npm run streak:forgive -- --day 2026-11-13 --reason "FAA ground stop"
+
+# Write the row, then announce it. A push needs the APNs secrets, which live
+# on the Fly machine, so run the built script THERE (it uses the machine's own
+# DATABASE_URL and APNS_* env; nothing is copied to a laptop).
+fly ssh console -a tailspot-api -C "sh -c 'node dist/tools/forgive-streak-day.js \
+  --day 2026-11-13 --reason \"FAA ground stop\" \
+  --push-title \"…\" --push-body \"…\" --min-build <N>'"
+
+# Test send to ONE device, with no build filter (see below). Same place.
+fly ssh console -a tailspot-api -C "sh -c 'node dist/tools/forgive-streak-day.js \
+  --day 2000-01-01 --reason \"Test\" \
+  --push-title \"…\" --push-body \"…\" --only-device <device uuid>'"
+
+# Undo a mistake. Deletes the day and never pushes.
+DATABASE_URL=… npm run streak:forgive -- --day 2026-11-13 --remove
+```
+
+- `--day` must be a real calendar date as `yyyy-MM-dd` (`2026-02-30` is
+  rejected). It is a zone-free label: each phone treats it as its own local day.
+- `--reason` is the short phrase the app shows; required, at most 80 characters.
+- A push is sent only when **both** `--push-title` and `--push-body` are given.
+- **`--min-build` is required whenever pushing** (unless `--only-device` is
+  used), **and it must be the first build
+  that shipped streak forgiveness.** Older app versions ignore the list, so
+  telling them "your streak is safe" would be untrue. The broadcast goes to
+  every non-disabled device that has an APNs token and a recorded
+  `devices.app_build` ≥ `--min-build`. A device with **no recorded build is
+  excluded**: `app_build` is only stored from the first push-token registration
+  after this deploy. The client re-uploads its token whenever its build
+  changes, so every install of a forgiveness-capable build records one as long
+  as the server was deployed before that build reached users.
+- **`--only-device <device uuid>` is the test send.** Use it before the first
+  real broadcast, so that broadcast is not also the first end-to-end test. With
+  the push flags it sends to that one device only and does **not** apply the
+  build filter — a Debug build reports build 1, which any real `--min-build`
+  excludes. It cannot be combined with `--min-build`. The device must exist, be
+  enabled and have a push token; otherwise the script says which of those
+  failed, writes nothing, sends nothing and exits non-zero. With `--dry-run` it
+  reports the one target, or why there is none.
+  **It still writes the day's row**, so test with a far-past day that touches
+  nobody's streak, such as `2000-01-01`, and `--remove` it afterwards (the row
+  is otherwise served to every phone, harmlessly, until removed).
+- The push needs the same `APNS_*` variables the server uses. If they are
+  missing and a push was requested, the script stops **before** writing
+  anything.
+- Re-running with the push flags pushes everyone again; the script keeps no
+  record of who was told. To fix a reason after announcing, re-run without them.
+
+The push is an ordinary alert with two top-level custom keys:
+
+```json
+{
+  "aps": { "alert": { "title": "…", "body": "…" }, "sound": "default" },
+  "kind": "streak_forgiveness",
+  "day": "2026-11-13"
+}
+```
+
+It carries no `challengeId` (and no `thread-id`), which is what keeps the
+client's challenge routing from claiming it. Sending follows the overtaken
+push's conventions: the APNs host is chosen per token from `apns_environment`,
+each send is bounded by a 5 s deadline, at most 20 are in flight at once, a
+dead token (`410`, `BadDeviceToken`, `Unregistered`) is cleared, a transient
+failure gets one retry, and one device's failure never stops the rest. The
+script ends with a summary (row written, pushes attempted / delivered / dead
+tokens cleared / failed) and exits non-zero if any push failed.
+
 > **Migrations are applied to production MANUALLY** — there is no Fly
 > `release_command`, so a deploy does *not* run them. `0009_device-disabled-at`
 > must be applied (`DATABASE_URL=… npm run db:migrate`) **before** deploying the
@@ -610,6 +850,13 @@ Re-disabling an already-disabled device is a reported no-op, so the original
 > untrue. The migration itself is additive — five nullable columns, no backfill
 > — so applying it ahead of the deploy is always safe, and it is the only safe
 > order.
+>
+> **`0012_streak-forgiveness`** (the `streak_forgiveness` table plus the
+> nullable `devices.app_build` column) has the same rule for the same reason:
+> once `app_build` is in the schema, an un-migrated database fails **device
+> registration**, not just the new endpoint (`test/forgiveStreakDay.test.ts`
+> pins it). It is additive — one new table, one nullable column, no backfill —
+> so apply it first, then deploy, then use `npm run streak:forgive`.
 
 ## Tests
 
@@ -668,6 +915,12 @@ Primary region: `sjc` (San Jose, CA). See `fly.toml` for machine/VM config and
 health-check settings. Secrets (Postgres URL, adsb.lol key, etc.) are set via
 `fly secrets set KEY=value` — never committed to the repo. `DATABASE_URL` is the
 Fly managed-Postgres connection string.
+
+A deploy that raises `CURRENT_SCORING_VERSION` (`src/catches/points.ts`) is
+not finished until the rescore has run: `npm run rescore -- --dry-run`, read
+the delta, then `npm run rescore`. Version 11 (notable planes) is the
+exception: it applies to new catches only, so it needs migration 0014 and no
+rescore.
 
 After provisioning Postgres and setting `DATABASE_URL`, apply migrations and seed
 the metadata tables once (then on each refresh):

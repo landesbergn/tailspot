@@ -37,6 +37,9 @@ import SwiftUI
 /// moment, before persistence). All optionality lives here; the
 /// view falls back to em-dashes / hidden lines when fields are nil.
 struct CardPlane: Equatable {
+    /// What the card names the plane by: the flight callsign, else the tail
+    /// number (`Callsign.cardIdentifier`). Display only. It can hold a
+    /// registration, so never feed it to an airline or route lookup.
     let callsign: String?
     let model: String?
     let carrier: String?
@@ -81,6 +84,13 @@ struct CardPlane: Equatable {
     /// Computed off the row's live base via `ScoringBonuses.guessBonus` so it
     /// re-tiers with the base like `firstOfType` does.
     let guessBonusPoints: Int
+    /// How many fresh planes the press that made this catch caught (1 = a
+    /// lone catch). Drives the "DOUBLE CATCH +N" ledger line via
+    /// `ScoringBonuses.multiCatchBonus`. Display-only, like `isFirstOfType`.
+    let pressSize: Int
+    /// The server's notable-airframe flag, when this plane carries one.
+    /// Drives the gold notable plate and the "NOTABLE PLANE +N" ledger line.
+    let notable: NotablePlane?
     /// The airframe's hex id, when the builder knows it. The share copy's
     /// fallback for a callsign-less catch ("Caught A1B2C3 · Cessna 172"),
     /// so every share path names the plane the way the Hangar detail does.
@@ -104,6 +114,8 @@ struct CardPlane: Equatable {
         isFirstOfType: Bool = false,
         guessKind: GuessKind? = nil,
         guessBonusPoints: Int = 0,
+        pressSize: Int = 1,
+        notable: NotablePlane? = nil,
         icao24: String? = nil
     ) {
         self.callsign = callsign
@@ -123,6 +135,8 @@ struct CardPlane: Equatable {
         self.isFirstOfType = isFirstOfType
         self.guessKind = guessKind
         self.guessBonusPoints = guessBonusPoints
+        self.pressSize = pressSize
+        self.notable = notable
         self.icao24 = icao24
     }
 }
@@ -491,7 +505,7 @@ extension CardPlane {
             model: c.model
         )
         self.init(
-            callsign: c.callsign,
+            callsign: Callsign.cardIdentifier(callsign: c.callsign, registration: c.registration),
             model: canonical.displayName ?? c.model,
             carrier: c.operatorName,
             rarity: c.resolvedRarity,

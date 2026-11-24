@@ -20,18 +20,23 @@
  *   - IDEMPOTENT — a second run over settled data changes nothing.
  *   - DRY-RUNNABLE — `{ dryRun: true }` computes the full delta and writes nothing,
  *     so a public-leaderboard re-score's blast radius is reviewable before it lands.
- *   - BATCHED — resolves each (icao24, first-of-type, guess, guess-era)
- *     variant once, writes once per variant (the first-of-type and
+ *   - BATCHED — resolves each (icao24, first-of-type, guess, guess-era,
+ *     press-size) variant once, writes once per variant (the first-of-type and
  *     correct-guess bonuses float with the re-derived base, so two catches of
  *     one airframe can land on different points; the guess ERA — the row's
  *     caughtAt vs. the 2026-08-13 route re-balance cutover — keeps
  *     pre-cutover route guesses at their legacy +10% forever).
  *
+ * NOTABLE PLANES (scoring v11). Read like the other flags: a row whose
+ * `notable_kind` was frozen at upload keeps its bonus, every other row gets
+ * none. The script never consults the notable directory, so a rescore
+ * cannot hand the bonus to a past catch or take one back.
+ *
  * Run as a script:  npm run rescore -- [--all] [--dry-run]
  *   (default targets only stale rows: unresolved OR older-regime.)
  */
 
-import { eq, inArray, isNull, lt, or } from "drizzle-orm";
+import { eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { type Database, closeDb, getDb } from "../db/client.js";
 import { catches } from "../db/schema.js";
 import { DrizzleCatchStore, type GuessVerdict, type ScoredCatch } from "../identity/store.js";
@@ -93,14 +98,17 @@ export async function rescoreCatches(
   const baseSelect = db
     .select({
       id: catches.id,
+      deviceId: catches.deviceId,
       icao24: catches.icao24,
       typecode: catches.typecode,
       rarity: catches.rarity,
       points: catches.points,
       scoringVersion: catches.scoringVersion,
       firstOfType: catches.firstOfType,
+      pressSize: catches.pressSize,
       guessKind: catches.guessKind,
       guessCorrect: catches.guessCorrect,
+      notableKind: catches.notableKind,
       caughtAt: catches.caughtAt,
     })
     .from(catches);
@@ -121,6 +129,28 @@ export async function rescoreCatches(
     applied: !opts.dryRun,
   };
   if (rows.length === 0) return report;
+
+  // Press sizes are normally frozen (counted at insert, backfilled by
+  // migration 0013), but two kinds of row miss that count: a press uploaded
+  // between the migration and the deploy of the v10 server, and one whose
+  // insert-time `reconcilePress` failed. Re-count every press here and RAISE a
+  // stale size (never lower: a deleted sibling keeps the survivor's bonus), so
+  // the dry-run shows the delta and the apply writes the size with the points.
+  const counted = await db
+    .select({
+      deviceId: catches.deviceId,
+      caughtAt: catches.caughtAt,
+      n: sql<number>`count(distinct ${catches.icao24})::integer`,
+    })
+    .from(catches)
+    .groupBy(catches.deviceId, catches.caughtAt)
+    .having(sql`count(distinct ${catches.icao24}) >= 2`);
+  const pressKey = (deviceId: string, caughtAt: Date) => `${deviceId}:${caughtAt.getTime()}`;
+  const countedSize = new Map(counted.map((p) => [pressKey(p.deviceId, p.caughtAt), p.n]));
+  for (const row of rows) {
+    const n = countedSize.get(pressKey(row.deviceId, row.caughtAt));
+    if (n !== undefined && n > row.pressSize) row.pressSize = n;
+  }
 
   // Resolve+score each distinct (airframe, first-of-type, guess, era) variant ONCE.
   // The expensive part — the registry→typecode join — depends only on the
@@ -147,7 +177,11 @@ export async function rescoreCatches(
   const scoreKey = (row: RescoreRow) => {
     const guess = rowGuess(row);
     const guessPart = guess ? `${guess.kind}:${guess.correct ? 1 : 0}:${guessEra(row)}` : "-";
-    return `${row.icao24}:${row.firstOfType ? 1 : 0}:${guessPart}`;
+    // `press_size` is read like the flags (counted at insert, backfilled by
+    // migration 0013, raised above when a press was missed): two rows of one airframe score differently when one
+    // was a lone catch and the other half of a double.
+    // `notable_kind` is frozen at upload and read the same way.
+    return `${row.icao24}:${row.firstOfType ? 1 : 0}:${guessPart}:${row.pressSize}:${row.notableKind === null ? 0 : 1}`;
   };
   const scoredByKey = new Map<string, ScoredCatch>();
   for (const row of rows) {
@@ -159,6 +193,8 @@ export async function rescoreCatches(
           firstOfType: row.firstOfType,
           guess: rowGuess(row),
           caughtAt: row.caughtAt,
+          pressSize: row.pressSize,
+          notable: row.notableKind !== null,
         }),
       );
     }
@@ -219,6 +255,7 @@ export async function rescoreCatches(
           rarity: score.rarity,
           points: score.points,
           scoringVersion: score.scoringVersion,
+          pressSize: score.pressSize,
         })
         .where(ids.length === 1 ? eq(catches.id, ids[0]) : inArray(catches.id, ids));
     }

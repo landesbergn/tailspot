@@ -31,7 +31,7 @@ export const UNKNOWN_RARITY_POINTS = 10;
  * re-score can find rows scored under an older regime and re-derive them.
  *
  * BUMP THIS when the scoring LOGIC changes — the `POINTS` ladder below, the
- * `UNKNOWN_RARITY_POINTS` floor, or the icao24→typecode→rarity resolution chain
+ * `UNKNOWN_RARITY_POINTS` floor, a bonus, or the icao24→typecode→rarity resolution chain
  * (`DrizzleCatchStore.resolveRarity`). After bumping, run `npm run rescore`
  * (see catches/rescore.ts) to bring every older-regime catch up to the new one.
  *
@@ -76,8 +76,25 @@ export const UNKNOWN_RARITY_POINTS = 10;
  *       rescore: a catch uploaded in a deploy→ingest gap is scored with the
  *       old tiers but stamped 9, and the default rescore (`scoringVersion <
  *       CURRENT`) never revisits it. Then rescore; review the dry-run delta.
+ *  10 — multi-catch bonus (2026-11-13, Noah's call): each plane caught in one
+ *       shutter press with one other plane earns +25% of its base, with two
+ *       or more others +50%. RETROACTIVE: migration 0013 adds `press_size`
+ *       and backfills it for every past press (rows of one press share
+ *       `caught_at`), so the v9→v10 rescore pays the combo the reveal showed
+ *       from 2026-05-21 to 2026-10-23 and the server never awarded. Apply the
+ *       migration BEFORE deploying this server, then rescore; review the
+ *       dry-run delta first.
+ *  11 — notable planes (2026-11-21): a catch of an individually notable
+ *       airframe (a head-of-state transport, a celebrity or corporate jet, a
+ *       team plane, a historic or special-mission aircraft; see
+ *       src/notable/) earns +50% of its base. GOING FORWARD ONLY: the
+ *       decision is frozen on the row at upload (migration 0014,
+ *       `notable_kind`), and only for a catch the app itself showed as
+ *       notable (1.2.7+ sends `notableClaim`). Past catches and older app
+ *       versions never earn it, so NO rescore is needed and none moves any
+ *       points. Apply migration 0014 BEFORE deploying this server.
  */
-export const CURRENT_SCORING_VERSION = 9;
+export const CURRENT_SCORING_VERSION = 11;
 
 /** Type guard for a known rarity tier string. */
 function isRarity(value: string | null | undefined): value is Rarity {
@@ -107,6 +124,45 @@ export function pointsForRarity(rarity: string | null | undefined): number {
  * points ladder once did.
  */
 export const FIRST_OF_TYPE_BONUS_FRACTION = 0.5;
+
+/**
+ * Multi-catch bonus fractions (scoring v10): several planes caught in ONE
+ * shutter press. Additive on each plane's own base, like first-of-type and the
+ * guess bonuses, so they stack without compounding. A press of two pays
+ * the double fraction; three or more pays the triple (the app caps a press at
+ * three planes under the new catch rule; the shipped rule can go higher but
+ * earns no more).
+ */
+export const MULTI_CATCH_DOUBLE_FRACTION = 0.25;
+export const MULTI_CATCH_TRIPLE_FRACTION = 0.5;
+
+/**
+ * The multi-catch BONUS for a given base and press size (the number of
+ * distinct airframes the device caught at the same instant). A lone catch
+ * (size 1, or anything below) earns nothing. Defined ONCE and used only by the
+ * canonical scorer.
+ */
+export function multiCatchBonus(base: number, pressSize: number): number {
+  if (pressSize < 2) return 0;
+  const fraction = pressSize === 2 ? MULTI_CATCH_DOUBLE_FRACTION : MULTI_CATCH_TRIPLE_FRACTION;
+  return Math.round(base * fraction);
+}
+
+/**
+ * Notable-plane bonus fraction (scoring v11): the caught airframe is in the
+ * notable directory (src/notable/). Additive on the base, like the others.
+ */
+export const NOTABLE_BONUS_FRACTION = 0.5;
+
+/**
+ * The notable-plane BONUS for a given base: +50% of the base, rounded. Whether
+ * the airframe IS notable is the caller's question (the canonical scorer asks
+ * the directory); this only prices it. Defined ONCE and used only by the
+ * canonical scorer.
+ */
+export function notableBonus(base: number): number {
+  return Math.round(base * NOTABLE_BONUS_FRACTION);
+}
 
 /** The guessable question kinds of the pre-reveal bonus round (game-layer PR1). */
 export type GuessKind = "route" | "type";

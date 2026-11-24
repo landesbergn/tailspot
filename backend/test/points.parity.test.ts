@@ -15,11 +15,16 @@ import {
   FIRST_OF_TYPE_BONUS_FRACTION,
   GUESS_BONUS_FRACTIONS,
   LEGACY_ROUTE_GUESS_FRACTION,
+  MULTI_CATCH_DOUBLE_FRACTION,
+  MULTI_CATCH_TRIPLE_FRACTION,
+  NOTABLE_BONUS_FRACTION,
   ROUTE_GUESS_REBALANCE_CUTOVER,
   type Rarity,
   UNKNOWN_RARITY_POINTS,
   firstOfTypeBonus,
   guessBonus,
+  multiCatchBonus,
+  notableBonus,
   pointsForRarity,
 } from "../src/catches/points.js";
 
@@ -29,6 +34,9 @@ const canonical = JSON.parse(readFileSync(canonicalPath, "utf8")) as Record<Rari
 const bonusesPath = resolve(here, "../../ios/Tailspot/Tailspot/scoring-bonuses.json");
 const bonuses = JSON.parse(readFileSync(bonusesPath, "utf8")) as {
   firstOfType: number;
+  multiCatchDouble: number; // each plane in a 2-plane press (scoring v10)
+  multiCatchTriple: number; // each plane in a press of 3 or more
+  notable: number; // an individually notable airframe (scoring v11)
   routeGuess: number;
   routeGuessCutover: number; // unix seconds — the 2026-08-13 route re-balance instant
   routeGuessLegacy: number; // the pre-cutover route fraction (+10%)
@@ -59,9 +67,12 @@ describe("bonus parity (backend ↔ canonical scoring-bonuses.json)", () => {
   const preCutover = new Date(bonuses.routeGuessCutover * 1000 - 1);
   const postCutover = new Date(bonuses.routeGuessCutover * 1000);
 
-  it("the canonical file defines exactly the five bonus values", () => {
+  it("the canonical file defines exactly the eight bonus values", () => {
     expect(Object.keys(bonuses).sort()).toEqual([
       "firstOfType",
+      "multiCatchDouble",
+      "multiCatchTriple",
+      "notable",
       "routeGuess",
       "routeGuessCutover",
       "routeGuessLegacy",
@@ -74,6 +85,9 @@ describe("bonus parity (backend ↔ canonical scoring-bonuses.json)", () => {
     expect(GUESS_BONUS_FRACTIONS.route).toBe(bonuses.routeGuess);
     expect(GUESS_BONUS_FRACTIONS.type).toBe(bonuses.typeGuess);
     expect(LEGACY_ROUTE_GUESS_FRACTION).toBe(bonuses.routeGuessLegacy);
+    expect(MULTI_CATCH_DOUBLE_FRACTION).toBe(bonuses.multiCatchDouble);
+    expect(MULTI_CATCH_TRIPLE_FRACTION).toBe(bonuses.multiCatchTriple);
+    expect(NOTABLE_BONUS_FRACTION).toBe(bonuses.notable);
     expect(ROUTE_GUESS_REBALANCE_CUTOVER.getTime()).toBe(bonuses.routeGuessCutover * 1000);
   });
 
@@ -81,6 +95,7 @@ describe("bonus parity (backend ↔ canonical scoring-bonuses.json)", () => {
     for (const tier of tiers) {
       const base = pointsForRarity(tier);
       expect(firstOfTypeBonus(base)).toBe(Math.round(base * bonuses.firstOfType));
+      expect(notableBonus(base)).toBe(Math.round(base * bonuses.notable));
       expect(guessBonus(base, "route", postCutover)).toBe(Math.round(base * bonuses.routeGuess));
       expect(guessBonus(base, "type", postCutover)).toBe(Math.round(base * bonuses.typeGuess));
     }
@@ -93,6 +108,17 @@ describe("bonus parity (backend ↔ canonical scoring-bonuses.json)", () => {
         Math.round(base * bonuses.routeGuessLegacy),
       );
       expect(guessBonus(base, "type", preCutover)).toBe(Math.round(base * bonuses.typeGuess));
+    }
+  });
+
+  it("the multi-catch bonus: nothing alone, the double fraction for 2, the triple for 3 or more", () => {
+    for (const tier of tiers) {
+      const base = pointsForRarity(tier);
+      expect(multiCatchBonus(base, 0)).toBe(0);
+      expect(multiCatchBonus(base, 1)).toBe(0);
+      expect(multiCatchBonus(base, 2)).toBe(Math.round(base * bonuses.multiCatchDouble));
+      expect(multiCatchBonus(base, 3)).toBe(Math.round(base * bonuses.multiCatchTriple));
+      expect(multiCatchBonus(base, 5)).toBe(Math.round(base * bonuses.multiCatchTriple));
     }
   });
 });

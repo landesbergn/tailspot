@@ -74,19 +74,42 @@ import Testing
               isDuplicate: dup)
     }
 
-    @Test func awardedIsTheSumOfEachCatchWithNoMultiplier() {
-        // Old view: (50 + 10 + 20) × 2.0 = 160. The server awards 80.
-        let t = MultiCatchReveal.tally([entry(.rare), entry(.common), entry(.uncommon)])
+    @Test func aTripleEarnsHalfOfEachBaseOnTop() {
+        // Scoring v10: three fresh planes, +50% of each base (25 + 5 + 10).
+        let entries = [entry(.rare), entry(.common), entry(.uncommon)]
+        let t = MultiCatchReveal.tally(entries)
         #expect(t.freshCount == 3)
         #expect(t.basePoints == 80)
         #expect(t.firstOfTypePoints == 0)
-        #expect(t.awarded == 80)
+        #expect(t.multiCatchPoints == 40)
+        #expect(t.awarded == 120)
+        // The rows add up to the total.
+        #expect(entries.map { MultiCatchReveal.earned($0, in: entries) } == [75, 15, 30])
+    }
+
+    @Test func aDoubleEarnsAQuarterOfEachBaseOnTop() {
+        // 50 + 13 (round 12.5 half up, as the server's Math.round) and 10 + 3.
+        let entries = [entry(.rare), entry(.common)]
+        let t = MultiCatchReveal.tally(entries)
+        #expect(t.multiCatchPoints == 16)
+        #expect(t.awarded == 76)
+        #expect(entries.map { MultiCatchReveal.earned($0, in: entries) } == [63, 13])
+    }
+
+    @Test func oneFreshPlaneAndADuplicateIsNotAMultiCatch() {
+        // The duplicate makes no row, so the server sees a lone catch.
+        let entries = [entry(.rare), entry(.epic, dup: true)]
+        let t = MultiCatchReveal.tally(entries)
+        #expect(t.multiCatchPoints == 0)
+        #expect(t.awarded == 50)
+        #expect(MultiCatchReveal.earned(entries[1], in: entries) == 0)
     }
 
     @Test func firstOfTypeIsCountedLikeTheServer() {
         let t = MultiCatchReveal.tally([entry(.rare, firstOfType: true), entry(.common)])
         #expect(t.firstOfTypePoints == ScoringBonuses.firstOfTypeBonus(base: 50))
-        #expect(t.awarded == 60 + ScoringBonuses.firstOfTypeBonus(base: 50))
+        #expect(t.multiCatchPoints == 16)
+        #expect(t.awarded == 60 + ScoringBonuses.firstOfTypeBonus(base: 50) + 16)
     }
 
     @Test func duplicatesEarnNothing() {
@@ -94,14 +117,15 @@ import Testing
                                         entry(.common)])
         #expect(t.freshCount == 2)
         #expect(t.duplicateCount == 1)
-        #expect(t.awarded == 60)
+        // Two fresh planes: a double. 50 + 13 and 10 + 3.
+        #expect(t.awarded == 76)
     }
 
-    @Test func announcementSpeaksAwardedPointsAndNoCombo() {
+    @Test func announcementSpeaksTheDoubleCatchBonusAndAwardedPoints() {
         let t = MultiCatchReveal.tally([entry(.rare, firstOfType: true), entry(.common),
                                         entry(.uncommon, dup: true)])
         let s = MultiCatchReveal.announcement(for: t)
-        #expect(!s.lowercased().contains("combo"))
+        #expect(s.contains("double catch plus \(t.multiCatchPoints)"))
         #expect(s.contains("2 planes caught"))
         #expect(s.contains("1 already in hangar"))
         #expect(s.contains("\(t.awarded) points awarded"))

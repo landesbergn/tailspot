@@ -71,6 +71,9 @@ struct HangarView: View {
                     // written before these fields existed. One metadata
                     // fetch per distinct icao24; idempotent. The @Query
                     // auto-refreshes the UI as fields fill and save().
+                    // Press sizes first (sync, no network): rows a restore
+                    // just brought in have none until this runs.
+                    CatchBackfill.backfillPressSizes(catches, in: modelContext)
                     await CatchBackfill.backfillAll(catches, in: modelContext)
                     // One-time photo-focus recovery: derive the crop focus
                     // from the baked bracket for catches that predate the
@@ -168,10 +171,18 @@ struct HangarView: View {
                         .tag(HangarSegment.sets)
                     HangarRecentView()
                         .tag(HangarSegment.recent)
-                    HangarTrophiesView()
+                    HangarTrophiesView(isActive: segment.wrappedValue == .trophies)
                         .tag(HangarSegment.trophies)
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
+                // The page view stops at the bottom safe area by default,
+                // which cut each segment's list off flat above the home
+                // indicator. Run the pages to the screen edge; each page's
+                // scroll view still insets its content for the indicator.
+                .ignoresSafeArea(.container, edges: .bottom)
+                // With the safe area ignored, give every page's scroll
+                // content room to clear the home indicator at the end.
+                .contentMargins(.bottom, 24, for: .scrollContent)
             }
             .background(Brand.Color.bgPrimary)
             .task(id: recapTaskID) {

@@ -98,7 +98,9 @@ yarn-error.log*
 *~
 
 # Tooling / local
-.claude/
+# .claude/ is local except rules/, which are shared path-scoped Claude Code rules.
+/.claude/*
+!/.claude/rules/
 tools/replay-harness/recordings/
 
 # Deploy-loop artifacts and per-user overrides

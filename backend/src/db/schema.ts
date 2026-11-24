@@ -174,6 +174,19 @@ export const devices = pgTable(
     apnsEnvironment: text("apns_environment"),
     /** Last time the token was (re)registered; audit + staleness triage. */
     apnsUpdatedAt: timestamp("apns_updated_at", { withTimezone: true }),
+    /**
+     * The app build (Int CFBundleVersion) that registered the current push
+     * token (migration 0012). Null = unknown: the token was registered before
+     * this column existed, or the client could not read its own build.
+     *
+     * It exists for BROADCAST pushes that are only true for new enough clients
+     * — the streak-forgiveness announcement (`src/tools/forgive-streak-day.ts`)
+     * must not tell an old build "your streak is safe" when that build ignores
+     * forgiveness. A null build is therefore always EXCLUDED from a gated
+     * broadcast. Written with the token and cleared with it (it describes the
+     * registration, not the device).
+     */
+    appBuild: integer("app_build"),
   },
   (t) => ({
     /**
@@ -259,6 +272,34 @@ export const catches = pgTable(
     guessKind: text("guess_kind"),
     guessValue: text("guess_value"),
     guessCorrect: boolean("guess_correct").notNull().default(false),
+    /**
+     * How many distinct airframes this device caught in the SAME shutter press
+     * as this row, itself included (migration 0013, scoring v10). 1 = a lone
+     * catch. Rows of one press share `caught_at` exactly (the app stamps one
+     * instant on every row of a press), so the server derives this itself; the
+     * wire carries no press size. Drives the multi-catch bonus in the ONE
+     * canonical scorer. Kept current on INSERT (`reconcilePress` re-counts
+     * the press and re-scores its rows when a sibling arrives). A rescore
+     * re-counts too and RAISES a stale size (a press uploaded between the
+     * migration and the v10 deploy, or one whose reconcile failed), but never
+     * lowers one: a later delete of a sibling does not take the bonus back.
+     */
+    pressSize: integer("press_size").notNull().default(1),
+    /**
+     * Notable planes (migration 0014, scoring v11). Set at INSERT, and only
+     * when the uploading app claimed the catch as notable (`notableClaim`,
+     * which only 1.2.7+ sends, and only for a catch it showed as notable) AND
+     * the airframe was in the notable directory (src/notable/) at that moment.
+     * FROZEN like `first_of_type`: the scorer pays the bonus when
+     * `notable_kind` is non-null and never asks the directory again, so a
+     * later change to the list neither grants nor takes back a bonus, and
+     * every catch made before 1.2.7 stays as it was (both columns null).
+     * `notable_kind` is one of the six kinds in src/notable/mapping.ts (plain
+     * text, like `guess_kind`); `notable_name` is the operator or owner, when
+     * the list named one.
+     */
+    notableKind: text("notable_kind"),
+    notableName: text("notable_name"),
     /** When the client says it was caught. */
     caughtAt: timestamp("caught_at", { withTimezone: true }).notNull(),
     observerLat: doublePrecision("observer_lat").notNull(),
@@ -521,3 +562,25 @@ export const challengeResults = pgTable(
     pk: primaryKey({ columns: [t.challengeId, t.deviceId] }),
   }),
 );
+
+/**
+ * Operator-declared "forgiven days" for catch streaks (migration 0012).
+ *
+ * Streaks are computed entirely on the phone; the server has no streak concept.
+ * This table is only a public list the app fetches (GET /v1/streak-forgiveness)
+ * and applies locally: a missed catch on a forgiven day does not break a
+ * streak. `day` is a ZONE-FREE "yyyy-MM-dd" label that each phone reads as its
+ * own local calendar day — which is why it is text and not a `date` or a
+ * timestamp: there is no instant to store, and a driver that helpfully turned
+ * it into a Date would invent one.
+ *
+ * Written only by `src/tools/forgive-streak-day.ts` (`npm run streak:forgive`).
+ * Nothing in the request path writes it.
+ */
+export const streakForgiveness = pgTable("streak_forgiveness", {
+  /** "yyyy-MM-dd", zone-free. Natural PK: one row per forgiven day. */
+  day: text("day").primaryKey(),
+  /** Short user-facing phrase shown by the app, e.g. "FAA ground stop". */
+  reason: text("reason").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+});

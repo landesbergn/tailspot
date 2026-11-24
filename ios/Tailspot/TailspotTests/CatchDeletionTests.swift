@@ -103,4 +103,39 @@ struct CatchDeletionTests {
 
         #expect(fired == ["SWA503"])
     }
+
+    // MARK: - Multi-catch press size
+
+    private func press(uploaded: Bool, size: Int) throws -> (ModelContext, [Catch]) {
+        let container = try ModelContainer(
+            for: Catch.self,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+        )
+        TestContainerRetention.retain(container)
+        let context = ModelContext(container)
+        let at = Date(timeIntervalSince1970: 1_790_000_000.4567)
+        let rows = (0..<size).map { _ in makeCatch(callsign: "SWA1", caughtAt: at, serverUuid: nil) }
+        for row in rows {
+            row.pressSize = size
+            if uploaded { row.uploadedAt = at }
+            context.insert(row)
+        }
+        try context.save()
+        return (context, rows)
+    }
+
+    @Test func deletingAnUnuploadedPlaneShrinksThePress() throws {
+        let (context, rows) = try press(uploaded: false, size: 3)
+        CatchDeletion.delete(rows[0], in: context, deleteRemotely: { _ in }, fireEvent: { _ in })
+        #expect(rows[1].pressSize == 2)
+        #expect(rows[2].pressSize == 2)
+        CatchDeletion.delete(rows[1], in: context, deleteRemotely: { _ in }, fireEvent: { _ in })
+        #expect(rows[2].pressSize == nil)
+    }
+
+    @Test func deletingAnUploadedPlaneKeepsTheOthersBonus() throws {
+        let (context, rows) = try press(uploaded: true, size: 2)
+        CatchDeletion.delete(rows[0], in: context, deleteRemotely: { _ in }, fireEvent: { _ in })
+        #expect(rows[1].pressSize == 2)
+    }
 }

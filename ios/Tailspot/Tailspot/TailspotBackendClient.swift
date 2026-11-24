@@ -60,6 +60,10 @@ nonisolated struct BackendAircraft: Decodable {
     /// optional — so an older backend that never sends it (or a routeless flight)
     /// decodes as nil with no error. Both codes are 4-letter ICAO airport idents.
     let route: Route?
+    /// The server's notable-airframe flag (additive 2026-11). The key is
+    /// absent for nearly every plane and on older backends; a malformed
+    /// object decodes as "not notable" rather than failing the poll.
+    let notable: NotablePlaneWire?
 
     /// Nested `route` object on `GET /v1/aircraft` (U6 backend addition):
     /// `{ "originIcao": "KSFO", "destIcao": "EGLL" }`. Both sub-fields optional.
@@ -85,7 +89,9 @@ nonisolated struct BackendAircraft: Decodable {
     func asAircraft() -> Aircraft {
         Aircraft(
             icao24: icao24,
-            callsign: callsign,
+            // Placeholder flight IDs ("00000000") become nil here, so a
+            // catch never stores one. See Callsign.swift.
+            callsign: Callsign.clean(callsign),
             originCountry: originCountry ?? "—",
             longitude: longitude,
             latitude: latitude,
@@ -102,7 +108,8 @@ nonisolated struct BackendAircraft: Decodable {
             originIata: route?.originIata,
             destIata: route?.destIata,
             originName: route?.originName,
-            destName: route?.destName
+            destName: route?.destName,
+            notable: notable?.value
         )
     }
 }

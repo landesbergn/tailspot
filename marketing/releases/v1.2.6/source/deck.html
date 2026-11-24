@@ -1,0 +1,211 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Tailspot store slides 1.2.6</title>
+<!-- One renderer for all seven 1.2.6 App Store slides (1206 x 2622, the size App Store Connect accepts for this slot).
+     Open deck.html#1 … #7; headless Chrome screenshots each at 1206x2622.
+     Type is the Mac system fonts (SF Pro / SF Mono), so render on a Mac. -->
+<style>
+:root{--cyan:#00D4FF;--app-text:#E8F4FF;--app-text-2:#A0B0C0;--card:#11151F;
+  --sf:-apple-system,"SF Pro Display",system-ui,sans-serif;--sfmono:ui-monospace,"SF Mono",Menlo,monospace}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:#0B1428;width:1206px;height:2622px;overflow:hidden}
+.slide{position:relative;width:1206px;aspect-ratio:1206/2622;container-type:inline-size;overflow:hidden;
+  background:radial-gradient(90% 40% at 15% 0%,#173B55 0%,transparent 70%),linear-gradient(180deg,#0B1428 0%,#141C33 55%,#2B2236 100%);color:#fff;font-family:var(--sf)}
+/* Headline: same size, weight and place on every slide; the second half in cyan. */
+.hl{position:absolute;left:7cqw;right:7cqw;top:9cqw;font-weight:800;letter-spacing:-.02em;line-height:1.02;text-align:center;font-size:11.5cqw;text-wrap:balance}
+.hl em{font-style:normal;color:var(--cyan)}
+/* Catch card (slides 1-2) and UI panel (slides 3-7) share the top line, border and shadow. */
+.idcard{position:absolute;top:56cqw;border:.4cqw solid rgba(0,212,255,.35);box-shadow:0 3cqw 8cqw rgba(0,0,0,.4)}
+.idcard{left:7cqw;right:7cqw;border-radius:5cqw;background:var(--card);overflow:hidden}
+.idcard .ph{position:relative;aspect-ratio:6/5;overflow:hidden}
+.idcard .ph img{width:100%;height:100%;object-fit:cover;display:block}
+.idcard .ph .ret{position:absolute;left:20%;top:14%;width:60%;height:72%;overflow:visible}
+.idcard .meta{padding:5.5cqw 6cqw 6cqw;display:flex;flex-direction:column;gap:2.4cqw}
+.idcard .ty{font-family:var(--sfmono);font-weight:700;font-size:7.2cqw;letter-spacing:.04em;white-space:nowrap}
+.idcard .op{font-family:var(--sfmono);font-size:4cqw;letter-spacing:.12em}
+.idcard .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:2cqw;margin-top:2.4cqw;border-top:.3cqw solid #262C3A;padding-top:4cqw;padding-bottom:1.2cqw}
+.idcard .stats div{display:flex;flex-direction:column;gap:1cqw}
+.idcard .stats small{font-family:var(--sfmono);font-size:3.2cqw;color:var(--app-text-2);letter-spacing:.1em}
+.idcard .stats strong{font-family:var(--sfmono);font-size:5.6cqw;white-space:nowrap;font-variant-numeric:tabular-nums}
+.idcard .stats strong span{font-size:3.4cqw;color:var(--app-text-2)}
+.idcard .earn{display:flex;justify-content:space-between;align-items:baseline;border-top:.3cqw solid #262C3A;padding-top:4cqw;margin-top:1cqw;font-family:var(--sfmono)}
+.idcard .earn small{font-size:3.6cqw;letter-spacing:.12em;color:var(--app-text-2)}
+.idcard .earn strong{font-size:8cqw}
+/* Slides 3-7: illustrated, centred compositions built from the app's own parts. */
+.mono{font-family:var(--sfmono)}
+.col{position:absolute;left:7cqw;right:7cqw;display:flex;flex-direction:column;align-items:center}
+.box{background:var(--card);border:.4cqw solid rgba(0,212,255,.35);box-shadow:0 3cqw 8cqw rgba(0,0,0,.4);border-radius:5cqw;overflow:hidden;width:100%}
+/* 3: guess round, drawn like the in-card round in CatchRevealView */
+.g{padding:4cqw 4cqw 6cqw}
+.g .ph{position:relative;aspect-ratio:16/9;overflow:hidden;border-radius:4cqw;border:.3cqw solid rgba(255,255,255,.12)}
+.g .ph img{width:100%;height:100%;object-fit:cover;display:block}
+.g .ph .ret{position:absolute;left:28%;top:15%;width:46%;height:70%;overflow:visible}
+.g .meta{padding:5cqw 2cqw 0;display:flex;flex-direction:column;gap:2cqw}
+.g .ty{font-family:var(--sfmono);font-weight:700;font-size:7.4cqw;letter-spacing:.1em}
+.g .op{font-family:var(--sfmono);font-size:3.9cqw;letter-spacing:.1em;display:flex;align-items:center;gap:2cqw}
+.g .op i{width:2.4cqw;height:2.4cqw;border-radius:50%;background:#8595A5}
+.g hr{border:0;border-top:.3cqw solid #262C3A;margin:2.4cqw 0 1.6cqw;width:100%}
+.g .bonus{font-family:var(--sfmono);font-weight:700;font-size:3.8cqw;letter-spacing:.12em;color:#FFC74A}
+.g .q{font-family:var(--sfmono);font-weight:700;font-size:5.5cqw;color:var(--cyan);white-space:nowrap;letter-spacing:-.01em}
+.g .chips{display:flex;flex-direction:column;gap:2.4cqw;margin-top:2.4cqw}
+.g .chip{display:flex;justify-content:space-between;align-items:center;font-family:var(--sfmono);font-weight:600;font-size:4.8cqw;
+  padding:3cqw 4.6cqw;border-radius:3.6cqw;background:rgba(26,32,48,.5);border:.3cqw solid rgba(0,212,255,.06);color:#7F8B98}
+.g .chip.ok{background:rgba(61,214,140,.15);border-color:#3DD68C;color:#E8F4FF}
+.g .chip.ok b{color:#3DD68C;font-size:5cqw}
+/* 4: Hangar Sets tab, drawn like SetsScreen (segmented control + SetCompletionCard rows) */
+.seg{display:flex;width:100%;padding:1.2cqw;border-radius:10cqw;background:#11151F;border:.3cqw solid #262C3A}
+.seg span{flex:1;text-align:center;font-size:5cqw;padding:3cqw 0;border-radius:10cqw;color:#A0B0C0;font-weight:500}
+.seg span.on{background:#00B8DE;color:#04121A;font-weight:600;box-shadow:0 0 5cqw rgba(0,212,255,.35)}
+.sets{display:flex;flex-direction:column;gap:3cqw;width:100%}
+.setc{display:flex;align-items:center;gap:5cqw;padding:4.2cqw 5cqw 4.2cqw 4.2cqw;border-radius:4.4cqw;background:#1A2030;border:.3cqw solid rgba(232,244,255,.06)}
+.setc svg.ring{width:16cqw;height:16cqw;flex:none}
+.setc .tx{flex:1;display:flex;flex-direction:column;gap:1.4cqw}
+.setc b{font-size:6.6cqw;font-weight:600}
+.setc small{font-family:var(--sfmono);font-weight:600;font-size:4cqw;color:#7F8B98}
+.setc .chev{color:rgba(127,139,152,.6);font-size:5cqw;font-weight:600}
+/* 5: trophies, drawn like the 1.2.6 Trophies tab (TrophyBadge: one monoline symbol in a ring) */
+.cap{display:flex;justify-content:space-between;width:100%;font-family:var(--sfmono);font-size:3.5cqw;letter-spacing:.22em;color:var(--app-text-2);font-weight:700}
+.cap i{font-style:normal;font-weight:500;color:#7F8B98;letter-spacing:.12em}
+.chase{display:flex;gap:5cqw;align-items:center;padding:5cqw;border-radius:5cqw;background:#11151F;border:.4cqw solid rgba(0,212,255,.35);box-shadow:0 3cqw 8cqw rgba(0,0,0,.4);width:100%}
+.chase .tx{flex:1;display:flex;flex-direction:column;gap:1.6cqw}
+.chase b{font-size:6.6cqw;font-weight:700;line-height:1.1;white-space:nowrap}
+.chase em{font-style:normal;font-size:4.3cqw;white-space:nowrap;color:var(--app-text-2)}
+.bar{height:1.5cqw;border-radius:1cqw;background:#05080F;overflow:hidden;width:100%}
+.bar u{display:block;height:100%;border-radius:1cqw;background:var(--cyan)}
+.chase small,.lvl small{font-family:var(--sfmono);font-weight:600;font-size:3.7cqw;color:#7F8B98}
+.lvl{display:flex;align-items:center;gap:4.6cqw;padding:4.2cqw 5cqw 4.2cqw 4.2cqw;border-radius:4.4cqw;background:#1A2030;border:.3cqw solid rgba(232,244,255,.06);width:100%}
+.lvl .tx{flex:1;display:flex;flex-direction:column;gap:1.8cqw}
+.lvl .h{display:flex;justify-content:space-between;align-items:baseline}
+.lvl b{font-size:6.2cqw;font-weight:600}
+.lvl .h span{font-family:var(--sfmono);font-weight:700;font-size:3.8cqw;color:var(--cyan)}
+/* 6: podium */
+.pod{display:flex;align-items:flex-end;justify-content:center;gap:3cqw;width:100%}
+.pod .p{display:flex;flex-direction:column;align-items:center;gap:2.4cqw;width:26cqw}
+.av{border-radius:50%;display:flex;align-items:center;justify-content:center;background:#1A2232;position:relative}
+.av svg{width:56%;height:56%}
+.pod .pts{font-family:var(--sfmono);font-weight:700;font-size:4.6cqw}
+.pod .blk{width:100%;border-radius:3cqw 3cqw 1cqw 1cqw;display:flex;justify-content:center;padding-top:3cqw;font-size:13cqw;font-weight:800;color:rgba(255,255,255,.92)}
+.rows{width:100%;display:flex;flex-direction:column;gap:2.4cqw}
+.row{display:flex;align-items:center;gap:3.4cqw;background:var(--card);border:.35cqw solid #222A3A;border-radius:3.4cqw;padding:3cqw 4cqw}
+.row .rk{font-family:var(--sfmono);font-weight:700;font-size:4.8cqw;width:5cqw;color:var(--app-text-2)}
+.row .bar{flex:1;height:2.4cqw;border-radius:2cqw;background:#2A3242}
+.row .pt{font-family:var(--sfmono);font-size:4.4cqw;color:var(--app-text-2)}
+.up{font-family:var(--sfmono);font-weight:700;font-size:3.8cqw;color:#4ECCA3;background:rgba(78,204,163,.14);border-radius:2cqw;padding:.8cqw 2cqw}
+.pill{font-family:var(--sfmono);font-size:3.6cqw;letter-spacing:.14em;color:var(--app-text-2);display:flex;gap:2cqw;align-items:center}
+.pill b{color:#04121A;background:var(--cyan);border-radius:10cqw;padding:1.2cqw 3.4cqw;font-weight:700;letter-spacing:.14em}
+/* 7: challenge */
+.push{width:100%;border-radius:6cqw;padding:4cqw 4.6cqw;display:flex;gap:3.6cqw;align-items:flex-start;
+  background:rgba(48,56,74,.82);border:.3cqw solid rgba(255,255,255,.14);box-shadow:0 4cqw 10cqw rgba(0,0,0,.5);backdrop-filter:blur(20px)}
+.push img{width:11cqw;height:11cqw;border-radius:2.6cqw;flex:none}
+.push .tx{flex:1;display:flex;flex-direction:column;gap:.8cqw}
+.push .hd{display:flex;justify-content:space-between;font-size:3.4cqw;color:#B8C2D2;letter-spacing:.02em}
+.push .t{font-size:4.6cqw;font-weight:700}
+.push .b{font-size:4.3cqw;color:#E3E8F0;line-height:1.3}
+.race{padding:5.5cqw 5.5cqw 7cqw;display:flex;flex-direction:column;gap:4.6cqw}
+.race .h{display:flex;justify-content:space-between;align-items:baseline}
+.race .h b{font-size:7.4cqw;font-weight:800}
+.race .h span{font-family:var(--sfmono);font-size:3.4cqw;color:#FF8A5B;letter-spacing:.1em}
+.race .sub{font-family:var(--sfmono);font-size:3.3cqw;color:var(--app-text-2);letter-spacing:.12em;margin-top:-2cqw}
+.lane{display:grid;grid-template-columns:5cqw 12cqw 1fr;align-items:center;gap:2.6cqw}
+.lane .rk{font-family:var(--sfmono);font-weight:700;font-size:4.6cqw;color:var(--app-text-2)}
+.lane .track{position:relative;height:12.5cqw}
+.lane .fill{position:absolute;inset:0 auto 0 0;border-radius:2.6cqw;display:flex;align-items:center;justify-content:flex-end;padding-right:3cqw;font-family:var(--sfmono);font-weight:700;font-size:4.2cqw}
+.lane.me .fill{box-shadow:0 0 6cqw rgba(0,212,255,.35)}
+.lane .you{position:absolute;left:3cqw;top:50%;transform:translateY(-50%);font-family:var(--sfmono);font-weight:700;font-size:3.6cqw;letter-spacing:.14em;color:#04121A}
+</style>
+<div id="o"></div>
+<script>
+const arm='M8 26 V8 H26 M74 8 H92 V26 M8 74 V92 H26 M74 92 H92 V74';
+const reticle=`<svg class="ret" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+  <path d="${arm}" fill="none" stroke="#04070D" stroke-width="5.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="${arm}" fill="none" stroke="#00D4FF" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const card=c=>`<div class="idcard">
+  <div class="ph"><img src="${c.img}" alt="">${reticle}</div>
+  <div class="meta"><div class="ty">${c.ty}</div><div class="op" style="color:${c.tint}">${c.op}</div>
+    <div class="stats"><div><small>ALT</small><strong>${c.alt}<span> ft</span></strong></div><div><small>SPD</small><strong>${c.spd}<span> kt</span></strong></div><div><small>DIST</small><strong>${c.dist}<span> km</span></strong></div></div>
+    <div class="earn"><small>CAUGHT</small><strong style="color:${c.tint}">+${c.pts}</strong></div></div></div>`;
+// Real catch rows (Fleet Week 2026). Tier tints and points from GameSystem.swift.
+const E6 ={img:'e6.png', ty:'E-6 MERCURY',  op:'US NAVY · LEGENDARY',      tint:'#FFC74A',alt:'1,801',spd:'135',dist:'1.3',pts:500};
+const L39={img:'l39.png',ty:'L-39 ALBATROS',op:'PATRIOTS JET TEAM · RARE', tint:'#00D4FF',alt:'200',  spd:'252',dist:'0.8',pts:50};
+// Monoline glyphs (24 x 24) standing in for the SF Symbols the app's TrophyBadge draws.
+const G={
+ book:'<path d="M8.2 3.8H17a1 1 0 011 1v15.4H8.3a2.1 2.1 0 010-4.2H18"/><path d="M8.2 3.8A2.2 2.2 0 006 6v12.1M9.6 3.8V16"/>',
+ ticket:'<path d="M3.5 8a1 1 0 011-1h15a1 1 0 011 1v2a2 2 0 000 4v2a1 1 0 01-1 1h-15a1 1 0 01-1-1v-2a2 2 0 000-4z"/><path d="M8 9.5h8v5H8z"/>',
+ moon:'<path d="M18.5 14.2A7.6 7.6 0 019.8 5.5a7.6 7.6 0 108.7 8.7z"/><path d="M16.5 4.2v3M15 5.7h3"/>',
+ plane:'<path fill="currentColor" stroke="none" transform="rotate(90 12 12) scale(.75)" d="M16 3c1.2 0 1.8 1.5 2 3l.4 6 8 4.2c.8.4 1.2 1 1.2 1.8v.6c0 .3-.3.5-.6.4l-8.6-2-.3 5 2.4 1.6c.2.2.3.4.3.7v.2c0 .3-.3.5-.6.4l-4.2-1-4.2 1c-.3.1-.6-.1-.6-.4v-.2c0-.3.1-.5.3-.7L13.5 22l-.3-5-8.6 2c-.3.1-.6-.1-.6-.4V18c0-.8.4-1.4 1.2-1.8l8-4.2.4-6c.2-1.5.8-3 2-3z"/>',
+};
+// TrophyBadge.swift in SVG: a disc, a ring (whole, in segments, or one arc toward the next level) and one glyph.
+const badge=(g,sz,o={})=>{const earned=o.earned!==false,R=44.25,W=5.5,lit='#00D4FF',dim='rgba(127,139,152,.5)',T=2*Math.PI;
+ const pt=a=>`${50+R*Math.cos(a)} ${50+R*Math.sin(a)}`;
+ const arc=(a0,a1,c)=>`<path d="M${pt(a0)} A${R} ${R} 0 ${a1-a0>Math.PI?1:0} 1 ${pt(a1)}" fill="none" stroke="${c}" stroke-width="${W}" stroke-linecap="round"/>`;
+ let ring;
+ if(o.arc!=null) ring=`<circle cx="50" cy="50" r="${R}" fill="none" stroke="${dim}" stroke-width="${W}"/>`+arc(-T/4,-T/4+T*Math.min(.999,o.arc),lit);
+ else if(o.segs>1){const gap=W/R+.12,sl=T/o.segs;ring=[...Array(o.segs)].map((_,i)=>arc(-T/4+sl*i+gap/2,-T/4+sl*(i+1)-gap/2,i<o.filled?lit:dim)).join('')}
+ else ring=`<circle cx="50" cy="50" r="${R}" fill="none" stroke="${earned?lit:dim}" stroke-width="${W}"/>`;
+ return `<svg viewBox="0 0 100 100" style="width:${sz}cqw;height:${sz}cqw;flex:none;display:block${o.glow?`;filter:drop-shadow(0 0 ${o.glow}cqw rgba(0,212,255,.45))`:''}">
+ <circle cx="50" cy="50" r="50" fill="${earned?'#1A2030':'#050810'}"/>${ring}
+ <svg x="31" y="31" width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="${earned?'#E8F4FF':'#7F8B98'}" color="${earned?'#E8F4FF':'#7F8B98'}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${G[g]}</svg></svg>`};
+// 3. Guess round: the real JBU1770 catch (photo cropped to inside the bracket the app baked in, one reticle drawn on top as on slides 1-2) (A321neo, GYE→JFK), its real four chips, GYE answered right.
+const chip=(code,city,ok)=>`<div class="chip${ok?' ok':''}"><span>${code} · ${city}</span>${ok?'<b>✓</b>':''}</div>`;
+const s3=`<div class="col" style="top:56cqw"><div class="box g">
+ <div class="ph"><img src="ph/a321_guess.jpg" alt="">${reticle}</div>
+ <div class="meta"><div class="ty">A321NEO</div><div class="op"><i></i>JBU1770 · JETBLUE AIRWAYS</div><hr>
+  <div class="bonus">BONUS ROUND · +25%</div><div class="q">Where's it coming from?</div>
+  <div class="chips">${chip('BOG','Bogota')}${chip('GYE','Guayaquil',1)}${chip('UIO','Quito')}${chip('CCS','Maiquetía')}</div></div></div></div>`;
+// 4. Hangar Sets tab. Set sizes are the real family sets in Sets.swift; progress is illustrative.
+const ring=(c,t)=>{const f=c/t,r=19,C=2*Math.PI*r;const mid=f>=1?'<path d="M17 25l5 5 10-11" fill="none" stroke="#00D4FF" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>'
+ :`<text x="25" y="29.5" text-anchor="middle" font-family="ui-monospace,SF Mono,Menlo" font-weight="800" font-size="12.5" fill="#E8F4FF">${Math.round(f*100)}%</text>`;
+ return `<svg class="ring" viewBox="0 0 50 50"><circle cx="25" cy="25" r="${r}" fill="none" stroke="rgba(127,139,152,.18)" stroke-width="5"/>
+ <circle cx="25" cy="25" r="${r}" fill="none" stroke="#00D4FF" stroke-width="5" stroke-linecap="round" stroke-dasharray="${C*f} ${C}" transform="rotate(-90 25 25)"/>${mid}</svg>`};
+const setc=(t,c,n)=>`<div class="setc">${ring(c,n)}<div class="tx"><b>${t}</b><small>${c} of ${n} variants</small></div><span class="chev">›</span></div>`;
+const s4=`<div class="col" style="top:56cqw;gap:5cqw">
+ <div class="seg"><span class="on">Sets</span><span>Recent</span><span>Trophies</span></div>
+ <div class="sets">${setc('Airbus A220',2,2)}${setc('Airbus A320',4,6)}${setc('Boeing 777',2,5)}${setc('Boeing 737',3,8)}${setc('Boeing 787',1,3)}</div>
+</div>`;
+// 5. Trophies in the 1.2.6 look. Names, thresholds and symbols from Trophies.swift and TrophyTracks.swift; progress is illustrative.
+// 5: the Trophies tab itself: the nearest chase ("On approach"), then three level rows.
+const lvl=(g,name,tag,cur,next,to,o)=>`<div class="lvl">${badge(g,16,o)}<div class="tx"><div class="h"><b>${name}</b><span>${tag}</span></div>
+ <div class="bar"><u style="width:${100*cur/next}%"></u></div><small>${cur} / ${next} to level ${to}</small></div></div>`;
+const s5=`<div class="col" style="top:56cqw;gap:4cqw">
+ <div class="cap"><span>ON APPROACH</span><i>3 LIVE</i></div>
+ <div class="chase">${badge('plane',22,{arc:.96,glow:2})}<div class="tx"><b>Heavies Level 2</b><em>2 more wide-bodies to go</em>
+  <div class="bar" style="margin-top:1.4cqw"><u style="width:96%"></u></div><small>48 / 50</small></div></div>
+ <div class="cap" style="margin-top:5cqw"><span>LEVELS</span><i>12 EARNED</i></div>
+ ${lvl('book','Logbook','Level 4',212,500,5,{arc:.42})}
+ ${lvl('ticket','Airlines','Level 1 of 4',27,30,2,{segs:4,filled:1})}
+ ${lvl('moon','Night','Level 1',18,25,2,{arc:.72})}
+</div>`;
+// 6. Leaderboard: podium and rows, no handles; one row climbing.
+const person=c=>`<svg viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="4.2" fill="${c}"/><path d="M3.5 21c.8-4.6 4.2-7 8.5-7s7.7 2.4 8.5 7z" fill="${c}"/></svg>`;
+const pod=(rk,pts,h,c,sz,crown='')=>`<div class="p">${crown}<div class="av" style="width:${sz}cqw;height:${sz}cqw;box-shadow:0 0 0 .7cqw ${c}">${person(c)}</div>
+ <div class="pts">${pts}</div><div class="blk" style="height:${h}cqw;background:linear-gradient(180deg,${c}cc,${c}33)">${rk}</div></div>`;
+const s6=`<div class="col" style="top:56cqw;gap:6cqw">
+ <div class="pod">${pod(2,'985',36,'#C5D0DA',17)}${pod(1,'1,240',50,'#FFC74A',21)}${pod(3,'720',26,'#C26B3F',17)}</div>
+ <div class="rows">
+  <div class="row" style="border-color:rgba(0,212,255,.6);box-shadow:0 0 6cqw rgba(0,212,255,.25)"><span class="rk" style="color:#fff">4</span><div class="av" style="width:9cqw;height:9cqw">${person('#00D4FF')}</div><div class="bar" style="background:linear-gradient(90deg,#00D4FF,#00D4FF55)"></div><span class="up">▲ 3</span><span class="pt" style="color:#fff">615</span></div>
+  <div class="row"><span class="rk">5</span><div class="av" style="width:9cqw;height:9cqw">${person('#5A6378')}</div><div class="bar" style="flex:.8"></div><div style="flex:.2"></div><span class="pt">540</span></div>
+  <div class="row"><span class="rk">6</span><div class="av" style="width:9cqw;height:9cqw">${person('#5A6378')}</div><div class="bar" style="flex:.65"></div><div style="flex:.35"></div><span class="pt">410</span></div>
+ </div></div>`;
+// 7. Challenge: the real "You got passed" push (no-handle variant) over the live race.
+const dot=c=>`<div class="av" style="width:12cqw;height:12cqw;box-shadow:0 0 0 .5cqw ${c}">${person(c)}</div>`;
+const lane=(rk,c,pct,pts,me=false)=>`<div class="lane${me?' me':''}"><span class="rk">${rk}</span>${dot(c)}<div class="track"><div class="fill" style="width:${pct}%;background:${me?'var(--cyan)':c+'99'};color:${me?'#04121A':'#fff'}">${pts}</div>${me?'<span class="you">YOU</span>':''}</div></div>`;
+const s7=`<div class="col" style="top:56cqw;gap:0">
+ <div class="push" style="position:relative;z-index:2"><img src="ph/icon.png" alt=""><div class="tx"><div class="hd"><span>TAILSPOT</span><span>now</span></div>
+  <div class="t">You got passed</div><div class="b">You've dropped to 2nd in the Weekend Flyoff.</div></div></div>
+ <div class="box race" style="margin-top:-3cqw;padding-top:9cqw">
+  <div class="h"><b>Weekend Flyoff</b><span>● LIVE</span></div>
+  <div class="sub">7 SPOTTERS · ENDS 8:36 PM</div>
+  ${lane(1,'#FF8A5B',92,'560')}${lane(2,'#00D4FF',86,'545',true)}${lane(3,'#B48CFF',64,'410')}${lane(4,'#4ECCA3',47,'300')}${lane(5,'#8595A5',30,'195')}
+ </div></div>`;
+const S={
+  1:['What\'s that plane? <em>Point your phone at it.</em>', card(E6)],
+  2:['Every catch goes into <em>your Hangar.</em>', card(L39)],
+  3:['Guess where it\'s <em>coming from.</em>', s3],
+  4:['Collect every <em>make and model.</em>', s4],
+  5:['Earn trophies for <em>unique catches.</em>', s5],
+  6:['Make your way up <em>the leaderboard.</em>', s6],
+  7:['Challenge <em>your friends.</em>', s7],
+};
+const n=+(location.hash.slice(1)||1);
+document.getElementById('o').innerHTML=`<div class="slide"><div class="hl">${S[n][0]}</div>${S[n][1]}</div>`;
+</script>

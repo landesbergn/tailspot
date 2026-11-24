@@ -66,7 +66,7 @@ nonisolated struct TypeHistory: Equatable, Sendable {
             // about who flies it; operatorLabel would call it "Private",
             // which is a guess, so it's left out rather than counted.
             let hasOperator = row.operatorName.map { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty } ?? false
-            let hasCallsign = row.callsign.map { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty } ?? false
+            let hasCallsign = Callsign.clean(row.callsign) != nil
             guard hasOperator || hasCallsign else { continue }
             let label = Airlines.operatorLabel(operatorName: row.operatorName, callsign: row.callsign)
             guard label != "Operator unknown" else { continue }

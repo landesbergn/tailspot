@@ -5,7 +5,9 @@
 //  The full-screen "moment" — an opaque branded takeover over the live AR
 //  that celebrates a newly-unlocked achievement. Drains
 //  `TrophyUnlockCenter`'s queue one event at a time (tap to advance), and
-//  renders the one-time recap first when present.
+//  renders the one-time recap first when present. Last in line is the
+//  quieter "almost there" card, for a catch that left a track one or two
+//  short of its next level.
 //
 //  Mounted once at a root level (ContentView) — see KTD-5. Achievements are
 //  binary now: every unlock is just "UNLOCKED" (or "SECRET UNLOCKED" for a
@@ -26,10 +28,6 @@ struct TrophyUnlockView: View {
     @State private var hapticTick = 0
     @State private var rayAngle = 0.0
 
-    /// Achievements render in a single cyan-family hex — set apart from the
-    /// rarity/type pills by shape + a consistent cool tone (not gold).
-    private let tier: TrophyTier = .platinum
-
     var body: some View {
         ZStack {
             // Opaque branded spotlight — a clean full takeover, not a
@@ -46,6 +44,8 @@ struct TrophyUnlockView: View {
                 TrophyRecapView(recap: recap) { center.dismissRecap() }
             } else if let event = center.head {
                 eventCard(event)
+            } else if let near = center.pendingNearMiss {
+                nearMissCard(near)
             } else {
                 Color.clear   // queue drained — the cover dismisses (U6)
             }
@@ -55,6 +55,7 @@ struct TrophyUnlockView: View {
         // *behind* the recap isn't committed/animated until the recap is
         // dismissed — then it re-fires for its proper entrance.
         .task(id: eventTaskKey) { await presentHead() }
+        .task(id: nearTaskKey) { presentNearMiss() }
         .task(id: center.pendingRecap) {
             guard center.pendingRecap != nil else { return }
             hapticTick &+= 1
@@ -68,10 +69,10 @@ struct TrophyUnlockView: View {
         }
     }
 
-    // MARK: - Celebratory hex (glow halo + rotating ray burst behind it)
+    // MARK: - Celebratory badge (glow halo + rotating ray burst behind it)
 
     @ViewBuilder
-    private func celebratoryHex(_ iconName: String, size: CGFloat) -> some View {
+    private func celebratoryHex(_ achievement: Achievement, size: CGFloat) -> some View {
         ZStack {
             // Soft cyan halo.
             Circle()
@@ -80,7 +81,7 @@ struct TrophyUnlockView: View {
                     center: .center, startRadius: 0, endRadius: size * 1.25))
                 .frame(width: size * 2.6, height: size * 2.6)
             // Slowly-rotating rays, faded at the center so they don't cover the
-            // hex, and at the rim. Suppressed under Reduce Motion.
+            // badge, and at the rim. Suppressed under Reduce Motion.
             if !reduceMotion {
                 RayBurst(count: 12)
                     .fill(Brand.Color.cyan.opacity(0.18))
@@ -90,7 +91,7 @@ struct TrophyUnlockView: View {
                         center: .center, startRadius: size * 0.55, endRadius: size * 1.2))
                     .rotationEffect(.degrees(rayAngle))
             }
-            TrophyView(tier: tier, iconName: iconName, size: size)
+            TrophyBadge(TrophyBadgeSpec(earnedAchievement: achievement), size: size)
         }
         .scaleEffect(appeared ? 1 : (reduceMotion ? 1 : 0.4))
         .opacity(appeared ? 1 : 0)
@@ -106,17 +107,17 @@ struct TrophyUnlockView: View {
                 .tracking(4)
                 .foregroundStyle(Brand.Color.cyan)
 
-            celebratoryHex(event.achievement.iconName, size: 132)
+            celebratoryHex(event.achievement, size: 132)
 
             // The trophy's name is prose (a title, not a readout), so it
             // takes the display face; mono stays on the NEW TROPHY label.
-            Text(event.achievement.title)
+            Text(TrophyTracks.displayTitle(for: event.achievement))
                 .brandDisplayFont()
                 .foregroundStyle(Brand.Color.textPrimary)
                 .multilineTextAlignment(.center)
                 .minimumScaleFactor(0.7)
 
-            Text(event.achievement.displaySummary)
+            Text(TrophyTracks.displaySummary(for: event.achievement, units: UnitPreferences.shared.units))
                 .font(Brand.Font.caption)
                 .foregroundStyle(Brand.Color.textSecondary)
                 .multilineTextAlignment(.center)
@@ -130,8 +131,57 @@ struct TrophyUnlockView: View {
         .onTapGesture { center.advance() }
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isModal)
-        .accessibilityLabel("\(event.achievement.title) unlocked. \(event.achievement.displaySummary)")
+        .accessibilityLabel("\(TrophyTracks.displayTitle(for: event.achievement)) unlocked. \(TrophyTracks.displaySummary(for: event.achievement, units: UnitPreferences.shared.units))")
         .accessibilityAction(named: "Dismiss") { center.advance() }
+    }
+
+    // MARK: - Almost-there card
+
+    /// A level one or two catches away. Quieter than an unlock: the ring as
+    /// it stands (no halo, no rays), what is left, and the goal. Nothing has
+    /// been earned yet, so it does not celebrate.
+    @ViewBuilder
+    private func nearMissCard(_ near: TrophyNearMiss) -> some View {
+        VStack(spacing: 18) {
+            // Pilot shorthand for the last stretch before landing. VoiceOver
+            // keeps the plain "Almost there".
+            Text("ON FINAL")
+                .font(Brand.Font.mono(size: 13, weight: .heavy))
+                .tracking(4)
+                .foregroundStyle(Brand.Color.textSecondary)
+
+            TrophyBadge(near.badgeSpec, size: 112)
+                .padding(.vertical, 10)
+                .scaleEffect(appeared ? 1 : (reduceMotion ? 1 : 0.85))
+                .opacity(appeared ? 1 : 0)
+
+            Text(near.title)
+                .brandDisplayFont()
+                .foregroundStyle(Brand.Color.textPrimary)
+                .multilineTextAlignment(.center)
+                .minimumScaleFactor(0.7)
+
+            VStack(spacing: 6) {
+                Text(near.remainingText.prefix(1).uppercased() + near.remainingText.dropFirst())
+                    .font(.headline)
+                    .foregroundStyle(Brand.Color.cyan)
+                Text(near.goalText)
+                    .font(Brand.Font.caption)
+                    .foregroundStyle(Brand.Color.textSecondary)
+            }
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, 32)
+
+            footer(remaining: 0)
+        }
+        .padding(.vertical, 40)
+        .frame(maxWidth: .infinity)
+        .contentShape(Rectangle())
+        .onTapGesture { center.dismissNearMiss() }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isModal)
+        .accessibilityLabel("Almost there. \(near.track.name) level \(near.level). \(near.remainingText). \(near.goalText).")
+        .accessibilityAction(named: "Dismiss") { center.dismissNearMiss() }
     }
 
     @ViewBuilder
@@ -175,12 +225,25 @@ struct TrophyUnlockView: View {
         center.pendingRecap == nil ? center.head?.id : nil
     }
 
+    /// Task id for the near-miss card: nil while a recap or unlock card is
+    /// still ahead of it.
+    private var nearTaskKey: String? {
+        center.pendingRecap == nil && center.head == nil ? center.pendingNearMiss?.achievement.id : nil
+    }
+
+    private func presentNearMiss() {
+        guard nearTaskKey != nil, let near = center.pendingNearMiss else { return }
+        center.markNearMissShown(near)                // commit-on-shown
+        animateIn()
+        AccessibilityNotification.Announcement("Almost there. \(near.title), \(near.remainingText)").post()
+    }
+
     private func presentHead() async {
         guard center.pendingRecap == nil, let event = center.head else { return }
         center.markShown(event)                       // commit-on-shown
         hapticTick &+= 1
         animateIn()
-        AccessibilityNotification.Announcement("\(event.achievement.title) unlocked").post()
+        AccessibilityNotification.Announcement("\(TrophyTracks.displayTitle(for: event.achievement)) unlocked").post()
     }
 
     private func animateIn() {

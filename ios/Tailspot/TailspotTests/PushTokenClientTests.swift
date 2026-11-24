@@ -321,4 +321,44 @@ struct PushEnvironmentTests {
     @Test func theSimulatorHasNoEnvironment() {
         #expect(PushEnvironment.current() == nil)
     }
+
+    // MARK: resolve — the rule `current()` applies
+
+    /// The regression this suite exists for. Apple strips
+    /// `embedded.mobileprovision` from App Store and TestFlight builds, so
+    /// "no profile on a real device" is every released install. Treating it
+    /// as "no token possible" kept all of them from registering.
+    @Test func aDeviceWithNoProfileIsAStoreBuildOnProduction() {
+        #expect(PushEnvironment.resolve(provisioningProfile: nil, isSimulator: false)
+                == PushEnvironment.production)
+    }
+
+    @Test func aDevelopmentProfileOnADeviceIsSandbox() {
+        #expect(PushEnvironment.resolve(
+            provisioningProfile: profile(apsEnvironment: "development"), isSimulator: false)
+                == PushEnvironment.sandbox)
+    }
+
+    @Test func aProductionProfileOnADeviceIsProduction() {
+        #expect(PushEnvironment.resolve(
+            provisioningProfile: profile(apsEnvironment: "production"), isSimulator: false)
+                == PushEnvironment.production)
+    }
+
+    /// A profile that is there but grants no push (or cannot be read) is a
+    /// development or ad hoc build without the entitlement. It must not
+    /// fall through to the store-build rule.
+    @Test func aProfileWithoutPushOnADeviceStaysNil() {
+        #expect(PushEnvironment.resolve(
+            provisioningProfile: profile(apsEnvironment: nil), isSimulator: false) == nil)
+        #expect(PushEnvironment.resolve(
+            provisioningProfile: Data([0x00, 0xFF, 0x10]), isSimulator: false) == nil)
+    }
+
+    /// The simulator wins over everything, including the store-build rule.
+    @Test func theSimulatorIsNilWhateverTheProfile() {
+        #expect(PushEnvironment.resolve(provisioningProfile: nil, isSimulator: true) == nil)
+        #expect(PushEnvironment.resolve(
+            provisioningProfile: profile(apsEnvironment: "production"), isSimulator: true) == nil)
+    }
 }

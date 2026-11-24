@@ -22,6 +22,8 @@ import { makeRegistryEnrichSink } from "./ingest/feedEnrich.js";
 import { DrizzleMetadataStore, type MetadataStore } from "./metadata/store.js";
 import { ErrorRateAlerter } from "./monitoring/errorRate.js";
 import { reportToSentry } from "./monitoring/report.js";
+import { NotableDirectory } from "./notable/directory.js";
+import type { NotableLookup } from "./notable/mapping.js";
 import {
   AdsbLolRouteService,
   type RouteEnricher,
@@ -48,6 +50,11 @@ import { registerLeaderboardRoute } from "./routes/leaderboard.js";
 import { registerMetadataRoute } from "./routes/metadata.js";
 import { registerRoutesRoute } from "./routes/routes.js";
 import { registerStatsRoute } from "./routes/stats.js";
+import { registerStreakForgivenessRoute } from "./routes/streakForgiveness.js";
+import {
+  DrizzleStreakForgivenessStore,
+  type StreakForgivenessStore,
+} from "./streaks/forgiveness.js";
 
 /**
  * buildApp() is an app factory — it creates and configures a Fastify instance
@@ -99,6 +106,13 @@ export interface BuildAppOptions {
   identityStore?: IdentityStore;
   /** Catch store override (catches + leaderboard). Lazily built over Postgres in prod. */
   catchStore?: CatchStore;
+  /**
+   * The notable-planes directory (src/notable/): stamps `notable` on
+   * /v1/aircraft and confirms an uploaded catch's notable claim. Omitted
+   * (production), the app loads the committed snapshot; tests inject a small
+   * one.
+   */
+  notableDirectory?: NotableLookup;
   /** Injectable clock (unix seconds) for deterministic catch-validation tests. */
   nowSeconds?: () => number;
   /** Override for GUESS_RECREDIT_CLOSES (tests). */
@@ -140,6 +154,11 @@ export interface BuildAppOptions {
    * evaluation, so a test can await it. Production leaves it undefined.
    */
   onOvertakenEvaluation?: (evaluation: Promise<OvertakenSummary>) => void;
+  /**
+   * Forgiven-streak-days store override for GET /v1/streak-forgiveness (tests
+   * inject a PGlite-backed or stub one). Lazily built over Postgres in prod.
+   */
+  streakForgivenessStore?: StreakForgivenessStore;
   /** Injectable clock (unix ms) for the rate limiters (tests pass a fake). */
   rateLimitNow?: () => number;
   /**
@@ -436,6 +455,11 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // per-device mutations. The honest client calls it once per launch at most
   // (APNs hands back the same token until the app is reinstalled).
   const pushTokenLimiter = new RateLimiter({ capacity: 30, windowMs: 3_600_000 }, rlNow);
+  // GET /v1/streak-forgiveness: unauthenticated, so per IP. The honest client
+  // asks a few times a day and the answer is memoised, so this is only a
+  // ceiling on how fast one address can spin the route — generous for the same
+  // shared-IPv4 reason as the other per-IP limits.
+  const streakForgivenessLimiter = new RateLimiter({ capacity: 120, windowMs: 60_000 }, rlNow); // 120/min per IP
 
   // ── Routes ────────────────────────────────────────────────────────────────
 
@@ -458,6 +482,15 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   app.get("/healthz", async () => {
     return { status: "ok" };
   });
+
+  // Notable planes: one directory for the whole app, so the star the
+  // aircraft feed shows and the claim the catch upload confirms always agree.
+  const notableDirectory =
+    options.notableDirectory ??
+    NotableDirectory.fromSnapshot({
+      onError: (err) =>
+        app.log.error({ err }, "notable snapshot failed to load; no plane is notable"),
+    });
 
   // GET /v1/aircraft — cached, single-flighted position proxy (WP 1.3).
   //
@@ -546,6 +579,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     now: options.now,
     onFreshSnapshot,
     routeEnricher,
+    notable: notableDirectory,
     // One info line per genuine upstream fetch (≤ 1 per tile per 10 s): which
     // feed answered, how many planes, how long it took. This is the record of
     // "which API served when" — the engage/recover warnings above only mark
@@ -705,7 +739,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     findByTokenHash: (h) => getIdentityStore().findByTokenHash(h),
     claimHandle: (id, h) => getIdentityStore().claimHandle(id, h),
     takenHandles: (hs) => getIdentityStore().takenHandles(hs),
-    setPushToken: (id, t, e, n) => getIdentityStore().setPushToken(id, t, e, n),
+    setPushToken: (id, t, e, n, b) => getIdentityStore().setPushToken(id, t, e, n, b),
     clearPushToken: (id) => getIdentityStore().clearPushToken(id),
   };
   const catchesStore: CatchStore = {
@@ -757,6 +791,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     bearerIpLimiter,
     // Route-guess verification shares the /v1/routes resolver (same cache).
     routeResolver,
+    notable: notableDirectory,
     // Challenge "someone passed you" pushes hang off a successful upload. A
     // hoisted function declaration, because the challenge wiring it needs is
     // built further down — it is only ever CALLED after a catch, long after
@@ -892,6 +927,24 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   registerStatsRoute(app, {
     catchStore: catchesStore,
     allowedOrigins: options.statsAllowedOrigins ?? statsOriginsFromEnv(),
+    now: rlNow,
+  });
+
+  // GET /v1/streak-forgiveness — the public list of forgiven streak days.
+  // Rate-limited + memoised (same clock, so tests can expire the memo); the
+  // store is resolved lazily like the others so DATABASE_URL is only read on
+  // first use.
+  let streakForgivenessStore = options.streakForgivenessStore;
+  registerStreakForgivenessRoute(app, {
+    store: {
+      listDays: () => {
+        if (!streakForgivenessStore) {
+          streakForgivenessStore = new DrizzleStreakForgivenessStore(getDb());
+        }
+        return streakForgivenessStore.listDays();
+      },
+    },
+    ipLimiter: streakForgivenessLimiter,
     now: rlNow,
   });
 

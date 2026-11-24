@@ -49,7 +49,7 @@
 //      ├─ catch_blocked_size      gate 3 (angular size) raised suspicion
 //      └─ catch_uncertain_aim     aim confidence was low
 //           ↓
-//    catch_detector_gate         L4 detector verdict (shadow), once per tap
+//    catch_detector_gate         L4 detector verdict (shadow), once per searched plane
 //           ↓
 //    catch_performed             ONE per processed target — the catch is
 //                                committed locally and a `Catch` row exists.
@@ -103,8 +103,9 @@ nonisolated enum CatchTelemetry {
     // (shadow + enforce) with the per-target verdict + features — the
     // calibration stream for the on-device texture threshold.
     static let localGateEvent = "catch_local_gate"
-    // Lever 4 (detector soft-gate). `catch_detector_gate` fires on every
-    // single-target catch (shadow + enforce) with the verdict + envelope
+    // Lever 4 (detector soft-gate). `catch_detector_gate` fires for every
+    // searched plane (each single catch, and each plane of a frame-mode
+    // multi-plane press; shadow + enforce) with the verdict + envelope
     // signals — the calibration stream that decides when enforcement is safe
     // to flip (watch the in-envelope no-detection rate on real catches).
     static let detectorGateEvent = "catch_detector_gate"
@@ -174,7 +175,9 @@ nonisolated enum CatchTelemetry {
         originIcao: String? = nil,
         destIcao: String? = nil,
         catchMode: CatchMode? = nil,
-        catchUuid: String? = nil
+        catchUuid: String? = nil,
+        notableKind: String? = nil,
+        notableInView: Int? = nil
     ) -> [String: AnalyticsValue] {
         var props: [String: AnalyticsValue] = [
             "icao24": .string(icao24),
@@ -199,7 +202,8 @@ nonisolated enum CatchTelemetry {
         if let c = visualFixConfidence { props["visual_fix_confidence"] = .double(Double(c)) }
         if let a = angularSizeArcmin { props["angular_size_arcmin"] = .double(a) }
         // L4 detector soft-gate verdict for this target; omitted when the
-        // gate didn't run (multi-catch, no photo) so absent means "not judged".
+        // gate didn't run (a legacy zone cluster, no photo) so absent means
+        // "not judged".
         if let v = detectorVerdict { props["detector_verdict"] = .string(v.rawValue) }
         // Whole-frame sky verdict at the exact catch moment. Unlike the
         // one-per-tap gate stream, this makes repeated strong indoor catches
@@ -227,6 +231,14 @@ nonisolated enum CatchTelemetry {
         // every build before the flag (2026-10-25) means the SHIPPED rule —
         // all pre-flag App Store traffic is legacy, never "frame".
         if let catchMode { props["catch_mode"] = .string(catchMode.rawValue) }
+        // The server's notable-airframe category ("team", "government", ...)
+        // when the caught plane carried the flag at the press. Absent for an
+        // ordinary plane.
+        addNonBlank("notable_kind", notableKind, to: &props)
+        // How many starred (notable) planes were on screen at the press,
+        // caught or not. With `notable_kind` this says whether a star in
+        // view was the plane that got caught.
+        if let notableInView { props["notable_in_view"] = .int(notableInView) }
         return props
     }
 
@@ -375,7 +387,12 @@ nonisolated enum CatchTelemetry {
         firstOfType: Bool? = nil,
         guessKind: String? = nil,
         guessCorrect: Bool? = nil,
-        catchUuid: String? = nil
+        catchUuid: String? = nil,
+        notableKind: String? = nil,
+        notableClaimed: Bool = false,
+        notableConfirmed: Bool? = nil,
+        originIcao: String? = nil,
+        destIcao: String? = nil
     ) -> [String: AnalyticsValue] {
         var props: [String: AnalyticsValue] = [
             "icao24": .string(icao24),
@@ -383,6 +400,18 @@ nonisolated enum CatchTelemetry {
             "points": .int(points),
             "duplicate": .bool(duplicate),
         ]
+        // Notable planes: the category the server stored, whether the app
+        // claimed the catch as notable, and the server's answer to that
+        // claim (absent on a server that predates the feature). Keys are
+        // absent on an ordinary catch.
+        // The flight's route, so one event answers "which flight was it".
+        addNonBlank("origin_icao", originIcao, to: &props)
+        addNonBlank("dest_icao", destIcao, to: &props)
+        addNonBlank("notable_kind", notableKind, to: &props)
+        if notableClaimed { props["notable_claimed"] = .bool(true) }
+        if let notableConfirmed, notableClaimed {
+            props["notable_confirmed"] = .bool(notableConfirmed)
+        }
         addNonBlank("registration", registration, to: &props)
         addNonBlank("typecode", typecode, to: &props)
         addNonBlank("manufacturer", manufacturer, to: &props)
@@ -512,7 +541,8 @@ nonisolated enum CatchTelemetry {
         angularSizeArcmin: Double? = nil,
         detectorVerdict: DetectorGateVerdict? = nil,
         catchMode: CatchMode? = nil,
-        skyVerdict: SkyVerdict? = nil
+        skyVerdict: SkyVerdict? = nil,
+        notableInView: Int? = nil
     ) {
         Analytics.capture(performedEvent, performedProperties(
             icao24: row.icao24,
@@ -537,7 +567,9 @@ nonisolated enum CatchTelemetry {
             destIcao: row.destIcao,
             catchMode: catchMode,
             // Minted by runCatch before the save.
-            catchUuid: row.serverUuid
+            catchUuid: row.serverUuid,
+            notableKind: row.claimsNotable ? row.notableInfo?.kind : nil,
+            notableInView: notableInView
         ))
     }
 
@@ -546,7 +578,9 @@ nonisolated enum CatchTelemetry {
     /// latency work is steered by measurements instead of estimates. One
     /// event per capture tap that ran the pipeline. `mode`: "shell" (early
     /// loading reveal), "settled" (single card built at pipeline end),
-    /// "multi", or "none" (nothing presented). `snapMs`/`composeMs` are nil
+    /// "multi_shell" (a multi-catch presented at the tap, 2026-11-13),
+    /// "multi" (a multi-catch built at pipeline end: every build before
+    /// that, and the fallback since), or "none" (nothing presented). `snapMs`/`composeMs` are nil
     /// when that stage didn't run (no photo / multi-target snap skip);
     /// `presentMs` is tap→reveal-on-screen, `totalMs` tap→pipeline-done.
     @MainActor static func firePipelineTiming(
@@ -603,7 +637,8 @@ nonisolated enum CatchTelemetry {
     /// and the rarity/points/duplicate off the server response. Rarity prefers
     /// the server value (authoritative re-tiering) and falls back to the
     /// locally resolved tier when the response omits it.
-    @MainActor static func fireUploaded(_ row: Catch, response: UploadCatchResponse) {
+    @MainActor static func fireUploaded(_ row: Catch, response: UploadCatchResponse,
+                                        notableClaimed: Bool = false) {
         Analytics.capture(uploadedEvent, uploadedProperties(
             icao24: row.icao24,
             rarity: response.rarity ?? row.resolvedRarity.rawValue,
@@ -626,7 +661,12 @@ nonisolated enum CatchTelemetry {
             // preferred; frozen local verdict as fallback (old backend).
             guessCorrect: row.guessKind != nil
                 ? (response.guessCorrect ?? row.guessCorrect) : nil,
-            catchUuid: row.serverUuid
+            catchUuid: row.serverUuid,
+            notableKind: response.notable.plane?.kind,
+            notableClaimed: notableClaimed,
+            notableConfirmed: response.notable == .unknown ? nil : response.notable.plane != nil,
+            originIcao: row.originIcao,
+            destIcao: row.destIcao
         ))
     }
 
@@ -730,7 +770,9 @@ nonisolated enum CatchTelemetry {
         liveFix: Bool,
         expectedFootprintPx: Double?,
         meanLuminance: Double?,
-        enforcing: Bool
+        enforcing: Bool,
+        targets: Int = 1,
+        snapConflict: Bool = false
     ) -> [String: AnalyticsValue] {
         var props: [String: AnalyticsValue] = [
             "verdict": .string(verdict.rawValue),
@@ -738,27 +780,39 @@ nonisolated enum CatchTelemetry {
             "live_fix": .bool(liveFix),
             "would_flag": .bool(verdict == .noDetection),
             "enforcing": .bool(enforcing),
+            // How many planes the press targeted, and whether this plane's
+            // detection was claimed by a nearer target. `targets` counts
+            // Hangar duplicates too, unlike `multi_n` on `catch_performed`,
+            // which counts new catches only. Both are absent on builds
+            // before per-plane verdicts: read them as 1 / false, and filter
+            // single catches with coalesce(targets, 1) = 1.
+            "targets": .int(targets),
+            "snap_conflict": .bool(snapConflict),
         ]
         if let f = expectedFootprintPx { props["expected_footprint_px"] = .double(f) }
         if let l = meanLuminance { props["mean_luminance"] = .double(l) }
         return props
     }
 
-    /// Fired once per single-target catch with the L4 verdict — on every such
-    /// catch, in shadow and enforce mode. The calibration stream that gates
-    /// flipping enforcement.
+    /// Fired once per searched target with the L4 verdict, in shadow and
+    /// enforce mode: every single catch, and each plane of a frame-mode
+    /// multi-plane press. The calibration stream that gates flipping
+    /// enforcement.
     static func fireDetectorGate(
         verdict: DetectorGateVerdict,
         snapHit: Bool,
         liveFix: Bool,
         expectedFootprintPx: Double?,
         meanLuminance: Double?,
-        enforcing: Bool
+        enforcing: Bool,
+        targets: Int = 1,
+        snapConflict: Bool = false
     ) {
         Analytics.capture(detectorGateEvent, detectorGateProperties(
             verdict: verdict, snapHit: snapHit, liveFix: liveFix,
             expectedFootprintPx: expectedFootprintPx,
-            meanLuminance: meanLuminance, enforcing: enforcing
+            meanLuminance: meanLuminance, enforcing: enforcing,
+            targets: targets, snapConflict: snapConflict
         ))
     }
 

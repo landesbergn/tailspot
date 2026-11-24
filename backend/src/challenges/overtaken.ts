@@ -435,19 +435,24 @@ export function isTransientFailure(res: ApnsResponse): boolean {
  * deadline, but the transport is an injected seam: a fake that never resolves
  * would hang phase 2's `Promise.all` forever, and with it the compensating
  * phase 3 that puts the failed recipients' baselines back.
+ *
+ * Exported for the other sender (the streak-forgiveness broadcast in
+ * `src/tools/forgive-streak-day.ts`), so both bound and never-throw a send the
+ * same way.
  */
-async function sendWithDeadline(
+export async function sendWithDeadline(
   transport: ApnsTransport,
   env: ApnsEnvironment,
   token: string,
   payload: unknown,
+  deadlineMs: number = SEND_DEADLINE_MS,
 ): Promise<ApnsResponse> {
   let timer: NodeJS.Timeout | undefined;
   try {
     return await Promise.race([
       transport.send(env, token, payload),
       new Promise<ApnsResponse>((resolve) => {
-        timer = setTimeout(() => resolve({ status: 0, reason: "timeout" }), SEND_DEADLINE_MS);
+        timer = setTimeout(() => resolve({ status: 0, reason: "timeout" }), deadlineMs);
         timer.unref?.();
       }),
     ]);

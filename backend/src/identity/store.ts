@@ -29,6 +29,9 @@ import {
   type GuessKind,
   firstOfTypeBonus,
   guessBonus,
+  isGuessKind,
+  multiCatchBonus,
+  notableBonus,
   pointsForRarity,
 } from "../catches/points.js";
 import type { Database } from "../db/client.js";
@@ -43,6 +46,7 @@ import {
   typecodes,
   weeklyChampions,
 } from "../db/schema.js";
+import { type Notable, isNotableKind, makeNotable } from "../notable/mapping.js";
 import {
   addDaysUtc,
   monthStartUtc,
@@ -98,12 +102,19 @@ export interface IdentityStore {
    * both kept it, one physical phone would receive another identity's
    * notifications. Last writer wins, which is also the truth (APNs gave the
    * token to whoever asked most recently).
+   *
+   * `build` is the registering app's build number (Int CFBundleVersion), or
+   * null/omitted when the client didn't say. It is stored as `app_build` and
+   * REPLACES the previous value, null included: a stale build left behind by an
+   * older registration could let a gated broadcast reach a client that no
+   * longer qualifies.
    */
   setPushToken(
     deviceId: string,
     token: string,
     environment: PushEnvironment,
     now: Date,
+    build?: number | null,
   ): Promise<SetPushTokenResult>;
   /** Forget this device's push token (the client's opt-out / sign-off path). */
   clearPushToken(deviceId: string): Promise<void>;
@@ -117,12 +128,13 @@ export type PushEnvironment = "sandbox" | "production";
  * token up — eviction when it moves to another install, the client's explicit
  * DELETE, and the sender's dead-token cleanup — uses this, so a row can never
  * end up half-cleared (no token but a stale `apns_environment`, or a
- * `apns_updated_at` that outlives the token it described).
+ * `apns_updated_at` or `app_build` that outlives the token it described).
  */
 export const CLEARED_PUSH_TOKEN = {
   apnsToken: null,
   apnsEnvironment: null,
   apnsUpdatedAt: null,
+  appBuild: null,
 } as const;
 
 /** What `setPushToken` did, so the route can report a token that MOVED. */
@@ -197,6 +209,7 @@ export class DrizzleIdentityStore implements IdentityStore {
     token: string,
     environment: PushEnvironment,
     now: Date,
+    build: number | null = null,
   ): Promise<SetPushTokenResult> {
     // Both writes in ONE transaction: between the clear and the set, a token
     // must never be on zero rows (a lost notification) or on two (a leak to
@@ -209,7 +222,12 @@ export class DrizzleIdentityStore implements IdentityStore {
         .returning({ id: devices.id });
       await tx
         .update(devices)
-        .set({ apnsToken: token, apnsEnvironment: environment, apnsUpdatedAt: now })
+        .set({
+          apnsToken: token,
+          apnsEnvironment: environment,
+          apnsUpdatedAt: now,
+          appBuild: build,
+        })
         .where(eq(devices.id, deviceId));
       return { movedFrom: moved.map((m) => m.id) };
     });
@@ -269,11 +287,21 @@ export interface ScoredCatch {
    */
   firstOfType: boolean;
   /**
+   * The press size the multi-catch bonus in `points` was computed for (echoes
+   * the value handed to the scorer; 1 = a lone catch, no bonus).
+   */
+  pressSize: number;
+  /**
    * Whether a correct-guess bonus is baked into `points` (echoes the verdict
    * handed to the scorer; false when no guess was made). Persisted on the row
    * and surfaced in the catch response.
    */
   guessCorrect: boolean;
+  /**
+   * Whether the notable-plane bonus is baked into `points` (echoes the flag
+   * handed to the scorer).
+   */
+  notable: boolean;
 }
 
 /**
@@ -335,6 +363,13 @@ export interface NewCatch {
   aircraftAltitudeMeters: number | null;
   aircraftPositionTimestamp: Date | null;
   validation: unknown;
+  /**
+   * The notable decision to FREEZE on the row: the directory's entry when the
+   * app claimed this catch as notable and the directory confirmed it, null
+   * otherwise (and when omitted). Must agree with the `notable` flag `points`
+   * was scored with.
+   */
+  notable?: Notable | null;
 }
 
 /** What the route echoes back after a catch is stored (or replayed). */
@@ -347,6 +382,12 @@ export interface StoredCatchResult {
   firstOfType: boolean;
   /** Whether a correct-guess bonus was awarded (read back on a replay too). */
   guessCorrect: boolean;
+  /** Distinct airframes in this catch's shutter press AS OF this call (1 = a
+   *  lone catch). The first row of a press to arrive reports 1; its points and
+   *  press size are raised when its siblings land. */
+  pressSize: number;
+  /** What the row stores about notability (read back on a replay too). */
+  notable: Notable | null;
 }
 
 /**
@@ -381,6 +422,18 @@ export interface RestorableCatch {
   /** Joined from `typecodes` by the row's typecode (clean DOC 8643 names). */
   manufacturer: string | null;
   model: string | null;
+  /** What the row stores about notability; null for an ordinary catch and
+   *  for every catch made before notable planes shipped. */
+  notable: Notable | null;
+}
+
+/**
+ * The wire `notable` object for a row's stored `notable_kind`/`notable_name`.
+ * Null when the row is not notable (or stores a kind this build no longer
+ * knows, which keeps its bonus but shows no label).
+ */
+export function storedNotable(kind: string | null, name: string | null): Notable | null {
+  return isNotableKind(kind) ? makeNotable(kind, name ?? undefined) : null;
 }
 
 /** One page of a device's catches, for the restore endpoint. */
@@ -464,10 +517,27 @@ export interface CatchStore {
    * stored column on re-score) — it picks the guess-bonus ERA (the 2026-08-13
    * route re-balance applies going forward only). Omitting it means "now",
    * which is only right for a catch being made right now.
+   *
+   * `pressSize` is the row's stored `press_size` (how many distinct airframes
+   * the device caught in the same shutter press); 2 or more adds
+   * `multiCatchBonus(base, pressSize)`. Omitted means 1, a lone catch.
+   *
+   * `notable` follows the same pattern (scoring v11): the caller supplies the
+   * flag and `notableBonus(base)` is added when it is true. Upload sets it
+   * when the app claimed the catch as notable and the directory confirmed it;
+   * everything else reads the frozen `notable_kind` off the row. The scorer
+   * never asks the directory, so past catches and later list changes cannot
+   * move anyone's points.
    */
   scoreCatch(
     icao24: string,
-    opts?: { firstOfType?: boolean; guess?: GuessVerdict; caughtAt?: Date },
+    opts?: {
+      firstOfType?: boolean;
+      guess?: GuessVerdict;
+      caughtAt?: Date;
+      pressSize?: number;
+      notable?: boolean;
+    },
   ): Promise<ScoredCatch>;
   /**
    * Whether `deviceId` has NO existing catch of `typecode` — i.e. a new catch of
@@ -604,23 +674,35 @@ export class DrizzleCatchStore implements CatchStore {
 
   async scoreCatch(
     icao24: string,
-    opts: { firstOfType?: boolean; guess?: GuessVerdict; caughtAt?: Date } = {},
+    opts: {
+      firstOfType?: boolean;
+      guess?: GuessVerdict;
+      caughtAt?: Date;
+      pressSize?: number;
+      notable?: boolean;
+    } = {},
   ): Promise<ScoredCatch> {
     const { typecode, rarity } = await this.resolveRarity(icao24);
     const firstOfType = opts.firstOfType ?? false;
     const guessCorrect = opts.guess?.correct ?? false;
+    const pressSize = Math.max(1, opts.pressSize ?? 1);
     const base = pointsForRarity(rarity);
+    const notable = opts.notable ?? false;
     const points =
       base +
       (firstOfType ? firstOfTypeBonus(base) : 0) +
-      (opts.guess?.correct ? guessBonus(base, opts.guess.kind, opts.caughtAt ?? new Date()) : 0);
+      (opts.guess?.correct ? guessBonus(base, opts.guess.kind, opts.caughtAt ?? new Date()) : 0) +
+      multiCatchBonus(base, pressSize) +
+      (notable ? notableBonus(base) : 0);
     return {
       typecode,
       rarity,
       points,
       scoringVersion: CURRENT_SCORING_VERSION,
       firstOfType,
+      pressSize,
       guessCorrect,
+      notable,
     };
   }
 
@@ -659,6 +741,8 @@ export class DrizzleCatchStore implements CatchStore {
           guessKind: c.guessKind,
           guessValue: c.guessValue,
           guessCorrect: c.guessCorrect,
+          notableKind: c.notable?.kind ?? null,
+          notableName: c.notable?.name ?? null,
           caughtAt: c.caughtAt,
           observerLat: c.observerLat,
           observerLon: c.observerLon,
@@ -679,19 +763,38 @@ export class DrizzleCatchStore implements CatchStore {
           typecode: catches.typecode,
           firstOfType: catches.firstOfType,
           guessCorrect: catches.guessCorrect,
+          notableKind: catches.notableKind,
+          notableName: catches.notableName,
         }),
     );
 
     if (inserted.length > 0) {
       const row = inserted[0];
+      // Multi-catch (scoring v10): this row may complete a press. Re-count the
+      // press and re-score every row in it, this one included. Best-effort: a
+      // failure here must not fail an insert that already landed (the client
+      // would retry into the replay path and never reconcile); the row keeps
+      // its lone-catch score, and the next rescore --all does not repair it
+      // (press_size is only ever counted here), so the miss is logged loudly.
+      let points = row.points;
+      let pressSize = 1;
+      try {
+        const press = await this.reconcilePress(c.deviceId, c.caughtAt);
+        pressSize = press.size;
+        points = press.pointsById.get(row.id) ?? row.points;
+      } catch (err) {
+        console.error("reconcilePress failed; catch kept at its lone-catch score", err);
+      }
       return {
         result: {
           catchId: row.id,
-          points: row.points,
+          points,
           rarity: row.rarity,
           typecode: row.typecode,
           firstOfType: row.firstOfType,
           guessCorrect: row.guessCorrect,
+          pressSize,
+          notable: storedNotable(row.notableKind, row.notableName),
         },
         duplicate: false,
       };
@@ -708,6 +811,9 @@ export class DrizzleCatchStore implements CatchStore {
           typecode: catches.typecode,
           firstOfType: catches.firstOfType,
           guessCorrect: catches.guessCorrect,
+          pressSize: catches.pressSize,
+          notableKind: catches.notableKind,
+          notableName: catches.notableName,
         })
         .from(catches)
         .where(and(eq(catches.deviceId, c.deviceId), eq(catches.catchUuid, c.catchUuid)))
@@ -722,9 +828,124 @@ export class DrizzleCatchStore implements CatchStore {
         typecode: row.typecode,
         firstOfType: row.firstOfType,
         guessCorrect: row.guessCorrect,
+        pressSize: row.pressSize,
+        notable: storedNotable(row.notableKind, row.notableName),
       },
       duplicate: true,
     };
+  }
+
+  /**
+   * Bring one shutter press up to date after a row joins it (scoring v10).
+   * A press is every catch of `deviceId` at exactly `caughtAt`; its size is the
+   * number of DISTINCT airframes in it. Each row whose stored `press_size`
+   * differs is re-scored through the ONE canonical scorer with its own frozen
+   * flags and updated. Returns the size and each press row's current points.
+   *
+   * Runs after the insert, so two siblings uploaded at once each re-count
+   * after their own row is visible: whichever counts last sees both and fixes
+   * the other. Never lowers a size (a delete does not take the bonus back,
+   * and a count can't shrink on insert).
+   */
+  private async reconcilePress(
+    deviceId: string,
+    caughtAt: Date,
+  ): Promise<{ size: number; pointsById: Map<string, number> }> {
+    const rows = await withDbRetry(() =>
+      this.db
+        .select({
+          id: catches.id,
+          icao24: catches.icao24,
+          points: catches.points,
+          pressSize: catches.pressSize,
+          firstOfType: catches.firstOfType,
+          guessKind: catches.guessKind,
+          guessCorrect: catches.guessCorrect,
+          notableKind: catches.notableKind,
+        })
+        .from(catches)
+        .where(and(eq(catches.deviceId, deviceId), eq(catches.caughtAt, caughtAt))),
+    );
+    const size = new Set(rows.map((r) => r.icao24)).size;
+    const pointsById = new Map<string, number>();
+    type PressRow = (typeof rows)[number];
+    // Score one row for this press and write it, but only if the row is still
+    // as it was read: a smaller press size (a concurrent reconcile that wrote
+    // a larger press is never overwritten) and the same guess verdict (a
+    // concurrent guess re-credit is never clobbered). Returns the written
+    // points, or undefined when the row moved underneath us.
+    const lift = async (row: PressRow): Promise<number | undefined> => {
+      const scored = await this.scoreCatch(row.icao24, {
+        firstOfType: row.firstOfType,
+        guess: isGuessKind(row.guessKind)
+          ? { kind: row.guessKind, correct: row.guessCorrect }
+          : undefined,
+        caughtAt,
+        pressSize: size,
+        notable: row.notableKind !== null,
+      });
+      const written = await withDbRetry(() =>
+        this.db
+          .update(catches)
+          .set({
+            typecode: scored.typecode,
+            rarity: scored.rarity,
+            points: scored.points,
+            scoringVersion: scored.scoringVersion,
+            pressSize: size,
+          })
+          .where(
+            and(
+              eq(catches.id, row.id),
+              lt(catches.pressSize, size),
+              row.guessKind === null
+                ? isNull(catches.guessKind)
+                : eq(catches.guessKind, row.guessKind),
+              eq(catches.guessCorrect, row.guessCorrect),
+            ),
+          )
+          .returning({ points: catches.points }),
+      );
+      return written[0]?.points;
+    };
+    const reread = async (id: string): Promise<PressRow | undefined> =>
+      (
+        await withDbRetry(() =>
+          this.db
+            .select({
+              id: catches.id,
+              icao24: catches.icao24,
+              points: catches.points,
+              pressSize: catches.pressSize,
+              firstOfType: catches.firstOfType,
+              guessKind: catches.guessKind,
+              guessCorrect: catches.guessCorrect,
+              notableKind: catches.notableKind,
+            })
+            .from(catches)
+            .where(eq(catches.id, id))
+            .limit(1),
+        )
+      )[0];
+    for (const row of rows) {
+      if (size < 2 || row.pressSize >= size) {
+        pointsById.set(row.id, row.points);
+        continue;
+      }
+      let points = await lift(row);
+      if (points === undefined) {
+        // The row changed between the read and the write. Read it again and
+        // try once more from what is stored now; report the stored points
+        // either way, never a score that was not written.
+        const current = await reread(row.id);
+        if (current && current.pressSize < size) points = await lift(current);
+        if (points === undefined) {
+          points = (await reread(row.id))?.points ?? row.points;
+        }
+      }
+      pointsById.set(row.id, points);
+    }
+    return { size, pointsById };
   }
 
   async recreditGuess(
@@ -732,6 +953,7 @@ export class DrizzleCatchStore implements CatchStore {
     catchUuid: string,
     guess: GuessRecredit,
     cutover: Date,
+    retried = false,
   ): Promise<GuessRecreditResult> {
     const readRow = async () => {
       const rows = await withDbRetry(() =>
@@ -741,8 +963,10 @@ export class DrizzleCatchStore implements CatchStore {
             icao24: catches.icao24,
             points: catches.points,
             firstOfType: catches.firstOfType,
+            pressSize: catches.pressSize,
             guessKind: catches.guessKind,
             guessCorrect: catches.guessCorrect,
+            notableKind: catches.notableKind,
             caughtAt: catches.caughtAt,
             createdAt: catches.createdAt,
           })
@@ -788,6 +1012,8 @@ export class DrizzleCatchStore implements CatchStore {
       firstOfType: row.firstOfType,
       guess: { kind: guess.kind, correct },
       caughtAt: row.caughtAt,
+      pressSize: row.pressSize,
+      notable: row.notableKind !== null,
     });
 
     // Conditional on `guess_kind IS NULL`: two concurrent calls can both get
@@ -804,7 +1030,16 @@ export class DrizzleCatchStore implements CatchStore {
           points: scored.points,
           scoringVersion: scored.scoringVersion,
         })
-        .where(and(eq(catches.id, row.id), isNull(catches.guessKind)))
+        .where(
+          and(
+            eq(catches.id, row.id),
+            isNull(catches.guessKind),
+            // The press size the points above were scored for. A sibling
+            // upload can raise it in between (`reconcilePress`); writing
+            // these points then would drop the multi-catch bonus.
+            eq(catches.pressSize, row.pressSize),
+          ),
+        )
         .returning({
           points: catches.points,
           guessKind: catches.guessKind,
@@ -814,6 +1049,11 @@ export class DrizzleCatchStore implements CatchStore {
     if (updated.length > 0) return { status: "applied", state: stateOf(updated[0]) };
     const after = await readRow();
     if (!after) return { status: "not_found" };
+    // Lost to a press-size change, not to another guess: score again from the
+    // row as it stands (once; a second loss reports the current state).
+    if (after.guessKind === null && after.pressSize !== row.pressSize && !retried) {
+      return this.recreditGuess(deviceId, catchUuid, guess, cutover, true);
+    }
     return { status: "already_has_guess", state: stateOf(after) };
   }
 
@@ -863,6 +1103,8 @@ export class DrizzleCatchStore implements CatchStore {
           registration: registry.registration,
           manufacturer: typecodes.manufacturer,
           model: typecodes.model,
+          notableKind: catches.notableKind,
+          notableName: catches.notableName,
         })
         .from(catches)
         .leftJoin(registry, eq(registry.icao24, catches.icao24))
@@ -894,6 +1136,7 @@ export class DrizzleCatchStore implements CatchStore {
         registration: r.registration,
         manufacturer: r.manufacturer,
         model: r.model,
+        notable: storedNotable(r.notableKind, r.notableName),
       })),
     };
   }

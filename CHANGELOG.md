@@ -5,6 +5,177 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-11-23 — Notable planes merged; 1.2.7 build 126 on TestFlight
+
+- [PR #438](https://github.com/landesbergn/tailspot/pull/438) squash-merged to `main` (69aa7ae) on green CI, after Noah's device checks. `main` now matches the deployed server (API v67).
+- Xcode Cloud run #126 (69aa7ae) succeeded. Build 126 adds to 125: notable planes (gold star, caption on the photo, +50% going forward), the catch card that fills the phone with consistent text sizes, and the notable analytics.
+- Test cleanup: the server holds no catch stored as notable (checked read-only; 28,852 catches, 471 uploaded since the v67 deploy). PostHog keeps 13 test events from Noah's device (9 `catch_performed` with `notable_kind = test`, 4 `catch_uploaded` claimed and unconfirmed, 2026-11-22 to 2026-11-23); single events cannot be deleted, and the Notable planes dashboard excludes them. Leave them out of any claimed-versus-confirmed rate.
+- Not yet seen on a device: a real notable catch paid by the server; Share-button taps on a card whose text is scaled.
+- Next: check App Store Connect crashes for 126, catch a real notable plane and confirm the row stores `notable_kind`, then decide on submitting 1.2.7 (Noah's call).
+
+## 2026-11-22 — Notable planes live on the server (API v67, migration 0014)
+
+- Noah gave the go for the server rollout. In order: volume snapshot `vs_DRbmgZ2Mg0pU9RjqbbG3zB` of `tailspot-db`; migration 0014 through the tracked `db:migrate` path (journal now 15; `catches.notable_kind` and `notable_name` exist, nullable); `fly deploy` of the branch at c0c4e2a, both machines on v67.
+- Checked after the deploy: `/readyz` ok; `GET /v1/aircraft` over New York returned one aircraft with a `notable` object (a business jet), so the snapshot file is in the image; 28,381 catches, none notable, and no points moved.
+- Not checked: a catch upload against v67. None arrived in the minutes after the deploy.
+- No rescore was run and none is needed. Older app versions are scored as before.
+- The server was deployed from the unmerged branch. Until [PR #438](https://github.com/landesbergn/tailspot/pull/438) merges, a deploy from `main` would put the old server back; that is harmless while no notable catch exists.
+- Next: the app on Noah's phone for a device check, then merge and a TestFlight build.
+
+## 2026-11-21 — Notable planes: a gold star, a name at the reveal and +50% (scoring v11) (branch `claude/notable-planes-feature-a4225e`)
+
+- Some individual airframes are worth more than their type: a head of state's transport, a team plane, a celebrity or company jet, a warbird, a firefighting tanker. The server now recognises them by ICAO hex and the app marks them. Built on the branch; not merged, not deployed, not shipped.
+- Noah's calls: scope is "names plus working aircraft"; the live label shows a gold star and hides who it is until the catch; the bonus is +50% of base; private individuals' jets are named as the source lists them.
+- Source: [plane-alert-db](https://github.com/sdr-enthusiasts/plane-alert-db), a community list under ODbL 1.0. The server loads a committed snapshot of it at boot, `backend/data/notable-airframes.json`: 5,138 airframes (working 2,002; special 1,512; business 905; government 616; celebrity 81; team 22). There is no runtime fetch. The snapshot is regenerated with `npm run notable:snapshot` when a release train opens, and the diff is read before it is committed.
+- Mapping rules live only in `backend/src/notable/mapping.ts`. Each upstream category maps to one of six kinds through an allow-list, so a category upstream adds later is excluded until someone maps it. Routine military, police and air-ambulance airframes are out. Upstream's tag columns and category names never leave the server.
+- API, additive: an optional `notable` object (`kind`, `label`, optional `name`) on each `GET /v1/aircraft` plane (absent for an ordinary plane); `notable` as an object or `null` in the `POST /v1/catches` response and on each `GET /v1/catches` row; and an optional `notableClaim: true` in the `POST /v1/catches` body. Older builds ignore all of it.
+- Scoring v11: a notable catch earns +50% of its base, additive with first-of-type, the guess bonuses and the multi-catch bonus.
+- Going forward only (Noah, 2026-11-22: "only applies to catches going forward and included in this release"). The app sends `notableClaim` for a catch it showed as notable; the server confirms it against its own list and freezes the result on the catch row (`notable_kind`, `notable_name`; migration 0014, two nullable columns). The scorer reads the row and never looks the airframe up. So: catches made before this release never gain a star or a bonus, older app versions are scored exactly as before, no rescore is needed, and a later change to the list cannot move points on an existing catch.
+- App: gold star on the live label; a gold-edged caption on the bottom of the photo (the name and the category) and a gold NOTABLE PLANE ledger row on the reveal, the settled card and the share cards; one NOTABLE line on the card back; a star and a gold name line on the Hangar row. The names are searchable, and the word "notable" works like a tier name.
+- Trophies: one, Star Sighting (catch a notable plane).
+- `Catch` gains three optional fields (`notableKind`, `notableLabel`, `notableName`; additive), set at catch time. Past catches are left alone: there is no backfill. A Hangar restore brings back the stars the server stored.
+- Deploy order, each server step on Noah's go: snapshot the DB, apply migration 0014, deploy the server, then the client. No rescore.
+- Reach is small: of 13,433 airframes caught since 2026-06-26, about 141 are in scope, covering about 205 of 28,324 catches (0.7%). Both figures were measured before the last mapping changes, so they are approximate.
+- Settings credits gain "Notable aircraft data: plane-alert-db contributors (ODbL)"; `backend/data/NOTICE.md` carries the attribution.
+- Simplified the same day at Noah's request ("is this as simple as it can be?"): removed the daily refresh from GitHub and its size floors, body cap and `NOTABLE_REFRESH` switch (the committed snapshot is now the only data, so no third-party text reaches the app unreviewed); removed the Notable chip from the Catches search field; removed the Who's Who and Four of a Kind trophies.
+- The star is per catch (Noah, 2026-11-22): a Hangar row shows the star and name line only when the catch it shows earned the bonus. Before, any notable catch of the airframe starred the row.
+- The plate became a caption on the photo (Noah, 2026-11-22, after the first device check): the boxed plate under the callsign made the card crowded and about 100 points taller than the screen, so the detail view scrolled a short way and stopped. Noah picked "caption on the photo" from four mockups. A notable card is now the same height as an ordinary one.
+- The card fills the phone (Noah, 2026-11-22: "can the card be more extended to fit the full length of the phone"). On the reveal and the saved-catch screen, a card shorter than the screen grows its photo (never past square) until it fills the space; everything under the photo is unchanged, and cards that already fill or scroll (long names, the SE) are as before. The saved-catch screen's bottom gap went from 40 pt to 8. `FlipCard`'s back face is now an overlay so a grown card can shrink again. Rendered at 375×667, 393×852, 402×874 and 440×956 (`CardFillLayoutTests`). Not yet exercised on a device: the reveal animation, the bonus-round chips, photo zoom and taps on the card back.
+- Card-fill follow-up (2026-11-22): the first fill layout drew the text under the photo at different sizes from the old layout on some phones. It now reproduces the old sizes on nine screen sizes (375×667 to 440×956) and four cards, checked by `textUnderThePhotoIsTheSameWithAndWithoutTheFill`; `screensStopLayingOut` fails if either screen keeps re-laying out. Three reveal cases differ from the old layout by one pixel. The old layout itself draws ALT/SPD smaller on some sizes (414×896, and short cards); that was left as it was.
+- The photo also shrinks (Noah, 2026-11-22: a three-line name with three bonus rows overflowed the saved-catch screen on an iPhone 16). A card too tall for the screen takes height back from the photo, down to 60% of its normal height (the bonus-round chip height on the reveal), before it scrolls. That card now fits on every size from 375×812 up; on the SE the photo sits at its floor and the card scrolls. With a two-line caption at the floor the photo is tight. One earlier full run had a single failure in `CatchPhotoViewerSnapshotTests/sheetViewerFillsScreen` (a fixed 1 s wait); it passed alone and in the next full run.
+- Text under the photo is consistent (Noah, 2026-11-22: text "can dynamically resize based on phone size, within reasonable limits and ensuring readability"). It draws at its designed size times the card width scale on every phone; the old accidental squeezing (ALT/SPD small on 414×896 and on short cards, route codes small beside large ALT) is gone, along with the code that reproduced it. When a card is too tall even with the photo at its floor, everything under the photo scales together by one factor, to 0.88 at most (`ShrinkToFitLayout`), then scrolls. Only the tall test cards on the SE still scroll. The chips-up state keeps full-size text. The scaled text is drawn with a transform; sharpness on a device is unchecked.
+- Code review of the card-fill, caption, debug-switch and analytics commits (2026-11-23): nothing serious. Fixed: a Debug test star is inert outside Debug builds and never sends a claim or lands in the catch event; `notable_in_view` counts only planes the visibility filter was showing; VoiceOver names the notable plane on the saved card; the shrink layout places with the factor it sized with; the share card badge stacks above a two-line caption; `notable_confirmed` is sent only for a claim. Left: Share-button taps under scaled text need one device check; a redundant frame in `FlipCard`; the reveal measures its text several times per frame.
+- Analytics: `catch_uploaded` gains `notable_kind`, `notable_claimed`, `notable_confirmed`, `origin_icao` and `dest_icao`; `catch_performed` gains `notable_in_view` (starred planes on screen at the press). PostHog dashboard "Notable planes" (id 2397047) lists every notable catch, planes caught, catches by player and unique planes per day; it excludes `notable_kind = test`.
+- Debug wrench switch "Every plane is notable" for testing without a real one (Debug builds only).
+- Reworked 2026-11-22 to going-forward only (above). That removed the retroactive rescore, the phone's one-time backfill of past catches and the server's "ask the directory on every read" paths.
+- Not verified: a real device, a live server, the Settings credit row render, and the Dockerfile `COPY` line for the snapshot (no Docker build was run).
+- Tests: backend 769 passed; iOS 2,417 passed, 0 failed on the iOS 26.5 iPhone Air simulator.
+- Code review fixes (2026-11-21): catch responses always carry `notable` (object or `null`), so the app can tell an older server from "not notable" and clears a star the server did not pay for; names are cleaned of control and format characters. Review doc: `docs/reviews/2026-11-21-notable-planes.html`.
+
+## 2026-11-21 — Multi-catch bonus live on the server (API v66, rescore applied)
+
+- Noah gave the go for the server steps and, after reviewing the dry run and examples, for the rescore.
+- Volume snapshot `vs_Pye92D8L2lxsKbA02MmMDZ` of `tailspot-db`, then migration 0013 through the tracked `db:migrate` path (journal now 14). Backfill: 828 rows in presses of two, 138 in presses of three, 8 in presses of four, 26,963 single.
+- API release v66 from `main` at 14de0c5 (rollback target v65). `/healthz`, `/readyz` and `/v1/leaderboard` return 200; no unresolved Sentry issues in the 24 hours around the deploy.
+- Rescore v9→v10: dry run and apply agreed. 489,536 → 494,064 points (+4,528) on 974 multi-catch rows for 42 players; every other row restamped with no point change (two unknown rows resolved to common at +0). A second dry run finds nothing left to change.
+- Standings: top ten all-time unchanged; this week chemtrailsarereal 9th → 7th and mach_1170 7th → 9th; this month chemtrailsarereal and baby_plane_sp0tter swap 6th and 7th. Past weekly and monthly crowns are frozen and unchanged.
+- The app side is in TestFlight build 125 (1.2.7), not yet on the App Store. Users on 1.2.6 earn the bonus on the server but see no DOUBLE / TRIPLE CATCH line.
+
+## 2026-11-20 — 1.2.7 train opened with the multi-catch bonus (branch `claude/catch-multiplier-scoring-a94f12`)
+
+- 1.2.6 is live on the App Store (Noah), so `MARKETING_VERSION` goes 1.2.6 → 1.2.7 in both app-target config blocks.
+- The multi-catch bonus ([PR #428](https://github.com/landesbergn/tailspot/pull/428), entry of 2026-11-13) passed Noah's field test on 2026-11-19 and merges into `main` as the first change of the train. Merged as 1d4b6e7; TestFlight build 125 cut from `main` at that commit and succeeded.
+- Not done: the server half (DB snapshot, migration 0013, API deploy, rescore dry-run, rescore). Each step waits for Noah's go. Until then the app shows the bonus and the leaderboard does not pay it.
+
+## 2026-11-19 — 1.2.6 submitted to App Review
+
+- Noah submitted version 1.2.6 with build 124 (ce31085). State: waiting for review; release type after-approval, so it goes live when approved; phased release off.
+- Submitted after one day on build 124. No catch had been made on 124 by then, and badge sharing, the "On final" card and a forgiven day on a TestFlight install had not been seen on any build.
+- After it goes live: App Store Connect crashes for 1.2.6, the first-catch funnel by version, production push tokens, then tag `v1.2.6`.
+
+## 2026-11-19 — App Store Trophies slide redrawn for 1.2.6 (branch `marketing/1-2-6-trophies-slide`)
+
+- The 1.2.5 slide 5 showed hex medals in gold and platinum, which the Trophies rebuild ([PR #425](https://github.com/landesbergn/tailspot/pull/425)) removed.
+- New slide 5 shows the Trophies tab: an "On approach" chase card and three level rows with the ring badge. Noah picked it over an unlock-moment version.
+- New folder `marketing/releases/v1.2.6/` with the deck source and all seven slides at 1206 × 2622 and 1320 × 2868. The other six slides match 1.2.5 pixel for pixel.
+- Uploaded to App Store Connect on 2026-11-19: slide 5 replaced in both screenshot sets of version 1.2.6. No app change.
+
+## 2026-11-18 — TestFlight build 124 for 1.2.6 (branch `claude/1-2-6-changelog-ed4cf0`)
+
+- Build 124 cut from `main` at ce31085 and succeeded. It is build 123 plus the five set slots ([PR #433](https://github.com/landesbergn/tailspot/pull/433)), and is the build meant for the App Store.
+- The multi-catch bonus ([PR #428](https://github.com/landesbergn/tailspot/pull/428)) is held for 1.2.7 (Noah).
+- Readiness read before the cut: `main` green and no Sentry issues, but builds 121 to 123 saw one real tester (12 catches over 3 days) plus Apple's test devices, no `trophies_tab_viewed` on a store build, and no `trophy_near_shown` on any build.
+- Push registration ([PR #427](https://github.com/landesbergn/tailspot/pull/427)) is confirmed on a store-signed install: one production token from build 122, registered 2026-11-16.
+- Not done: the soak on 124, App Store Connect crash check, screenshot check against the new Trophies tab, release notes. Docs only; no code change.
+
+## 2026-11-17 — Five set slots for caught types that had no home (branch `claude/add-to-set-4baa1f`)
+
+- Noah's ask: a player's Boeing E-3B Sentry catch filled no set slot. A check of every military type players have caught found four more with no slot.
+- Military set: Boeing E-3 Sentry (`E3TF`, `E3CF`), AH-64 Apache (`H64`), CH-53 Sea Stallion / Super Stallion (`H53S`, `H53`), Grumman E-2 Hawkeye (`E2`). Vintage & warbirds: Consolidated PB4Y-2 Privateer (`P4Y`).
+- Tokens are full designators, never the bare name: "sentry" would pull in the Lancair Sentry 4T, "apache" the Piper PA-23, "privateer" the `PVTR` amphibian.
+- Card backs: `TypeInfo.json` gains an `entries` record for each slot. The CH-53, E-2 and Privateer had no record before. `tools/generate-type-info.py` gains four Wikipedia title overrides; only the new records were kept from the regeneration.
+- The E-6 Mercury already had a slot ([PR #328](https://github.com/landesbergn/tailspot/pull/328)); no change.
+- Not done: military types nobody has caught yet (B-52, B-1, B-2, F-15, F-16, F-22, F-35, A-10, V-22, P-3 and others) still have no slot.
+- Tests: seven catalog rows and slot assignments in `SetsCoverageTests.swift`.
+
+## 2026-11-15 — Frame catch rule rolled out to everyone; multi-plane catches get a detector verdict (branch `claude/catch-rule-experiment-33d5ad`)
+
+- Rollout: PostHog flag `frame-is-the-catch` went from a 50/50 split to 100% (flag version 6). No code change; users get the frame rule at their next cold launch or return from the background. Builds older than 1.2.4 (111), and sessions where the flag hasn't loaded, still run legacy because the code default is `.legacy`.
+- Why now: Noah asked for an interim read on day 6 of the A/B planned to run to 2026-12-21, and chose to roll out. 57 people, no flips. Share of open days with a catch: frame 0.58 (23 people) vs legacy 0.50 (34), 74% chance frame is better, below the pre-set 90% bar, so a tie decided by Noah. Existing users only: 0.68 vs 0.65.
+- The A/B notebook's "confirmed share" guardrail looked bad for frame (33% vs 64%) but was not a fair comparison: a detection counts as corroborated even on planes too small to expect one. Counting only `catch_detector_gate` rows inside the envelope, frame was 11 of 54 and legacy 45 of 116; without one heavy frame user, 11 of 31. Per-person averages 33% vs 45%, inside noise.
+- Evidence gap closed: a frame multi-plane press already searched the still once per plane to place brackets, but only single catches recorded the result. Now every searched plane gets a `catch_detector_gate` event and a `detector_verdict` on its `catch_performed` row.
+- `catch_detector_gate` gains `targets` (planes in the press) and `snap_conflict` (the search found a plane but a nearer target claimed it). Older builds send neither; read them as 1 and false.
+- Suspicion is unchanged: only a single-target in-envelope miss can join the shadow signal, and only with enforcement on (`DetectorGate.raisesSuspicion`). Legacy multi-catches (zone clusters) are still not searched and carry no verdict.
+- Tests: three new cases in `DetectorGateTests.swift` (the two new properties, and the suspicion rule).
+- Still open: delete the legacy rule and make frame the code default after a watch period.
+
+## 2026-11-15 — Push registration works on App Store and TestFlight builds (branch `fix/push-registration-app-store`)
+
+- Found while testing the forgiven-streak-day push ([PR #426](https://github.com/landesbergn/tailspot/pull/426)): the production `devices` table held one `apns_token`, a sandbox token from Noah's development build on 2026-09-28. No released install had ever registered, so no challenge "overtaken" push has reached a real user since they shipped on 2026-09-27.
+- Cause: `PushEnvironment.current()` read `embedded.mobileprovision` and returned nil when the file was missing, and `PushRegistration` skipped registration on nil. Apple strips that file from App Store and TestFlight builds, so only development-signed builds passed the check.
+- Fix: new pure `PushEnvironment.resolve(provisioningProfile:isSimulator:)`. Simulator → nil. Real device with no profile → `production` (a store build; TestFlight uses the production gateway too). Real device with a profile → what the profile says, as before. The profile parser is unchanged.
+- Tests: five new cases in `PushTokenClientTests.swift` for the rule (no profile, development, production, profile without push, simulator).
+- Not verifiable on a development build, which always has a profile. Needs a TestFlight build: after one is installed with notifications allowed, `devices` should start showing rows with `apns_environment = 'production'`.
+- No backend change. Existing installs register on their first launch of the fixed build if notification permission is already granted.
+
+## 2026-11-14 — Forgiven streak days (branch `claude/streak-forgiveness-extensions-15f61d`)
+
+- Noah's ask: forgive a day for everyone (an FAA ground stop, say) so a missed catch doesn't break anyone's streak, with a push to announce it.
+- **Covered days** (`StreakCover.swift`): a forgiven day holds a streak together but never adds to its count, so every counted day is still a real catch. `Streaks.currentStreak` / `longestStreak` take the covered set; `Streaks.coveredDays()` is the one funnel the Profile, the reveal chip, the reminder planner, the weekly recap and the secret streak trophy all read.
+- **Backend.** New `streak_forgiveness` table, public `GET /v1/streak-forgiveness` (60 s cache, 120/min per IP), and `npm run streak:forgive -- --day … --reason … [--push-title … --push-body … --min-build N | --only-device <id>] [--dry-run] [--remove]`.
+- The app fetches the list on every foreground and applies it locally, so people with notifications off are covered too. The push is only the announcement and goes to devices whose recorded build is at least `--min-build`, because older builds ignore forgiveness.
+- `--only-device <device id>` sends the push to one device with no build filter, for a test send before a real broadcast. Test against a far-past day such as `2000-01-01` and `--remove` it afterwards.
+- The server now stores the build a push token came from (`devices.app_build`); it used to be logged and dropped.
+- **Server deployed 2026-11-14 18:35 PT** as API release v65 (rollback target v64), from the PR branch, which was level with `main`. Migration 0012 was applied to prod first through the tracked `db:migrate` path (journal now 13), after volume snapshot `vs_4aqGB1vkBl9tPM8YAwoBJg`. Verified: `/healthz`, `/readyz`, `GET /v1/streak-forgiveness` returning `{"days":[]}`, no new Sentry issues, and `streak:forgive --dry-run` against prod (writes nothing). The app half is not released yet.
+- **Field test 2026-11-15 (Noah's iPhone, 25-day streak, no catch yet that day).** Declared the day forgiven with no push: the toast and the Profile "No catch needed today" line both showed. A single-device push (`--only-device`, run on the Fly machine) arrived. `--remove` took the day back and the list is empty again. The first build with forgiveness will be 123 or later (122 is `main` with only the push registration fix, [PR #427](https://github.com/landesbergn/tailspot/pull/427)), so a broadcast uses `--min-build` of that build. A broadcast reaches nobody until store installs register tokens, which #427 fixes and a TestFlight install has yet to confirm.
+- **Merged 2026-11-15 as 171c4b3; TestFlight build 123 (1.2.6) cut from it.** Build 123 = build 122 plus forgiven days and the multi-plane detector verdict change (#429). Broadcasts use `--min-build 123`.
+- A forgiven day older than 7 days stays cached even if the server stops listing it, so an empty server list can't break old streaks; newer days follow the server, which is how a mistake is taken back.
+- App surfaces: the Profile streak row reads "No catch needed today" on a forgiven day, one toast says why ("No catch needed today: FAA ground stop."), and the 5pm reminder skips forgiven days. The reminder can still fire on a day forgiven after the app was last opened, because the app can't be woken to cancel it.
+- **Narrowed 2026-11-14 (Noah).** Earned freezes and a manual repair were built in the same round and then cut from this change: they soften every streak, can't be field-tested without missing days, and nothing yet says broken streaks are what loses people. They are parked, complete with tests, on branch `claude/streak-freezes-repair` and plug into the same covered set.
+- The broadcast goes to everyone with notifications allowed, not only people with streak reminders on. Respecting that toggle is a separate change.
+- **Deploy order:** apply migration `0012_streak-forgiveness.sql` to prod, then deploy the server, then ship the app. An un-migrated database fails device registration once the new server is live.
+- Tests: `StreakCoverTests` (15) plus the existing streak suites (full `TailspotTests` 2,041 passing); backend `streakForgiveness.route`, `forgiveStreakDay`, `pushToken.route` (45).
+
+## 2026-11-13 — Trophies rebuilt as levels, trophies and chases (1.2.6 train opens) (branch `claude/trophies-rebuild-738248`)
+
+- Why: PostHog showed trophies were earned by accident and by volume, not chased. Four of the ten most-earned were secrets, trophy count tracked catch count, the heaviest players had run out, nothing was shareable, and the tab had no analytics.
+- Existing achievements keep their ids, thresholds and ledger. `TrophyTracks.swift` groups them into 15 tracks with numbered levels, treats the rest as feats (secrets stay hidden), and picks up to three live chases.
+- The ten pure-volume tracks (Logbook, Airframes, Heavies, Single aisle, Regionals, Rare finds, Days out, Night, Route calls, Points) are endless: past their hand-set levels they continue on a generated 1 / 2.5 / 5 series (Logbook 1,000, 2,500, 5,000…), twelve levels each, ids like `logbook.lv6`. Their ring is one arc toward the next level. Airlines, Places, Sets, Types and Heritage stay capped. Roster version 6.
+- Levels read "Level 3 of 4" in plain digits; sections are On approach, Levels and Trophies; the post-reveal card is headed "On final".
+- 13 new top levels (roster version 5), such as Airlines 60 and 100, Heavies 150, Rare finds 75. A reseed that grants more than three shows one recap, not a card each.
+- The Trophies segment is rewritten: chases, a row per track, a feats grid, one glyph-ring badge everywhere, a badge detail sheet with the level ladder and a share card. The hex icons are deleted.
+- The catch reveal is unchanged. When a catch leaves a track level one or two short (and unlocks nothing), an "On final" card (almost there) follows the reveal, once per level. A progress row on the reveal was built first and dropped: it made tall cards scroll (Noah, 2026-11-13).
+- New events: `trophies_tab_viewed`, `trophy_detail_opened`, `trophy_share_opened`, `trophy_share_completed`, `trophy_near_shown`. `trophy_unlocked` gains `track` and `level`.
+- Built by three Sonnet subagents (model, tab, reveal) with a review after each. Not yet checked on a device.
+## 2026-11-13 — CLAUDE.md cleanup (branch `claude/claude-md-cleanup-6fcac8`)
+
+- Both CLAUDE.md files trimmed to Anthropic's current guidance (under 200 lines, nothing Claude can read from the code, plain wording): root 203 → ~130 lines, `ios/CLAUDE.md` 225 → ~140.
+- Working model updated: Noah weighs in on UI, workflows and product; code decisions are Claude's, without narration.
+- Removed the doc-staleness Stop hook (`bin/doc-staleness-check`). It only fired on `main` with unpushed commits, which branch protection rules out, so it never ran.
+- New `.claude/rules/` holds path-scoped rules (analytics identity, the `Catch` model contract, ADS-B errors) that load only when Claude touches matching files. `.gitignore` now keeps `.claude/` local except `rules/`.
+- Test-timing measurement steps moved to CONTRIBUTING.md.
+
+## 2026-11-13 — Multi-catch is a real thing: a paid bonus, a steady button, no wait (branch `claude/catch-multiplier-scoring-a94f12`)
+
+- Noah: multi-catch "should be an actual thing". The ×1.5–×3 combo was removed on 2026-10-23 because the server never paid it, the button flickered between ×2 and a single catch, and the reveal took seconds to open.
+- **Scoring v10 (Noah's numbers).** Each plane in a press of two earns +25% of its own base; each in a press of three or more earns +50%. Additive, like first-of-type and the guess bonus, so they stack without compounding. A rare caught in a double is 50 + 13.
+- **The server decides, with no new wire field.** Every row of one press already carries the same `caughtAt`, so the server counts the distinct airframes a device caught at that instant (`press_size`, migration 0013). When a second plane of a press arrives, `reconcilePress` re-scores the first. Builds already on phones get the bonus without an update. Only fresh planes count: an already-caught plane makes no row.
+- **Past multi-catches are paid too.** Migration 0013 backfills `press_size` for every old press; the v9→v10 `npm run rescore` then adds the bonus. That is the combo the reveal showed from 2026-05-21 to 2026-10-23.
+- **App.** `Catch.pressSize` (optional, additive) is set at catch time and backfilled for old and restored rows by the same rule. The reveal page, the multi-catch summary, the Hangar row, the detail card, the share card and the weekly recap all show a "DOUBLE CATCH" / "TRIPLE CATCH" line through `ScoringBonuses`, pinned to the server's fractions by `scoring-bonuses.json`.
+- **Steady button (`PressHold`).** A plane the rules chose stays in the press for 0.6 s after they drop it, while it is still on screen. Joining is immediate, a plane that leaves the frame goes at once, and the press never grows past its cap. Both catch rules; who qualifies is unchanged, so the A/B is not disturbed.
+- **No wait.** A multi-catch now opens its reveal at the tap, as single catches have since 2026-08-13: each fresh plane starts from live feed data and the viewfinder frame, and its photo and route arrive when the pipeline finishes. PostHog (60 days, Release builds): the old flow took 1.2 s at the median and 1.8 s at p90 under the new catch rule, mostly one detector search per plane. `catch_pipeline_timing` reports the new path as `mode: multi_shell`.
+- Not changed: who is in a press under either rule (the A/B reads 2026-12-21), and the pipeline's own speed (each plane's detector search still decodes the photo again).
+- Code review fixes (2026-11-15, [PR #428](https://github.com/landesbergn/tailspot/pull/428)): the rescore re-counts presses and raises a stale `press_size` (covers a press uploaded between migration 0013 and the deploy, and a failed insert-time count); `reconcilePress` and `recreditGuess` each write only if the row is as they read it; `CatchDeletion` lowers the press size of the other planes when a plane is deleted before it uploads; `CatchBackfill.pressKey` matches presses to the millisecond.
+- Wrench panel rebuilt (2026-11-15, Noah: "basically unusable"): it had grown past the screen, with switches under the capture button, buttons on top of the bottom bar, and streak buttons truncated to "S…". It is now one scrolling, near-opaque card that ends above the capture button: readouts, then ACTIONS and STREAK as two-column grids with whole labels, then SWITCHES, then the nearby list. Debug builds accept `-tailspotShowDebugPanel` to open it at launch.
+- **Needs Noah's go-ahead, in this order:** snapshot the DB, apply migration 0013 to prod, deploy the API, then dry-run the rescore and review the delta and any changed weekly or monthly winner before applying it.
+
+## 2026-11-12 — Placeholder callsigns show the tail number (branch `claude/catch-000000-issue-5eeec5`)
+
+- Noah's Challenger 300 catch (N549FX, 2026-11-08) read "00000000 · PRIVATE". The plane's transponder broadcast all zeros as its flight ID, and adsb.lol passes that through.
+- New `Callsign.clean` treats a blank callsign, or one with no letters and no non-zero digits, as no callsign. It runs on feed decode (new catches never store one) and at the display and route-lookup sites that read stored catches, so old rows render right without a data change.
+- Cards now name a plane by its callsign, else its tail number (the Hangar row's order). That applies to every callsign-less catch, not just placeholders.
+- Route backfill skips placeholder callsigns instead of looking up `/v1/routes/00000000`.
+
 ## 2026-11-12 — Scoring v9 live on prod (tier audit server rollout, #406)
 
 - 1.2.5 went live, so the server half ran in the documented order: DB volume snapshot, `typecodes` ingest from the shipped `AircraftTypes.json`, deploy (API v63), rescore dry run, review, apply.

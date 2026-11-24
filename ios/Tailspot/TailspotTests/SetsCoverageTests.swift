@@ -300,6 +300,14 @@ struct SetsCoverageTests {
         // Public catalog coverage additions validated 2026-10-23.
         ("BE60", "Beechcraft", "60 Duke"),
         ("RJ85", "Avro", "RJ-85 Avroliner"),
+        // Caught military types that had no slot, added 2026-11-17.
+        ("E3TF", "Boeing", "E-3B Sentry"),
+        ("E3CF", "Boeing", "E-3D Sentry"),
+        ("H64", "McDonnell Douglas", "AH-64 Apache"),
+        ("H53S", "Sikorsky", "S-80"),
+        ("H53", "Sikorsky", "S-65"),
+        ("E2", "Grumman", "E-2 Daya"),
+        ("P4Y", "Convair", "P4Y Privateer"),
         // Public catalog coverage additions validated 2026-10-25.
         ("BUSH", "Rainbow Skyreach", "BushCat"),
         ("C337", "Cessna", "337 Super Skymaster"),
@@ -453,6 +461,13 @@ struct SetsCoverageTests {
             (("A400", "Airbus", "A400M Atlas"), "fam-military", "fm-a400m"),
             (("DH82", "De Havilland", "DH-82 Queen Bee"), "fam-vintage", "fv-dh82"),
             (("E6", "Boeing", "E-6 Mercury"), "fam-military", "fm-e6"),
+            (("E3TF", "Boeing", "E-3B Sentry"), "fam-military", "fm-e3"),
+            (("E3CF", "Boeing", "E-3D Sentry"), "fam-military", "fm-e3"),
+            (("H64", "McDonnell Douglas", "AH-64 Apache"), "fam-military", "fm-ah64"),
+            (("H53S", "Sikorsky", "S-80"), "fam-military", "fm-ch53"),
+            (("H53", "Sikorsky", "S-65"), "fam-military", "fm-ch53"),
+            (("E2", "Grumman", "E-2 Daya"), "fam-military", "fm-e2"),
+            (("P4Y", "Convair", "P4Y Privateer"), "fam-vintage", "fv-p4y"),
             (("L39", "Aero", "L-39 Albatros"), "fam-military", "fm-l39"),
             (("LA4", "Lake", "LA-4"), "fam-sport-classics", "fsc-lake-la4"),
             (("S92", "Sikorsky", "S-92"), "fam-heli", "fh-s92"),

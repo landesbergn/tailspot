@@ -84,6 +84,43 @@ describe("normalizeAdsbLol", () => {
     expect(mustGet(byHex, "86e4b8").callsign).toBe("JAL58");
   });
 
+  it("drops placeholder flight IDs (all zeros / dashes), keeps real ones", () => {
+    const resp: AdsbLolResponse = {
+      now: FIXTURE.now,
+      ac: [
+        {
+          hex: "a6f9ee",
+          flight: "00000000",
+          lat: 37.5,
+          lon: -122.5,
+          alt_baro: 10000,
+          seen_pos: 1.0,
+        },
+        {
+          hex: "a6f9ef",
+          flight: "--------",
+          lat: 37.5,
+          lon: -122.5,
+          alt_baro: 10000,
+          seen_pos: 1.0,
+        },
+        {
+          hex: "a6f9f0",
+          flight: "1200    ",
+          lat: 37.5,
+          lon: -122.5,
+          alt_baro: 10000,
+          seen_pos: 1.0,
+        },
+      ],
+    };
+    const rows = normalizeAdsbLol(resp, FETCHED_AT, SF_BBOX);
+    const hex = new Map(rows.map((r) => [r.icao24, r]));
+    expect(mustGet(hex, "a6f9ee").callsign).toBeNull();
+    expect(mustGet(hex, "a6f9ef").callsign).toBeNull();
+    expect(mustGet(hex, "a6f9f0").callsign).toBe("1200");
+  });
+
   it("passes the readsb DB typecode + registration through (incl. foreign tails)", () => {
     const ua = mustGet(byHex, "a92d6d");
     expect(ua.typecode).toBe("B772");

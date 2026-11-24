@@ -89,12 +89,27 @@ struct CatchDetailView: View {
     private var type: AircraftType { row.aircraftType }
     private var hasCatchPhoto: Bool { shown.photoFilename != nil }
 
+    /// The scroll column's insets. The top one clears the floating chrome
+    /// bar (see the comment at its use). Internal for `CardFillLayoutTests`.
+    static let columnTopInset: CGFloat = 8 + ChromeMetrics.disc + 16
+    static let columnBottomInset: CGFloat = 8
+
     var body: some View {
         GeometryReader { geo in
         ZStack(alignment: .top) {
             Brand.Color.bgPrimary.ignoresSafeArea()
 
             ScrollView {
+                // The card fills the screen (2026-11-22): the column is
+                // offered the height between its top and bottom insets, and
+                // the card's photo is the one part that takes spare height
+                // (`SettledCatchCard.fillsHeight`). A card too tall for that
+                // takes height back from the photo, down to a floor, so the
+                // turn-over row stays on screen; one still too tall at the
+                // floor (an SE) scrolls, as it always did. The attribution line, when shown, comes out of
+                // the photo's share because the offer covers the column.
+                ProposedHeightLayout(height: max(0, geo.size.height
+                                                    - Self.columnTopInset - Self.columnBottomInset)) {
                 VStack(spacing: 14) {
                     // Direction B (2026-07-05): the reveal card at rest IS
                     // the detail screen — one card design across the app.
@@ -114,7 +129,8 @@ struct CatchDetailView: View {
                                 ? "View photo full screen"
                                 : "View photo on Planespotters.net",
                             heroZoom: hasCatchPhoto ? heroZoom : nil,
-                            caughtAt: shown.caughtAt
+                            caughtAt: shown.caughtAt,
+                            fillsHeight: true
                         )
                     } back: {
                         CatchCardBack(model: backModel, width: cardWidth,
@@ -125,13 +141,14 @@ struct CatchDetailView: View {
                         attribution(photo)
                     }
                 }
+                }
                 .padding(.horizontal, 18)
                 // Clears the floating chrome bar (8 pt top inset + 44 pt
                 // ChromeButton) with a 16 pt breath. The discs grew from 36 pt in
                 // the 2026-10-30 back-controls pass; left at 56 the card's
                 // outline nearly touched them (Noah's device pass).
-                .padding(.top, 8 + ChromeMetrics.disc + 16)
-                .padding(.bottom, 40)
+                .padding(.top, Self.columnTopInset)
+                .padding(.bottom, Self.columnBottomInset)
             }
 
             chromeBar
@@ -219,7 +236,8 @@ struct CatchDetailView: View {
             typeInfo: typeInfo,
             history: typeHistory,
             summary: summary,
-            summaryLoading: summaryLoading
+            summaryLoading: summaryLoading,
+            notable: shown.notableInfo
         )
     }
 
@@ -268,7 +286,8 @@ struct CatchDetailView: View {
             ? shown.photoFilename.flatMap { CatchPhotoStore.url(forFilename: $0) }
             : planespottersPhoto?.thumbnailLargeURL
         return CardPlane(
-            callsign: shown.callsign,
+            callsign: Callsign.cardIdentifier(callsign: shown.callsign,
+                                              registration: shown.registration),
             model: canonical.displayName ?? shown.model,
             carrier: Airlines.operatorLabel(operatorName: shown.operatorName,
                                             callsign: shown.callsign),
@@ -284,6 +303,8 @@ struct CatchDetailView: View {
             originName: shown.originName,
             destName: shown.destName,
             isFirstOfType: wasFirstOfType,
+            pressSize: shown.pressSize ?? 1,
+            notable: shown.notableInfo,
             icao24: shown.icao24
         )
     }
@@ -390,7 +411,8 @@ struct CatchDetailView: View {
     // MARK: - Delete
 
     private var deleteTitle: String {
-        let cs = shown.callsign?.trimmedNonEmpty ?? shown.icao24.uppercased()
+        let cs = Callsign.cardIdentifier(callsign: shown.callsign, registration: shown.registration)
+            ?? shown.icao24.uppercased()
         return "Delete catch of \(cs)?"
     }
 

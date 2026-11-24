@@ -66,6 +66,11 @@ enum CatchFingerprint {
         hasher.combine(c.placeName)
         hasher.combine(c.country)
         hasher.combine(c.suspectReason)
+        // The notable flag can change after the row exists (the upload
+        // response); the search index and the trophy inputs both read it.
+        hasher.combine(c.notableKind)
+        hasher.combine(c.notableLabel)
+        hasher.combine(c.notableName)
     }
 }
 
