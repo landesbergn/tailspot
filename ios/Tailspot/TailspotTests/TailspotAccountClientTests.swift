@@ -337,7 +337,8 @@ protocol UploadCatchClient {
         headingAccuracyDeg: Double?,
         aircraft: UploadCatchRequest.Aircraft?,
         guessKind: String?,
-        guessValue: String?
+        guessValue: String?,
+        notableClaim: Bool
     ) async throws -> UploadCatchResponse
 }
 
@@ -385,7 +386,8 @@ final class FakeUploadClient: UploadCatchClient {
         headingAccuracyDeg: Double?,
         aircraft: UploadCatchRequest.Aircraft?,
         guessKind: String?,
-        guessValue: String?
+        guessValue: String?,
+        notableClaim: Bool
     ) async throws -> UploadCatchResponse {
         uploadedIcaos.append(icao24)
         uploadedGuesses[icao24] = (kind: guessKind, value: guessValue)
@@ -461,7 +463,8 @@ func uploadPendingWithClient(
                 elevationDeg: pose.elevationDeg,
                 headingAccuracyDeg: pose.headingAccuracyDeg,
                 aircraft: pose.aircraft,
-                guessKind: catchRow.guessKind, guessValue: catchRow.guessValue
+                guessKind: catchRow.guessKind, guessValue: catchRow.guessValue,
+                notableClaim: catchRow.claimsNotable
             )
             catchRow.uploadedAt = Date()
             anySuccess = true

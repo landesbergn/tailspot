@@ -22,6 +22,8 @@ import { makeRegistryEnrichSink } from "./ingest/feedEnrich.js";
 import { DrizzleMetadataStore, type MetadataStore } from "./metadata/store.js";
 import { ErrorRateAlerter } from "./monitoring/errorRate.js";
 import { reportToSentry } from "./monitoring/report.js";
+import { NotableDirectory } from "./notable/directory.js";
+import type { NotableLookup } from "./notable/mapping.js";
 import {
   AdsbLolRouteService,
   type RouteEnricher,
@@ -104,6 +106,13 @@ export interface BuildAppOptions {
   identityStore?: IdentityStore;
   /** Catch store override (catches + leaderboard). Lazily built over Postgres in prod. */
   catchStore?: CatchStore;
+  /**
+   * The notable-planes directory (src/notable/): stamps `notable` on
+   * /v1/aircraft and confirms an uploaded catch's notable claim. Omitted
+   * (production), the app loads the committed snapshot; tests inject a small
+   * one.
+   */
+  notableDirectory?: NotableLookup;
   /** Injectable clock (unix seconds) for deterministic catch-validation tests. */
   nowSeconds?: () => number;
   /** Override for GUESS_RECREDIT_CLOSES (tests). */
@@ -474,6 +483,15 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     return { status: "ok" };
   });
 
+  // Notable planes: one directory for the whole app, so the star the
+  // aircraft feed shows and the claim the catch upload confirms always agree.
+  const notableDirectory =
+    options.notableDirectory ??
+    NotableDirectory.fromSnapshot({
+      onError: (err) =>
+        app.log.error({ err }, "notable snapshot failed to load; no plane is notable"),
+    });
+
   // GET /v1/aircraft — cached, single-flighted position proxy (WP 1.3).
   //
   // Opportunistic registry enrichment: each fresh upstream fetch carries the
@@ -561,6 +579,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     now: options.now,
     onFreshSnapshot,
     routeEnricher,
+    notable: notableDirectory,
     // One info line per genuine upstream fetch (≤ 1 per tile per 10 s): which
     // feed answered, how many planes, how long it took. This is the record of
     // "which API served when" — the engage/recover warnings above only mark
@@ -772,6 +791,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     bearerIpLimiter,
     // Route-guess verification shares the /v1/routes resolver (same cache).
     routeResolver,
+    notable: notableDirectory,
     // Challenge "someone passed you" pushes hang off a successful upload. A
     // hoisted function declaration, because the challenge wiring it needs is
     // built further down — it is only ever CALLED after a catch, long after

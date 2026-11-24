@@ -606,6 +606,7 @@ func statCell(_ label: String, _ raw: String?, scale: CGFloat, accent: Color) ->
             }
         }
         .lineLimit(1).minimumScaleFactor(0.6)
+        .reportsCardFrame(label == "ALT" ? .altValue : label == "DIST" ? .distValue : nil)
     }
 }
 
@@ -704,6 +705,7 @@ func identityRow(callsign: String?, carrier: String?, rarity: Rarity,
                 .font(.system(size: 11 * scale, weight: .semibold, design: .monospaced))
                 .tracking(1).foregroundColor(RP.ink)
                 .lineLimit(1).minimumScaleFactor(0.7)
+                .reportsCardFrame(.callsign)
         }
         if isDuplicate {
             Text("· ALREADY CAUGHT")
@@ -733,20 +735,26 @@ func ledgerRow(_ label: String, _ amount: String, _ color: Color, _ opacity: Dou
 
 // MARK: - CatchRevealView
 
-/// Lays out its single child at the child's compressed minimum height and
-/// reports THAT size — proposing zero height, the way the reveal's old
-/// `VStack { Spacer; card; Spacer; cta }` column effectively did (see
-/// `CatchRevealView.revealColumn`). Keeps the card pixel-identical to what
-/// shipped while the column around it changes; width passes through.
-nonisolated struct CompressedHeightLayout: Layout {
+/// Offers its single child `height`, whatever the parent offers, and takes
+/// the size the child comes back with. Each catch-card screen wraps its card
+/// column in one to offer the height the card should fill
+/// (CardPhotoFill.swift): the photo is the only part of the card that
+/// stretches or gives way, so the card fills that height when it can and
+/// is its own shortest when it cannot. One layout pass, no measured state.
+nonisolated struct ProposedHeightLayout: Layout {
+    var height: CGFloat
+
+    private func offer(width: CGFloat?) -> ProposedViewSize {
+        ProposedViewSize(width: width, height: height)
+    }
+
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        guard let child = subviews.first else { return .zero }
-        return child.sizeThatFits(ProposedViewSize(width: proposal.width, height: 0))
+        subviews.first?.sizeThatFits(offer(width: proposal.width)) ?? .zero
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         subviews.first?.place(at: CGPoint(x: bounds.midX, y: bounds.minY), anchor: .top,
-                              proposal: ProposedViewSize(width: bounds.width, height: 0))
+                              proposal: offer(width: bounds.width))
     }
 }
 
@@ -1001,7 +1009,19 @@ struct CatchRevealView: View {
     /// The target the reveal's own count-up climbs to — base + first-of-type +
     /// any pre-frozen bonus. The LIVE route bonus is deliberately excluded: it
     /// counts up separately (on `bonusStart`) once the player answers correctly.
-    private var revealTargetTotal: Int { isDuplicate ? 0 : base + firstOfTypeBonus + frozenGuessBonus }
+    private var revealTargetTotal: Int {
+        isDuplicate ? 0 : base + firstOfTypeBonus + frozenGuessBonus + multiCatchBonus + notableBonus
+    }
+    /// The notable-airframe bonus (scoring v11): +50% of base when the
+    /// server flags this plane. 0 for an ordinary plane or a duplicate.
+    private var notableBonus: Int {
+        livePlane.notable != nil && !isDuplicate ? ScoringBonuses.notableBonus(base: base) : 0
+    }
+    /// The multi-catch bonus this plane earns as one of a press of two or
+    /// more fresh planes (scoring v10). 0 for a lone catch or a duplicate.
+    private var multiCatchBonus: Int {
+        isDuplicate ? 0 : ScoringBonuses.multiCatchBonus(base: base, pressSize: livePlane.pressSize)
+    }
 
     var body: some View {
         GeometryReader { geo in
@@ -1163,7 +1183,8 @@ struct CatchRevealView: View {
             typeInfo: backTypeInfo,
             history: backHistory,
             summary: backSummary,
-            summaryLoading: backSummaryLoading
+            summaryLoading: backSummaryLoading,
+            notable: livePlane.notable
         )
     }
 
@@ -1360,6 +1381,10 @@ struct CatchRevealView: View {
     private static let ctaStripPadding: (top: CGFloat, bottom: CGFloat) = (24, 28)
     private static let ctaStripEstimate: CGFloat = ctaStripPadding.top + 19 + ctaStripPadding.bottom
 
+    /// The air left above the card and below its turn-over row when the
+    /// photo grows to fill the viewport. Internal for `CardFillLayoutTests`.
+    static let fillMargin: CGFloat = 8
+
     /// Measured height of the scroll viewport above the CTA strip; nil until
     /// the first layout pass reports it. It is the scroll content's MINIMUM
     /// height, so a card that fits centers exactly as it did in the fixed
@@ -1388,25 +1413,23 @@ struct CatchRevealView: View {
         @ViewBuilder cta: () -> CTA
     ) -> some View {
         let viewport = cardViewportHeight ?? max(0, height - Self.ctaStripEstimate)
-        // The card is laid out through `CompressedHeightLayout` so it takes the
-        // SAME size it always has. The pre-scroll column was
-        // `VStack { Spacer; card; Spacer; cta }`: a VStack offers each child a
-        // share of the remaining space in order of flexibility, so the card
-        // was proposed about a third of the screen and always laid out at its
-        // compressed MINIMUM — route codes/names and the readouts (all
-        // `minimumScaleFactor` text) scaled down — on every device. That is
-        // the card every user has seen; a bare scroll view proposes unbounded
-        // height, which un-squeezes it and made cards that used to fit (a
-        // one-line name on the SE, a two-line one on a 6.1") start scrolling
-        // by a few points. (Whether the design should render at its intended
-        // sizes is a separate call — see the PR.)
+        // The card is offered the viewport's height less a small margin top
+        // and bottom (2026-11-22, CardPhotoFill.swift). The photo is the only
+        // part of it that takes or gives height (see `card`), so a short
+        // card grows its photo until the card and its turn-over row fill
+        // the space, a tall one shrinks its photo until they fit, and one
+        // too tall even then lays out at its shortest and scrolls.
         //
-        // Around it, a min-height frame does what the two Spacers did: a card
-        // that fits is centered; a taller card sets the content height and
-        // scrolls. No padding or Spacers here: under the scroll view's
-        // unbounded proposal even `Spacer(minLength: 0)` reports 8 pt, a
-        // phantom scroll where a card just fits.
-        let content = CompressedHeightLayout { card() }
+        // Around it, a min-height frame centers a card that stops short of
+        // the viewport (the photo reached square). No padding or Spacers
+        // here: under the scroll view's unbounded proposal even
+        // `Spacer(minLength: 0)` reports 8 pt, a phantom scroll where a card
+        // just fits.
+        //
+        // (Until 2026-11-22 the card was offered ZERO height here, to keep
+        // the squeezed text the first reveal happened to ship with. Noah
+        // retired that: the text is at its designed size now, see `card`.)
+        let content = ProposedHeightLayout(height: max(0, viewport - 2 * Self.fillMargin)) { card() }
             .frame(maxWidth: .infinity)
             .frame(minHeight: viewport)
             .background {
@@ -1486,6 +1509,10 @@ struct CatchRevealView: View {
         }
         var parts = ["Caught \(model)", livePlane.rarity.label]
         if firstOfTypeBonus > 0 { parts.append("first of type") }
+        if multiCatchBonus > 0 {
+            parts.append(ScoringBonuses.multiCatchLabel(pressSize: livePlane.pressSize).lowercased())
+        }
+        if let notable = livePlane.notable { parts.append(notable.accessibilityText) }
         parts.append("\(revealTargetTotal) points")
         if let days = liveStreakDays { parts.append("\(days) day streak") }
         return parts.joined(separator: ", ")
@@ -1719,6 +1746,19 @@ struct CatchRevealView: View {
         // under the card needs that room on a 6.1" phone with a three-line
         // name (`RevealShortScreenTests`).
         let photoHeight = ((render?.chipsInLayout ?? false) ? 100.0 : 152.0) * scale
+        // The photo is the one part of the card that takes spare height
+        // (2026-11-22): up to square when the reveal column offers the card
+        // more room than it needs. Not while the chips are up: that card is
+        // as short as it can be made. Both states go through the same frame
+        // modifier, so the chips' pop and collapse still animate one height.
+        let photoMaxHeight = (render?.chipsInLayout ?? false)
+            ? photoHeight : CardPhotoFill.maxHeight(cardWidth: width, base: photoHeight)
+        // And the one part that gives height back when the card is too tall
+        // for the viewport (three-line name, several ledger rows): down to
+        // the height it already takes while the chips are up, never below.
+        // (60% of 152 is 91, under that, so the chip height is the floor.)
+        let photoMinHeight = (render?.chipsInLayout ?? false)
+            ? photoHeight : min(photoHeight, max(100 * scale, CardPhotoFill.minHeight(base: photoHeight)))
         // The reveal's own count-up climbs to the pre-bonus total; a correct
         // in-card guess then rolls its route bonus in on the separate `bt` clock.
         let revealCount = Int((Double(revealTargetTotal) * easeOut(ss(0.82, 0.96, t))).rounded())
@@ -1750,20 +1790,22 @@ struct CatchRevealView: View {
         }()
 
         return ZStack {
-            // Tier bloom behind the card — modest for rare, cinematic for legendary.
-            if livePlane.rarity.ordinal >= Rarity.epic.ordinal {
-                RadialGradient(colors: [accent.opacity(0.22), .clear],
-                               center: .center, startRadius: 1, endRadius: Double(width) * 0.9)
-                    .opacity(ss(0.0, 0.4, t) * (livePlane.rarity == .legendary ? 1.0 : 0.6))
-                    .blur(radius: 8)
-            }
-
             VStack(alignment: .leading, spacing: 0) {
                 RevealPhoto(url: livePlane.photoURL, focus: livePlane.photoFocus,
                             provisional: loader?.provisionalPhoto,
                             loading: loader.map { !$0.pipelineFinished } ?? false)
-                    .frame(height: photoHeight)
+                    .frame(minHeight: photoMinHeight, maxHeight: photoMaxHeight)
                     .frame(maxWidth: .infinity)
+                    .reportsCardFrame(.photo)
+                    // The notable caption: who this plane is, on the
+                    // photo's bottom edge, revealed with the identity line
+                    // (the AR label only showed a star).
+                    .overlay(alignment: .bottom) {
+                        if let notable = livePlane.notable {
+                            NotablePlate(notable: notable, scale: scale)
+                                .opacity(ss(0.6, 0.74, t))
+                        }
+                    }
                     .clipShape(RoundedRectangle(cornerRadius: Brand.Radius.card))
                     // Zoom-transition source: publishes the hero's frame and
                     // owns the opening pinch. Enabled under the same gate as
@@ -1837,6 +1879,13 @@ struct CatchRevealView: View {
                             if firstOfTypeBonus > 0 {
                                 ledgerRow("FIRST OF TYPE", "+\(firstOfTypeBonus)", RP.gold, ss(0.82, 0.9, t), scale: scale)
                             }
+                            if multiCatchBonus > 0 {
+                                ledgerRow(ScoringBonuses.multiCatchLabel(pressSize: livePlane.pressSize),
+                                          "+\(multiCatchBonus)", RP.gold, ss(0.83, 0.91, t), scale: scale)
+                            }
+                            if notableBonus > 0 {
+                                ledgerRow("NOTABLE PLANE", "+\(notableBonus)", RP.gold, ss(0.83, 0.91, t), scale: scale)
+                            }
                             // Route-guess bonus. In the live in-card round it
                             // appears ONLY on a correct call and fades in with
                             // the count-up (`bt`); the legacy re-render path uses
@@ -1876,9 +1925,30 @@ struct CatchRevealView: View {
                 // 16, not 22 (2026-10-28): the turn row under the card
                 // needs the room on a 6.1" phone.
                 .padding(.bottom, 16 * scale)
+                // Everything under the photo is at its designed size (times
+                // the card's width scale) while the photo can still give
+                // way; past the photo's floor the whole block scales down
+                // together, to 88% at most (CardPhotoFill.swift). Not while
+                // the chips are up: that card keeps full-size, tappable
+                // chips and scrolls, as it always has.
+                .shrinksToFit(width: width,
+                              minScale: (render?.chipsInLayout ?? false) ? 1 : CardPhotoFill.minTextScale)
             }
             .frame(width: width)
+            .reportsCardFrame(.card)
             .modifier(CatchRarityFrame(rarity: livePlane.rarity, scale: scale))
+        }
+        // Tier bloom behind the card — modest for rare, cinematic for
+        // legendary. A background, so it is the card's size: as a flexible
+        // sibling in the stack above it would take the whole height the card
+        // is offered, including the part the card leaves empty.
+        .background {
+            if livePlane.rarity.ordinal >= Rarity.epic.ordinal {
+                RadialGradient(colors: [accent.opacity(0.22), .clear],
+                               center: .center, startRadius: 1, endRadius: Double(width) * 0.9)
+                    .opacity(ss(0.0, 0.4, t) * (livePlane.rarity == .legendary ? 1.0 : 0.6))
+                    .blur(radius: 8)
+            }
         }
     }
 
@@ -1992,6 +2062,7 @@ struct CatchRevealView: View {
                 }
             }
             .lineLimit(1).minimumScaleFactor(0.6)
+            .reportsCardFrame(.routeCodes)
             routeCityLine(origin: livePlane.originName, dest: livePlane.destName, scale: scale)
         }
     }

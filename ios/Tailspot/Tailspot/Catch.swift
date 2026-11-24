@@ -192,6 +192,29 @@ final class Catch {
     /// the server never saw the guess; the sweep sends it once. Added
     /// 2026-10 — optional + nil-default for lightweight migration.
     var guessRecreditedAt: Date?
+    /// How many FRESH planes the shutter press that made this row caught,
+    /// this one included (scoring v10, 2026-11-13). 2 or more earns the
+    /// multi-catch bonus (`ScoringBonuses.multiCatchBonus`); nil or 1 is a
+    /// lone catch. Written once at catch time; rows from before this field
+    /// are filled by `CatchBackfill.backfillPressSizes`, which counts the
+    /// distinct airframes sharing a `caughtAt` (every row of one press is
+    /// stamped with the same instant), the same rule the server uses. Not
+    /// on the init. Optional + nil-default for lightweight migration.
+    var pressSize: Int?
+    /// The server's notable-airframe flag for this plane (NotablePlane.swift):
+    /// `notableKind` is the machine category ("team", "government", ...; an
+    /// open string), `notableLabel` the user-facing category ("Team plane"),
+    /// `notableName` who it is, when known. All nil = not notable. Filled at
+    /// catch time from the live feed, and only then: a catch made before the
+    /// feature never gains the flag. The upload sends it as `notableClaim`,
+    /// and the response confirms or clears it (`applyNotable`: an object
+    /// sets, an explicit null clears, a missing key leaves the row alone).
+    /// A Hangar restore reads back what the server stored. Read through
+    /// `notableInfo`. Not on the init. Added 2026-11, optional + nil-default
+    /// for lightweight migration.
+    var notableKind: String?
+    var notableLabel: String?
+    var notableName: String?
 
     init(
         icao24: String,
@@ -261,6 +284,54 @@ final class Catch {
         )
         self.rarity = (rarity ?? autoRarity).rawValue
         self.aircraftType = (aircraftType ?? autoType).rawValue
+    }
+
+    /// What `POST /v1/catches` sends as `notableClaim`: true only for a
+    /// catch recorded as notable at catch time. The server pays the bonus
+    /// only when this is sent and its own list confirms the airframe, so a
+    /// catch from before the feature, re-uploaded by this build, earns none.
+    /// A Debug test flag never claims: it would look like a forged claim.
+    var claimsNotable: Bool { notableKind != nil && notableKind != NotablePlane.testKind }
+
+    /// The notable flag as one value, or nil for an ordinary plane.
+    var notableInfo: NotablePlane? {
+        let info = NotablePlane(kind: notableKind, label: notableLabel, name: notableName)
+        #if !DEBUG
+        // A test flag left by a Debug build is not a notable plane.
+        if info?.isDebugTest == true { return nil }
+        #endif
+        return info
+    }
+
+    /// Write (or clear, with nil) the notable flag. Returns true when the
+    /// row changed, so callers save only when there is something to save.
+    @discardableResult
+    func setNotable(_ info: NotablePlane?) -> Bool {
+        guard info != notableInfo else { return false }
+        notableKind = info?.kind
+        notableLabel = info?.label
+        notableName = info?.name
+        return true
+    }
+
+    /// Apply the upload response's answer for this catch: an object sets or
+    /// corrects the flag, an explicit null clears it (no bonus was paid, so
+    /// the card must not show one), and silence (`.unknown`, an older
+    /// server) leaves the row alone. Only the three notable fields ever
+    /// change. Returns true when the row changed.
+    @discardableResult
+    func applyNotable(_ verdict: NotableVerdict) -> Bool {
+        switch verdict {
+        case .unknown: return false
+        case .notNotable:
+            #if DEBUG
+            // A wrench-panel test flag survives the server's "no", so the
+            // test catch can be looked at. Turning the switch off clears it.
+            if notableKind == NotableDebug.testKind { return false }
+            #endif
+            return setNotable(nil)
+        case .notable(let plane): return setNotable(plane)
+        }
     }
 
     /// The airport code to DISPLAY for the origin: the IATA code when we

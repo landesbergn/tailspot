@@ -115,8 +115,13 @@ struct TailCard: View {
         let guessKind: GuessKind? = (c.guessCorrect == true)
             ? c.guessKind.flatMap(GuessKind.init(rawValue:))
             : nil
+        // The star, the name line and the bonus all come from the catch
+        // shown, so they always appear together.
+        let notable = c.notableInfo
         let points = ScoringBonuses.displayPoints(
-            base: base, isFirstOfType: isFirstOfType, guessKind: guessKind, caughtAt: c.caughtAt
+            base: base, isFirstOfType: isFirstOfType, guessKind: guessKind, caughtAt: c.caughtAt,
+            pressSize: c.pressSize ?? 1,
+            isNotablePlane: c.notableInfo != nil
         )
 
         // One spoken line for the whole row — otherwise VoiceOver walks the
@@ -124,6 +129,7 @@ struct TailCard: View {
         // route arrow as "right arrow".
         let a11yLabel: String = {
             var parts = [tailNumber, airline]
+            if let notable { parts.append(notable.accessibilityText) }
             if showPoints, let model { parts.append(model) }
             // On screen the tier is only a color (score column + route
             // arrow), so say it. Recent feed only: in the compact Sets
@@ -172,6 +178,27 @@ struct TailCard: View {
                     .foregroundStyle(Brand.Color.textSecondary)
                     .lineLimit(1)
                     .truncationMode(.tail)
+            }
+
+            // Notable rows only: the name (or category) on its own line.
+            // Line 1 has no room for it beside the callsign and airline
+            // ("Golden State Warriors" cut to "Golden..."), and a line of
+            // its own also sets the few notable rows apart in the feed.
+            // The solid gold star leads that line (Noah, 2026-11-24), so
+            // the callsign column stays aligned with every other row. The
+            // first-of-type sparkle is ringed and on the model line, so a
+            // row carrying both shows two different marks.
+            if let notable {
+                HStack(spacing: 5) {
+                    Image(systemName: "star.fill")
+                        .font(.system(size: 10, weight: .bold))
+                        .fixedSize()
+                    Text(notable.shortText)
+                        .font(.footnote.weight(.semibold))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+                .foregroundStyle(Brand.Color.ledgerGold)
             }
 
             // Line 2 — make/model as the card's HERO line (the reveal

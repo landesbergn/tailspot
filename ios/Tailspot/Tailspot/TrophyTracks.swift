@@ -278,6 +278,7 @@ nonisolated enum TrophyTracks {
         "doubleheader": "rectangle.on.rectangle",
         "hotstreak": "bolt",
         "dynasty": "medal",
+        "notable": "star.circle",
         "groundstop": "xmark.octagon",
     ]
 

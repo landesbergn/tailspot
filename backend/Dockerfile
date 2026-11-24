@@ -34,6 +34,11 @@ RUN npm ci --omit=dev
 # Copy compiled output from the builder stage
 COPY --from=builder /app/dist ./dist
 
+# The notable-planes snapshot the server loads at boot (src/notable/directory.ts
+# resolves it as ../../data from dist/notable/). Without it the server still
+# starts, but no plane is notable.
+COPY data/notable-airframes.json data/NOTICE.md ./data/
+
 EXPOSE 8080
 
 CMD ["node", "dist/index.js"]

@@ -306,6 +306,9 @@ OVERRIDES = {
     "fm-hawk": "BAE Systems Hawk",
     "fm-u2": "Lockheed U-2",
     "fm-f5": "Northrop F-5",
+    "fm-ah64": "Boeing AH-64 Apache",
+    "fm-ch53": "Sikorsky CH-53E Super Stallion",
+    "fm-e2": "Northrop Grumman E-2 Hawkeye",
     # Vintage.
     "fv-dh82": "de Havilland Tiger Moth",
     "fv-stearman": "Boeing-Stearman Model 75",
@@ -315,6 +318,7 @@ OVERRIDES = {
     "fv-p149": "Piaggio P.149",
     "fv-p51": "North American P-51 Mustang",
     "fv-tbm": "Grumman TBF Avenger",
+    "fv-p4y": "Consolidated PB4Y-2 Privateer",
     # Sport & classics.
     "fsc-alarus": "Zenith CH 2000",
     "fsc-mt03": "AutoGyro MTOsport",

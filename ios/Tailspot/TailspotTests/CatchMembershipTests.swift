@@ -11,6 +11,7 @@
 
 import Testing
 import CoreGraphics
+import Foundation
 @testable import Tailspot
 
 @Suite("Catch membership")
@@ -195,5 +196,58 @@ struct SnapAssignmentTests {
         ])
         #expect(resolved[0].snapped != nil)
         #expect(resolved[1].snapped != nil)
+    }
+}
+
+// MARK: - Press hold
+
+/// `PressHold`: the capture button's press must not flicker between frames
+/// (×2 dropping to a single catch as the user taps), and must never keep a
+/// plane that is no longer on screen.
+@MainActor
+@Suite struct PressHoldTests {
+    private let t0 = Date(timeIntervalSince1970: 1_790_000_000)
+    private func at(_ s: TimeInterval) -> Date { t0.addingTimeInterval(s) }
+
+    @Test func aPlaneThatDropsOutForAMomentStaysInThePress() {
+        let hold = PressHold()
+        #expect(hold.steady(raw: ["a", "b"], onScreen: ["a", "b"], now: at(0)) == ["a", "b"])
+        // The rules drop b for a few frames; the press stays a double.
+        #expect(hold.steady(raw: ["a"], onScreen: ["a", "b"], now: at(0.1)) == ["a", "b"])
+        #expect(hold.steady(raw: ["a"], onScreen: ["a", "b"], now: at(0.5)) == ["a", "b"])
+        // Past the hold it is gone.
+        #expect(hold.steady(raw: ["a"], onScreen: ["a", "b"], now: at(0.8)) == ["a"])
+    }
+
+    @Test func aPlaneThatLeavesTheFrameIsDroppedAtOnce() {
+        let hold = PressHold()
+        _ = hold.steady(raw: ["a", "b"], onScreen: ["a", "b"], now: at(0))
+        #expect(hold.steady(raw: ["a"], onScreen: ["a"], now: at(0.1)) == ["a"])
+        // And it does not come back just because it re-enters the frame.
+        #expect(hold.steady(raw: ["a"], onScreen: ["a", "b"], now: at(0.2)) == ["a"])
+    }
+
+    @Test func joiningIsImmediateAndNeverInvented() {
+        let hold = PressHold()
+        #expect(hold.steady(raw: [], onScreen: ["a", "b"], now: at(0)) == [])
+        #expect(hold.steady(raw: ["a"], onScreen: ["a", "b"], now: at(0.1)) == ["a"])
+        #expect(hold.steady(raw: ["a", "b"], onScreen: ["a", "b"], now: at(0.2)) == ["a", "b"])
+    }
+
+    @Test func theHoldNeverGrowsThePressPastTheCap() {
+        let hold = PressHold()
+        let all: Set<String> = ["a", "b", "c", "d"]
+        _ = hold.steady(raw: ["a", "b", "c"], onScreen: all, now: at(0))
+        // A rank swap brings d in: the rules' three win, the held one waits.
+        #expect(hold.steady(raw: ["a", "b", "d"], onScreen: all, now: at(0.1)) == ["a", "b", "d"])
+        // With a free slot the most recently chosen held plane fills it.
+        #expect(hold.steady(raw: ["a", "b"], onScreen: all, now: at(0.2)) == ["a", "b", "d"])
+    }
+
+    @Test func resetForgetsHeldPlanes() {
+        let hold = PressHold()
+        _ = hold.steady(raw: ["a", "b"], onScreen: ["a", "b"], now: at(0))
+        hold.reset()
+        #expect(hold.steady(raw: ["a"], onScreen: ["a", "b"], now: at(0.1)) == ["a"])
     }
 }

@@ -745,7 +745,11 @@ final class ADSBManager: ObservableObject {
                 lamax: observerLat + dLat,
                 lomax: observerLon + dLon
             )
+            #if DEBUG
+            self.rawAircraft = NotableDebug.apply(to: raw)
+            #else
             self.rawAircraft = raw
+            #endif
             // verbose: log per-plane drop reasons once per network poll
             // (not on the 1 Hz smoothness tick) so the field log isn't spammed.
             self.reAnnotate(observer: location, now: Date(), verbose: true)

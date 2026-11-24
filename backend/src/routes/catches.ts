@@ -5,7 +5,8 @@
  *     → 200 { total, catches: [{ catchUuid, icao24, callsign, typecode,
  *              rarity, points, firstOfType, guessKind, guessValue,
  *              guessCorrect, caughtAt, observerLat, observerLon,
- *              aircraftAltitudeMeters, registration, manufacturer, model }…] }
+ *              aircraftAltitudeMeters, registration, manufacturer, model,
+ *              notable }…] }
  *       401 bad/absent token
  *     Returns ONLY the authenticated device's catches, oldest first. `total`
  *     is the device's full count so the client can page (limit ≤ 500) and
@@ -14,8 +15,10 @@
  *
  *   POST /v1/catches   (auth required)
  *     body { catchUuid, icao24, callsign|null, caughtAt, observer{…}, aircraft{…},
- *            guess?: { kind: "route"|"type", value: string } }
- *     → 201 { catchId, points, rarity, typecode, firstOfType, guessCorrect, duplicate:false }
+ *            guess?: { kind: "route"|"type", value: string },
+ *            notableClaim?: true }
+ *     → 201 { catchId, points, rarity, typecode, firstOfType, guessCorrect, pressSize,
+ *             notable, duplicate:false }
  *       200 { …, duplicate:true }   when catchUuid was already ingested (replay)
  *       401 bad/absent token
  *       422 malformed body
@@ -35,6 +38,17 @@
  *     GUESS_RECREDIT_CUTOVER). The `code` field lets the client tell this
  *     route's 404 apart from the framework 404 an older server returns for an
  *     unknown route.
+ *
+ * NOTABLE PLANES (additive 2026-11-21, scoring v11, going forward only).
+ * The app sends `notableClaim: true` for a catch it showed as notable (the
+ * star came from GET /v1/aircraft). The claim is only a request: the server
+ * pays the +50% bonus and freezes `notable_kind`/`notable_name` on the row
+ * when its OWN directory (src/notable/) lists the airframe. No claim, no
+ * bonus, so app versions before 1.2.7 and every catch already stored are
+ * untouched. `notable` on the POST response and on each GET item is what the
+ * row stores: `{ kind, label, name? }` or an explicit `null`, always present
+ * (the app reads a MISSING key as "this server predates notable planes").
+ * GET /v1/aircraft differs: there the key is omitted for an ordinary plane.
  *
  * Server-side resolution: the icao24 is looked up in the metadata store →
  * typecode → rarity → points. The client sends NO points/rarity (deliberately);
@@ -75,6 +89,7 @@ import { resolveDevice } from "../identity/auth.js";
 import { ipKey } from "../identity/clientIp.js";
 import type { RateLimiter } from "../identity/rateLimiter.js";
 import type { CatchStore, IdentityStore } from "../identity/store.js";
+import type { NotableLookup } from "../notable/mapping.js";
 import type { RouteResolver } from "../providers/adsblolRoutes.js";
 
 export interface CatchesRouteOptions {
@@ -136,6 +151,11 @@ export interface CatchesRouteOptions {
    * verifies as incorrect — the catch itself is never blocked.
    */
   routeResolver?: RouteResolver;
+  /**
+   * The notable-planes directory, which confirms an upload's `notableClaim`.
+   * Omitted → no claim is ever confirmed.
+   */
+  notable?: NotableLookup;
   /** Injectable clock (unix seconds) for deterministic validation in tests. */
   nowSeconds?: () => number;
 }
@@ -512,6 +532,15 @@ export function registerCatchesRoute(app: FastifyInstance, opts: CatchesRouteOpt
       guess = { kind: g.kind, value };
     }
 
+    // ── Optional notable claim ──────────────────────────────────────────────
+    // Absent (every app before 1.2.7, and every ordinary catch) = no claim.
+    // A claim is confirmed against the server's own directory, so a forged
+    // one on an ordinary airframe earns nothing.
+    if (body.notableClaim !== undefined && typeof body.notableClaim !== "boolean") {
+      return reject("notableClaim must be a boolean");
+    }
+    const notable = body.notableClaim === true ? (opts.notable?.lookup(icao24) ?? null) : null;
+
     // ── Server-side scoring (typecode → rarity → points, regime-stamped) ────
     // First-of-type is server-authoritative (un-spoofable): resolve the typecode,
     // then check whether THIS device already holds a catch of it BEFORE inserting
@@ -565,6 +594,7 @@ export function registerCatchesRoute(app: FastifyInstance, opts: CatchesRouteOpt
       firstOfType,
       guess: guess ? { kind: guess.kind, correct: guessCorrect } : undefined,
       caughtAt: caughtAtDate,
+      notable: notable !== null,
     });
 
     // ── Instrumented anti-cheat (stored, never enforced) ────────────────────
@@ -609,6 +639,7 @@ export function registerCatchesRoute(app: FastifyInstance, opts: CatchesRouteOpt
       aircraftPositionTimestamp:
         aircraft?.positionTimestamp == null ? null : new Date(aircraft.positionTimestamp * 1000),
       validation,
+      notable,
     });
 
     // Post-upload side effects, scheduled AFTER the reply. A replay (the same
@@ -633,6 +664,12 @@ export function registerCatchesRoute(app: FastifyInstance, opts: CatchesRouteOpt
       typecode: result.typecode,
       firstOfType: result.firstOfType,
       guessCorrect: result.guessCorrect,
+      // Scoring v10. `points` above already includes the multi-catch bonus
+      // for the press as it stands now; the first row of a press reports 1.
+      pressSize: result.pressSize,
+      // Scoring v11. What the row stores: the object when the bonus is in
+      // `points`, null otherwise. A replay reports the ORIGINAL decision.
+      notable: result.notable,
       duplicate,
     });
   });

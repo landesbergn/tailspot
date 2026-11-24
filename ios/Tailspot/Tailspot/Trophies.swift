@@ -216,6 +216,10 @@ nonisolated struct TrophyProgressInputs: Sendable {
     // fresh installs and offline devices read the cached (or zero) values.
     var weeklyWins: Int             // weekly-champion crowns (server count)
     var everToppedAllTime: Bool     // ever held #1 on the all-time board
+    // Notable-airframe metrics (2026-11): from the server's flag stored on
+    // catch rows (`Catch.notableInfo`, NotablePlane.swift). Nothing to do
+    // with `Rarity.isNotable` (rare-or-better).
+    let notableAirframes: Int       // distinct icao24 carrying the flag
 
     init(
         totalCatches: Int,
@@ -258,7 +262,8 @@ nonisolated struct TrophyProgressInputs: Sendable {
         correctGuesses: Int = 0,
         bestGuessStreak: Int = 0,
         weeklyWins: Int = 0,
-        everToppedAllTime: Bool = false
+        everToppedAllTime: Bool = false,
+        notableAirframes: Int = 0
     ) {
         self.totalCatches = totalCatches
         self.uniqueAirframes = uniqueAirframes
@@ -301,6 +306,7 @@ nonisolated struct TrophyProgressInputs: Sendable {
         self.bestGuessStreak = bestGuessStreak
         self.weeklyWins = weeklyWins
         self.everToppedAllTime = everToppedAllTime
+        self.notableAirframes = notableAirframes
     }
 
     static let zero = TrophyProgressInputs(
@@ -556,6 +562,14 @@ nonisolated enum Trophies {
                     tiers: [.init(tier: .gold, at: 5)],
                     progress: { $0.heritageCatches }),
 
+        // ── Notable airframes (2026-11) ──
+        // Star Sighting: catch a plane the server flags as notable (a head
+        // of state's transport, a team charter, ...). One trophy, a feat.
+        // Hard on purpose: most skies never see one.
+        Achievement(id: "notable", title: "Star Sighting", summary: "Catch a notable plane",
+                    tiers: [.init(tier: .gold, at: 1)],
+                    progress: { $0.notableAirframes }),
+
         // ── Rarity one-shots ──
         Achievement(id: "firstrare", title: "First Rare", summary: "Catch a rare-tier plane",
                     tiers: [.init(tier: .gold, at: 1)],
@@ -764,10 +778,14 @@ nonisolated enum Trophies {
         // (time, correct) for ANSWERED bonus rounds only — skipped/never-
         // offered rounds leave guessCorrect nil and don't participate.
         var guessTimeline: [(Date, Bool)] = []
+        var notableAirframes = Set<String>()
         let calendar = Calendar(identifier: .gregorian)
 
         for c in catches {
             unique.insert(c.icao24)
+            if c.notableInfo != nil {
+                notableAirframes.insert(c.icao24)
+            }
             let r = c.resolvedRarity
             let t = c.resolvedType
             totalPoints += r.basePoints
@@ -944,7 +962,8 @@ nonisolated enum Trophies {
             correctGuesses: guessTimeline.filter(\.1).count,
             bestGuessStreak: bestGuessStreak(guessTimeline),
             weeklyWins: standing.weeklyWins,
-            everToppedAllTime: standing.everToppedAllTime
+            everToppedAllTime: standing.everToppedAllTime,
+            notableAirframes: notableAirframes.count
         )
     }
 

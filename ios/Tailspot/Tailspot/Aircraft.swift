@@ -75,6 +75,11 @@ nonisolated struct Aircraft: Identifiable, Equatable, Sendable {
     let originName: String?
     /// Human-readable destination airport/city ("London"). Same as `originName`.
     let destName: String?
+    /// Set when the server flags this exact airframe as notable (a head of
+    /// state's transport, a team charter, ...). nil for nearly every plane,
+    /// and on the replay path. See NotablePlane.swift.
+    /// `var` only so the Debug wrench override can stamp a copy.
+    var notable: NotablePlane?
 
     var id: String { icao24 }
 
@@ -113,7 +118,8 @@ nonisolated struct Aircraft: Identifiable, Equatable, Sendable {
         originIata: String? = nil,
         destIata: String? = nil,
         originName: String? = nil,
-        destName: String? = nil
+        destName: String? = nil,
+        notable: NotablePlane? = nil
     ) {
         self.icao24 = icao24
         self.callsign = callsign
@@ -134,6 +140,7 @@ nonisolated struct Aircraft: Identifiable, Equatable, Sendable {
         self.destIata = destIata
         self.originName = originName
         self.destName = destName
+        self.notable = notable
     }
 
     /// Heuristic: is this a small (GA-sized) airframe? US general-aviation

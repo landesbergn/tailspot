@@ -272,6 +272,34 @@ export const catches = pgTable(
     guessKind: text("guess_kind"),
     guessValue: text("guess_value"),
     guessCorrect: boolean("guess_correct").notNull().default(false),
+    /**
+     * How many distinct airframes this device caught in the SAME shutter press
+     * as this row, itself included (migration 0013, scoring v10). 1 = a lone
+     * catch. Rows of one press share `caught_at` exactly (the app stamps one
+     * instant on every row of a press), so the server derives this itself; the
+     * wire carries no press size. Drives the multi-catch bonus in the ONE
+     * canonical scorer. Kept current on INSERT (`reconcilePress` re-counts
+     * the press and re-scores its rows when a sibling arrives). A rescore
+     * re-counts too and RAISES a stale size (a press uploaded between the
+     * migration and the v10 deploy, or one whose reconcile failed), but never
+     * lowers one: a later delete of a sibling does not take the bonus back.
+     */
+    pressSize: integer("press_size").notNull().default(1),
+    /**
+     * Notable planes (migration 0014, scoring v11). Set at INSERT, and only
+     * when the uploading app claimed the catch as notable (`notableClaim`,
+     * which only 1.2.7+ sends, and only for a catch it showed as notable) AND
+     * the airframe was in the notable directory (src/notable/) at that moment.
+     * FROZEN like `first_of_type`: the scorer pays the bonus when
+     * `notable_kind` is non-null and never asks the directory again, so a
+     * later change to the list neither grants nor takes back a bonus, and
+     * every catch made before 1.2.7 stays as it was (both columns null).
+     * `notable_kind` is one of the six kinds in src/notable/mapping.ts (plain
+     * text, like `guess_kind`); `notable_name` is the operator or owner, when
+     * the list named one.
+     */
+    notableKind: text("notable_kind"),
+    notableName: text("notable_name"),
     /** When the client says it was caught. */
     caughtAt: timestamp("caught_at", { withTimezone: true }).notNull(),
     observerLat: doublePrecision("observer_lat").notNull(),

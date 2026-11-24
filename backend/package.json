@@ -16,6 +16,7 @@
     "ingest:faa": "npm run build && node dist/ingest/faa.js",
     "ingest:mictronics": "npm run build && node dist/ingest/mictronics.js",
     "rescore": "npm run build && node dist/catches/rescore.js",
+    "notable:snapshot": "npm run build && node dist/notable/snapshot.js",
     "device:disable": "npm run build && node dist/tools/disable-device.js",
     "streak:forgive": "npm run build && node dist/tools/forgive-streak-day.js"
   },

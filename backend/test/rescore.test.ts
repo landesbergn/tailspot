@@ -7,7 +7,10 @@
  * PGlite Postgres so the registry→typecode join and the UPDATE run for real.
  */
 
-import { eq } from "drizzle-orm";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { eq, sql } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { CURRENT_SCORING_VERSION } from "../src/catches/points.js";
 import { rescoreCatches } from "../src/catches/rescore.js";
@@ -25,6 +28,7 @@ describe("rescoreCatches", () => {
   const KNOWN = "bbb222";
 
   let uuidSeq = 0;
+  let caughtSeq = 0;
   const uuid = () => `00000000-0000-4000-8000-${String(++uuidSeq).padStart(12, "0")}`;
 
   async function insertCatch(opts: {
@@ -36,6 +40,8 @@ describe("rescoreCatches", () => {
     firstOfType?: boolean;
     guessKind?: string | null;
     guessCorrect?: boolean;
+    /** Frozen press size (defaults to the column default: a lone catch). */
+    pressSize?: number;
     /** Defaults PRE the 2026-08-13 route re-balance cutover (legacy +10% era). */
     caughtAt?: Date;
   }): Promise<string> {
@@ -55,7 +61,11 @@ describe("rescoreCatches", () => {
         // Frozen guess verdict (defaults mirror the columns: no guess).
         guessKind: opts.guessKind ?? null,
         guessCorrect: opts.guessCorrect ?? false,
-        caughtAt: opts.caughtAt ?? new Date("2026-06-11T00:00:00Z"),
+        pressSize: opts.pressSize ?? 1,
+        // Staggered a second apart: the rescore re-counts presses, and two
+        // airframes sharing a (device, instant) would read as a double.
+        caughtAt:
+          opts.caughtAt ?? new Date(Date.parse("2026-06-11T00:00:00Z") + ++caughtSeq * 1000),
         observerLat: 37.8,
         observerLon: -122.3,
       })
@@ -106,6 +116,123 @@ describe("rescoreCatches", () => {
     expect(after[0].rarity).toBe("epic");
     expect(after[0].typecode).toBe("A388");
     expect(after[0].scoringVersion).toBe(CURRENT_SCORING_VERSION);
+  });
+
+  describe("multi-catch bonus (scoring v10, retroactive)", () => {
+    const PRESS = new Date("2026-07-04T18:00:00Z");
+
+    it("pays a stored press size on the v9→v10 rescore and leaves lone catches of the same airframe alone", async () => {
+      // KNOWN resolves to C172 → common (base 10); FOREIGN to A388 → epic (100).
+      const double = await insertCatch({
+        icao24: FOREIGN,
+        typecode: "A388",
+        rarity: "epic",
+        points: 100,
+        scoringVersion: 9,
+        pressSize: 2,
+        caughtAt: PRESS,
+      });
+      const triple = await insertCatch({
+        icao24: FOREIGN,
+        typecode: "A388",
+        rarity: "epic",
+        points: 150,
+        scoringVersion: 9,
+        pressSize: 3,
+        firstOfType: true,
+      });
+      const lone = await insertCatch({
+        icao24: FOREIGN,
+        typecode: "A388",
+        rarity: "epic",
+        points: 100,
+        scoringVersion: 9,
+      });
+
+      const dry = await rescoreCatches(db, { dryRun: true });
+      expect(dry.scanned).toBe(3);
+      expect(dry.changed).toBe(2);
+      expect(dry.pointsAfter - dry.pointsBefore).toBe(25 + 50);
+
+      await rescoreCatches(db, {});
+      const pts = async (id: string) =>
+        (await db.select().from(catches).where(eq(catches.id, id)))[0];
+      expect((await pts(double)).points).toBe(125); // 100 + round(100*0.25)
+      expect((await pts(triple)).points).toBe(200); // 100 + first-of-type 50 + round(100*0.5)
+      expect((await pts(lone)).points).toBe(100);
+      expect((await pts(lone)).scoringVersion).toBe(CURRENT_SCORING_VERSION);
+      expect((await pts(double)).pressSize).toBe(2); // no sibling row: the stored size stands
+    });
+
+    it("re-counts a press the insert missed (uploaded between the migration and the deploy) and never lowers one", async () => {
+      // Two airframes at one instant, both still press_size 1 at v9.
+      const a = await insertCatch({
+        icao24: FOREIGN,
+        typecode: "A388",
+        rarity: "epic",
+        points: 100,
+        scoringVersion: 9,
+        caughtAt: PRESS,
+      });
+      const b = await insertCatch({
+        icao24: KNOWN,
+        typecode: "C172",
+        rarity: "common",
+        points: 10,
+        scoringVersion: 9,
+        caughtAt: PRESS,
+      });
+      // A stored triple whose siblings were deleted keeps its size.
+      const survivor = await insertCatch({
+        icao24: FOREIGN,
+        typecode: "A388",
+        rarity: "epic",
+        points: 150,
+        scoringVersion: 9,
+        pressSize: 3,
+      });
+
+      const dry = await rescoreCatches(db, { dryRun: true });
+      expect(dry.pointsAfter - dry.pointsBefore).toBe(25 + 3);
+      const row = async (id: string) =>
+        (await db.select().from(catches).where(eq(catches.id, id)))[0];
+      expect((await row(a)).pressSize).toBe(1); // a dry run writes nothing
+
+      await rescoreCatches(db, {});
+      expect((await row(a)).pressSize).toBe(2);
+      expect((await row(a)).points).toBe(125);
+      expect((await row(b)).pressSize).toBe(2);
+      expect((await row(b)).points).toBe(13); // 10 + round(10*0.25)
+      expect((await row(survivor)).pressSize).toBe(3);
+      expect((await row(survivor)).points).toBe(150);
+    });
+
+    it("migration 0013's backfill counts distinct airframes per (device, instant)", async () => {
+      // A real double, a restored duplicate row (same airframe, same instant),
+      // and a lone catch, all as they sit before the migration: press_size 1.
+      const a = await insertCatch({ icao24: FOREIGN, points: 100, caughtAt: PRESS });
+      const b = await insertCatch({ icao24: KNOWN, points: 10, caughtAt: PRESS });
+      const dupInstant = new Date("2026-07-05T18:00:00Z");
+      const d1 = await insertCatch({ icao24: KNOWN, points: 10, caughtAt: dupInstant });
+      const d2 = await insertCatch({ icao24: KNOWN, points: 10, caughtAt: dupInstant });
+      const lone = await insertCatch({ icao24: KNOWN, points: 10 });
+
+      const migration = readFileSync(
+        join(dirname(fileURLToPath(import.meta.url)), "../drizzle/0013_press-size.sql"),
+        "utf8",
+      );
+      const backfill = migration.split("--> statement-breakpoint")[1];
+      expect(backfill).toContain("UPDATE");
+      await db.execute(sql.raw(backfill));
+
+      const size = async (id: string) =>
+        (await db.select().from(catches).where(eq(catches.id, id)))[0].pressSize;
+      expect(await size(a)).toBe(2);
+      expect(await size(b)).toBe(2);
+      expect(await size(d1)).toBe(1);
+      expect(await size(d2)).toBe(1);
+      expect(await size(lone)).toBe(1);
+    });
   });
 
   it("re-scores a STORED first-of-type catch to base + 50% (the bonus floats with the re-derived base)", async () => {

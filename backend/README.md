@@ -87,7 +87,12 @@ degrees and returns a normalized, SI-unit snapshot of aircraft inside it:
       "velocityMps": 150.1,        // ground speed; null if unknown
       "trackDeg": 311.94,          // degrees true; null if unknown
       "onGround": false,
-      "positionTimestamp": 1781116525  // unix seconds of last position update; null if unknown
+      "positionTimestamp": 1781116525, // unix seconds of last position update; null if unknown
+      "notable": {                 // ONLY on a notable airframe (see "Notable planes"); additive
+        "kind": "celebrity",       // 2026-11-21, the key is absent for every other plane
+        "label": "Celebrity",
+        "name": "George Lucas"     // omitted when the source names nobody
+      }
     }
   ]
 }
@@ -128,6 +133,128 @@ Behind the route:
 Every JSON response over 1 KB is gzipped when the client sends
 `Accept-Encoding: gzip` (URLSession always does). The aircraft list shrinks
 about 5×.
+
+### Notable planes (`notable` on `/v1/aircraft` and `/v1/catches`)
+
+Some individual airframes are worth more than their type: a head-of-state
+transport, a celebrity's or a company's jet, a team plane, a warbird, a
+firefighting tanker. The API recognises them by ICAO hex and says so with one
+object, the same shape everywhere it appears:
+
+```jsonc
+"notable": { "kind": "celebrity", "label": "Celebrity", "name": "George Lucas" }
+"notable": { "kind": "special", "label": "Historic and special" }   // no name known
+```
+
+| `kind` | `label` (fixed) | What it covers |
+|---|---|---|
+| `government` | Head of state and government | Government, head-of-state and royal flights |
+| `celebrity` | Celebrity | Named individuals' aircraft |
+| `business` | Business jet | Corporate jets, business-jet operators, vanity registrations, and the jets of business magnates and their companies (upstream's `Oligarch`) |
+| `team` | Team plane | Sports team and club aircraft |
+| `special` | Historic and special | Warbirds and vintage types, display teams, one-offs (Beluga, Dreamlifter, NASA), airships and balloons, heavy-lift helicopters |
+| `working` | Special mission | Coast guard, aerial firefighting, survey, surveillance, contract air services, UN, Civil Air Patrol |
+
+Where it appears:
+
+| Route | Notable | Not notable |
+|---|---|---|
+| `GET /v1/aircraft`, each aircraft | the object | key **omitted** |
+| `POST /v1/catches`, the response | the object | `"notable": null` |
+| `GET /v1/catches`, each item | the object | `"notable": null` |
+
+- `/v1/aircraft` answers "is this airframe on the list?". The key is omitted
+  for ordinary planes (nearly all of a list of hundreds) and stamped on every
+  serve, including tile-cache hits.
+- The catch routes answer a different question: "was this **catch** recorded
+  as notable?". The key is always present, an object or an explicit `null`.
+  The app reads a missing key as "this server predates notable planes".
+
+**Going forward only: claim and confirm.** A catch is notable only if the app
+said so when it uploaded it and the server agreed:
+
+```jsonc
+// POST /v1/catches request, from an app that showed this catch as notable
+{ "catchUuid": "…", "icao24": "a4d2ab", …, "notableClaim": true }
+```
+
+- The app sends `notableClaim: true` only for a catch it recorded as notable
+  at catch time (it saw `notable` on `/v1/aircraft`). App versions before
+  1.2.7 never send it.
+- The claim is a request, not a verdict. The server looks the airframe up in
+  its own directory; if it is listed, the row stores `notable_kind` and
+  `notable_name` (migration 0014) and the points include the bonus. A claim on
+  an unlisted airframe earns nothing and the response says `"notable": null`.
+- No claim, no bonus. Every catch stored before this shipped, and every catch
+  from an older app version, has both columns null and stays that way.
+- The stored decision is frozen, like `first_of_type`. A replay
+  (`200`, `duplicate: true`) and `GET /v1/catches` report what the row stores.
+  Regenerating the snapshot later never adds or removes a bonus on a catch
+  that already exists.
+
+```jsonc
+// POST /v1/catches response, an ordinary catch
+{ "catchId": "…", "points": 75, "rarity": "rare", "typecode": "B738", "firstOfType": true,
+  "guessCorrect": false, "pressSize": 1, "notable": null, "duplicate": false }
+```
+
+**Scoring (version 11).** A notable catch earns +50% of its base, additive
+with first-of-type, the guess bonuses and the multi-catch bonus
+(`notableBonus` in `src/catches/points.ts`; the fraction is `notable` in
+`scoring-bonuses.json`). The scorer is told whether the catch is notable (the
+confirmed claim at upload, the stored `notable_kind` everywhere else) and
+never looks the airframe up itself.
+
+**Source and licence.** [plane-alert-db](https://github.com/sdr-enthusiasts/plane-alert-db),
+a community-maintained CSV of about 17,000 airframes, under the Open Database
+License 1.0. Attribution is in `data/NOTICE.md`. About 5,100 of its rows pass
+our rules. `src/notable/mapping.ts` holds those rules and is the only place
+they live:
+
+- Each upstream `Category` maps to one kind through an allow-list. **A
+  category that is not on the list is excluded**, so a category upstream adds
+  later changes nothing until someone maps it.
+- Military and police rows (`#CMPG` of `Mil` or `Pol`) are dropped, except in
+  the government categories, `Historic` and `Aerobatic Teams`.
+- `name` is the upstream Operator, omitted for placeholders such as
+  "Private". It comes from a file anyone can send a pull request to, so it is
+  cleaned before it is served: control characters, bidirectional overrides
+  (U+202A–202E, U+2066–2069) and zero-width characters are stripped,
+  whitespace is collapsed and trimmed, and the result is capped at 60 code
+  points (never cutting a surrogate pair). The upstream tag columns and the
+  raw category never leave the server: they are the maintainers' in-jokes and
+  editorial labels.
+
+**Few moving parts.** The list itself has no table, no ingest step and no
+network call. At boot the server loads the committed snapshot,
+`data/notable-airframes.json` (already filtered and mapped), and serves it
+until the next deploy. If the file is missing or corrupt the server logs an
+error and starts with nothing notable. The only database change is the two
+nullable columns on `catches` (migration 0014).
+
+**Regenerating the snapshot.** The list changes slowly. Regenerate it when a
+release train opens, or when the rules in `mapping.ts` change:
+
+```sh
+npm run notable:snapshot                       # fetch upstream, rewrite data/notable-airframes.json
+npm run notable:snapshot -- --input file.csv   # from a saved copy
+```
+
+Read the diff before committing it: every added line is a name that will
+appear in the app, and a category that lost most of its rows means upstream
+renamed something. The Docker image copies `data/notable-airframes.json`, so
+a new snapshot reaches production with the next deploy. It affects only
+catches made after that deploy.
+
+**Rescore.** Scoring version 11 needs **no rescore**. `npm run rescore` reads
+each row's stored `notable_kind` the way it reads `first_of_type`, so a pass
+over existing rows restamps their version and moves no points. Apply migration
+0014 **before** deploying the server (the server reads and writes the new
+columns; without them every catch upload and Hangar restore returns 500, for
+every app version). Once a notable catch exists, roll forward rather than back:
+the previous server knows nothing of the flag and would drop the bonus the next
+time it re-scores that row. Keep "server before client" for TestFlight builds
+too, or a phone shows a bonus the server never paid.
 
 ### `GET /v1/metadata/{icao24}` (WP 1.4)
 
@@ -788,6 +915,12 @@ Primary region: `sjc` (San Jose, CA). See `fly.toml` for machine/VM config and
 health-check settings. Secrets (Postgres URL, adsb.lol key, etc.) are set via
 `fly secrets set KEY=value` — never committed to the repo. `DATABASE_URL` is the
 Fly managed-Postgres connection string.
+
+A deploy that raises `CURRENT_SCORING_VERSION` (`src/catches/points.ts`) is
+not finished until the rescore has run: `npm run rescore -- --dry-run`, read
+the delta, then `npm run rescore`. Version 11 (notable planes) is the
+exception: it applies to new catches only, so it needs migration 0014 and no
+rescore.
 
 After provisioning Postgres and setting `DATABASE_URL`, apply migrations and seed
 the metadata tables once (then on each refresh):

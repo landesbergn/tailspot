@@ -30,3 +30,12 @@ so the server can pick the right leg of a multi-leg filing and reject a stale
 one (a one-sided as-observed route is moment data and is never touched); and a
 stored route whose corridor is nowhere near the catch is cleared by
 `CatchBackfill.clearImplausibleRoutes` back into the fill pool.
+The notable-airframe flag (`notableKind` / `notableLabel` / `notableName`,
+read through `notableInfo`) is set in one place only: from the live feed at
+the press. A catch made before the feature never gains it (there is no
+backfill). The upload sends it as `notableClaim`, and the upload response
+confirms or clears it. That response has three states (`NotableVerdict`): an
+object sets the flag, an explicit JSON null clears it (the server paid no
+bonus), and a missing key (a server older than the feature) leaves the row
+alone. A Hangar restore reads back what the server stored. Those writers
+touch only these three fields.
