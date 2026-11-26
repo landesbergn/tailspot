@@ -739,12 +739,14 @@ body:has(.hero) .site-footer { margin-top: 0; padding: 1.5rem 1.75rem; }
 
 /* ── Challenge invite (invite.html, served at /c/CODE) ──
    What someone sees when they open an invite inside Instagram or another
-   app's built-in browser. One narrow column: the code, then the two ways
-   forward. */
+   app's built-in browser. Sized to fit one in-app browser screen (about
+   393 × 650 pt on an iPhone 16, under Instagram's toolbars): the name, the
+   button that opens the app, the code, the App Store. */
+.invite-body .site-nav { padding: 0.9rem 1.5rem; }
 .invite-page {
   max-width: 30rem;
   margin: 0 auto;
-  padding: 3.5rem 1.75rem 4rem;
+  padding: 2rem 1.5rem 2.5rem;
   text-align: center;
   display: flex;
   flex-direction: column;
@@ -760,59 +762,68 @@ body:has(.hero) .site-footer { margin-top: 0; padding: 1.5rem 1.75rem; }
   color: var(--cyan);
 }
 .invite-title {
-  font-size: 1.6rem;
-  line-height: 1.25;
-  margin: 0.6rem 0 0.5rem;
+  font-size: 1.75rem;
+  line-height: 1.2;
+  margin: 0.5rem 0 0;
   text-wrap: balance;
+  overflow-wrap: anywhere;
 }
-.invite-msg { color: var(--text-dim); }
-.invite-tried {
-  margin-top: 1.5rem;
-  padding: 0.75rem 1rem;
+.invite-meta {
+  margin-top: 0.5rem;
+  color: var(--text-dim);
+  font-size: 0.9rem;
+}
+.invite-note {
+  margin-top: 1.25rem;
+  padding: 0.6rem 0.9rem;
   border: 1px solid var(--gold);
   border-radius: 6px;
   color: var(--gold);
   font-size: 0.9rem;
 }
+.invite-open, .invite-store {
+  display: block;
+  width: 100%;
+}
+.invite-open { margin-top: 1.75rem; }
 .invite-code-block {
   width: 100%;
-  margin-top: 1.75rem;
-  padding: 1.25rem 1rem;
+  margin-top: 1.25rem;
+}
+.invite-code-label {
+  display: block;
+  color: var(--text-dim2);
+  font-size: 0.85rem;
+  margin-bottom: 0.5rem;
+}
+.invite-code-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.6rem 0.6rem 0.6rem 1.1rem;
   background: var(--bg-surface);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.9rem;
+  border-radius: 8px;
 }
 .invite-code {
   font-family: var(--mono);
-  font-size: 2rem;
+  font-size: 1.6rem;
   font-weight: 700;
   letter-spacing: 0.2em;
-  /* letter-spacing trails the last glyph; pull it back so the code centres. */
-  margin-right: -0.2em;
   -webkit-user-select: all;
   user-select: all;
 }
 /* A real <button>, which .btn-ghost (written for links) doesn't fully reset. */
-.invite-code-block .btn {
+.invite-code-row .btn {
   background: transparent;
   cursor: pointer;
   -webkit-appearance: none;
   appearance: none;
 }
-.invite-help { color: var(--text-dim2); font-size: 0.85rem; line-height: 1.5; }
-.invite-actions {
-  width: 100%;
-  margin-top: 1.5rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
+.invite-store { margin-top: 0.75rem; }
 .invite-safari {
-  margin-top: 1.25rem;
+  margin-top: 1rem;
   color: var(--text-dim);
   font-size: 0.85rem;
 }
