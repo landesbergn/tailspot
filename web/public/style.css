@@ -736,3 +736,83 @@ body:has(.hero) .site-footer { margin-top: 0; padding: 1.5rem 1.75rem; }
   .badge-link:hover, .badge-link:active,
   a.btn-primary:hover, .btn:active { transform: none; }
 }
+
+/* ── Challenge invite (invite.html, served at /c/CODE) ──
+   What someone sees when they open an invite inside Instagram or another
+   app's built-in browser. One narrow column: the code, then the two ways
+   forward. */
+.invite-page {
+  max-width: 30rem;
+  margin: 0 auto;
+  padding: 3.5rem 1.75rem 4rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+/* .btn sets display, which would otherwise beat the hidden attribute. */
+.invite-page [hidden] { display: none; }
+.invite-label {
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--cyan);
+}
+.invite-title {
+  font-size: 1.6rem;
+  line-height: 1.25;
+  margin: 0.6rem 0 0.5rem;
+  text-wrap: balance;
+}
+.invite-msg { color: var(--text-dim); }
+.invite-tried {
+  margin-top: 1.5rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--gold);
+  border-radius: 6px;
+  color: var(--gold);
+  font-size: 0.9rem;
+}
+.invite-code-block {
+  width: 100%;
+  margin-top: 1.75rem;
+  padding: 1.25rem 1rem;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.9rem;
+}
+.invite-code {
+  font-family: var(--mono);
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  /* letter-spacing trails the last glyph; pull it back so the code centres. */
+  margin-right: -0.2em;
+  -webkit-user-select: all;
+  user-select: all;
+}
+/* A real <button>, which .btn-ghost (written for links) doesn't fully reset. */
+.invite-code-block .btn {
+  background: transparent;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.invite-help { color: var(--text-dim2); font-size: 0.85rem; line-height: 1.5; }
+.invite-actions {
+  width: 100%;
+  margin-top: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.invite-safari {
+  margin-top: 1.25rem;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+}
