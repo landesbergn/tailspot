@@ -3,6 +3,10 @@ name: tests
 on:
   pull_request:
     branches: [main]
+  # The backstop for the web-only skip below: every merge to main runs the
+  # full suite, whatever it touched.
+  push:
+    branches: [main]
 
 # Least privilege for GITHUB_TOKEN: without this block the token defaults to
 # the repo-wide setting (write on many scopes), which is more than a checkout
@@ -10,18 +14,30 @@ on:
 permissions:
   contents: read
 
-# Newer pushes to the same PR cancel in-flight runs.
+# Newer pushes to the same PR cancel in-flight runs. Each push to main gets
+# its own group (keyed by commit), because GitHub cancels a PENDING run in a
+# shared group whenever a newer one queues, even with cancel-in-progress off.
+# So every merge gets its own result, and a red main names the commit.
 concurrency:
-  group: tests-${{ github.head_ref || github.ref }}
-  cancel-in-progress: true
+  group: tests-${{ github.event_name == 'push' && github.sha || github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-# One job, on EVERY PR — deliberately. A path-gated variant (skip the
-# simulator suite when the diff can't touch the app) shipped 2026-08-15 and
-# was reverted the same day: the skip's failure mode (classifier bug →
-# green required check with zero tests run) is silent, and Noah preferred
-# paying ~10 min on web-/backend-only PRs over carrying that risk. Don't
-# re-propose skipping without a loud backstop (e.g. a full run on every
-# push to main).
+# The iOS suite is skipped on a PR whose every changed file is under web/ or
+# is a top-level Markdown doc (CHANGELOG, PLAN, README...). Noah asked for
+# this on 2026-11-26 to speed up website PRs.
+#
+# History: a path-gated skip shipped 2026-08-15 and was reverted the same day,
+# because its failure mode was silent: a classifier bug would give a green
+# required check with zero tests run. This version answers that three ways:
+#   1. The rule is an allowlist that fails toward running. Anything outside
+#      web/ and top-level *.md, an empty file list, or a git error runs the
+#      full suite.
+#   2. A skip is loud: the job summary and a notice say the iOS suite was
+#      skipped and list the files that allowed it.
+#   3. The backstop: every push to main runs the full suite (the push
+#      trigger above). If a skip ever hid a break, main goes red on the next
+#      merge and GitHub emails whoever merged.
+# The required check keeps its name ("Unit tests") and always reports.
 jobs:
   test:
     name: Unit tests
@@ -33,6 +49,50 @@ jobs:
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history so the scope step can diff the PR against its base.
+          fetch-depth: 0
+
+      # Decides whether this run needs the iOS suite. See the comment at the
+      # top of the file. Defaults to running it; only a PR whose changed
+      # files are ALL under web/ or top-level *.md skips.
+      - name: Decide whether the iOS suite runs
+        id: scope
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          ios=true
+          if [ "$EVENT" = "pull_request" ]; then
+            # --no-renames: a file moved from ios/ to web/ must list its old
+            # path too, or the move would look web-only.
+            if files=$(git diff --name-only --no-renames "$BASE...$HEAD"); then
+              # Files outside the allowlist. `|| true` because grep exits 1
+              # when it prints nothing, which is the skip case.
+              outside=$(printf '%s\n' "$files" | grep -v -E '^web/|^[^/]+\.md$' || true)
+              if [ -n "$files" ] && [ -z "$outside" ]; then
+                ios=false
+              fi
+            else
+              echo "::warning::Could not list the changed files; running the full suite."
+            fi
+          fi
+          echo "ios=$ios" >> "$GITHUB_OUTPUT"
+          if [ "$ios" = false ]; then
+            echo "::notice title=iOS suite skipped::Every changed file is under web/ or a top-level Markdown doc. The full suite runs again when this merges to main."
+            {
+              echo "## iOS suite skipped"
+              echo
+              echo "Every changed file is under \`web/\` or is a top-level Markdown doc, so the simulator tests did not run. The full suite runs on the merge to \`main\`."
+              echo
+              echo "Changed files:"
+              echo
+              printf '%s\n' "$files" | sed 's/^/- `/; s/$/`/'
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Running the full iOS suite ($EVENT)."
+          fi
 
       # Seconds, and stdlib-only: checks that tools/generate-aircraft-types.py
       # and the bundled AircraftTypes.json agree (tiers, types, override
@@ -48,6 +108,7 @@ jobs:
       # upgrades. If the runner image lacks this version the job fails
       # loudly here (better than silent drift) — bump or wait for the image.
       - name: Select Xcode (pinned to local dev version)
+        if: steps.scope.outputs.ios == 'true'
         uses: maxim-lobanov/setup-xcode@v1
         with:
           xcode-version: '26.6'
@@ -62,11 +123,13 @@ jobs:
       # xcodebuild is harmless (booting an already-booting device is a no-op
       # error).
       - name: Pre-boot simulator (overlaps boot with build)
+        if: steps.scope.outputs.ios == 'true'
         run: nohup xcrun simctl boot 'iPhone 17' >/dev/null 2>&1 || true
 
       # Prints the toolchain + the simulators this runner image actually
       # has, so if 'iPhone 17' is absent the log tells us what to switch to.
       - name: Show toolchain
+        if: steps.scope.outputs.ios == 'true'
         run: |
           xcodebuild -version
           xcrun simctl list devices available | grep -i iphone || true
@@ -84,6 +147,7 @@ jobs:
       # clone boot on a fresh runner, so the flag stays. It does mean every
       # fixed sleep in a test is wall time here.
       - name: Run TailspotTests
+        if: steps.scope.outputs.ios == 'true'
         run: |
           set -o pipefail
           xcodebuild test \

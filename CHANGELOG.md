@@ -5,13 +5,20 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
-## 2026-11-26 — Invite page shows the challenge and fits one screen (branch `web/invite-page-polish`)
+## 2026-11-26 — CI skips the iOS suite on web-only PRs, with a full run on main (branch `ci/skip-ios-tests-web-only`)
+
+- Noah asked for faster CI on website PRs. A PR whose every changed file is under `web/` or is a top-level Markdown doc no longer runs the simulator suite; anything else, including backend-only PRs, runs it as before.
+- This revisits the path-gated skip reverted on 2026-08-15 ([PR #191](https://github.com/landesbergn/tailspot/pull/191)), whose risk was a silent green check with no tests run. The new version: the rule is an allowlist that falls back to running (an empty file list or a git error runs everything); a skip posts a notice and a job summary listing the files; and every push to `main` now runs the full suite, so a skip that hid a break turns `main` red on the merge.
+- The required check keeps its name, **Unit tests**, and still reports on every PR. Each push to `main` runs in its own concurrency group, so a later merge can't cancel an earlier one's run and each merge gets its own result. Renames are listed under both paths (`--no-renames`), so moving a file out of `ios/` into `web/` still runs the suite.
+- The rule was tested locally under bash and zsh against web-only, mixed, docs, workflow and empty changes. An early version that used `! pipeline` gave the wrong answer under zsh for a mixed web and iOS change; it was rewritten to read the same in any shell.
+
+## 2026-11-26 — Invite page shows the challenge and fits one screen ([PR #444](https://github.com/landesbergn/tailspot/pull/444), deployed)
 
 - After Noah's first Instagram test of [PR #442](https://github.com/landesbergn/tailspot/pull/442) (the page appeared): the title is now the challenge's own name, with a line under it for the creator, how many have joined and when it ends ("From @noah · 4 of 10 in · Ends in 23h"). It comes from the existing public `GET /v1/invites/:code/preview`, so there is no backend change.
 - Copy cut: the tagline and the "Have Tailspot? Open it, go to Challenges..." help text are gone. The code sits in one row with its Copy button under "Or join with code".
 - The page now fits one Instagram browser screen (rendered at 393 × 650): Open in Tailspot comes first, then the code, then Get Tailspot.
 - Ended or cancelled challenges show a note and keep only Get Tailspot; a full one shows a note. If the preview request fails, the generic title stays and the rest works.
-- Web only. Not verified yet: the real page in Instagram, and whether Open in Tailspot opens the app.
+- Deployed to tailspot-www as release v32 (rollback target v31) before the merge, at Noah's request to test it in Instagram; the merged `web/` files match production. Web only. Not verified yet: the real page in Instagram, and whether Open in Tailspot opens the app.
 
 ## 2026-11-26 — Challenge invite links work inside Instagram ([PR #442](https://github.com/landesbergn/tailspot/pull/442), deployed)
 
