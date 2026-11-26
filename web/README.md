@@ -121,7 +121,8 @@ app shares:
   slash — so a code that could never exist (`/c/K7M4QD2O`, `/c/short`)
   falls through to the 404 page instead of a pointless App Store trip.
   The regex is **quoted** because nginx reads a bare `{6}` as the start of
-  a config block and refuses to start. There is no landing page for people.
+  a config block and refuses to start. There is no landing page for people,
+  except inside in-app browsers (below).
 - **Link previews of `/c/CODE`** — bots that fetch a link to draw its
   preview card (matched by user agent in the `$link_preview_bot` map:
   iMessage sends `facebookexternalhit … Twitterbot`, plus WhatsApp, Slack,
@@ -135,6 +136,32 @@ app shares:
   other app land here. Check with
   `curl -A 'facebookexternalhit/1.1' https://tailspot.app/c/ABCDEF` (expect
   200 HTML) versus plain `curl -sI` (expect the 302).
+
+- **In-app browsers on `/c/CODE`** — a link tapped inside Instagram,
+  Facebook, Threads, TikTok, Snapchat, X or LinkedIn opens in that app's own
+  web view (matched by user agent in the `$in_app_browser` map). iOS never
+  sees the tap, so the universal link cannot open Tailspot even when it is
+  installed, and Instagram's browser drops the 302 to the App Store: the
+  person taps the invite and nothing happens. These browsers get
+  `invite.html` as well, for its body. It reads the code from the path and
+  shows:
+  - **Open in Tailspot**, a link to the same `/c/CODE` on the *other*
+    associated host (`tailspot.app` ↔ `www.tailspot.app`). A universal link
+    only fires on a tap that crosses hosts, which is why both hosts are in
+    the entitlements and the association file must stay reachable on `www`.
+    The link carries `#tried`; if the app doesn't take it, the page reloads
+    from the other host and swaps the button for a note.
+  - **The code with a Copy button**, for Challenges → Join with code. This
+    is the path that cannot be blocked.
+  - **Get Tailspot on the App Store**, plus an `x-safari-https://` link
+    (iOS 17+) that reopens the listing in Safari if the in-app browser
+    refuses to.
+
+  Check with
+  `curl -A 'Mozilla/5.0 (iPhone) Instagram 390.0' https://tailspot.app/c/ABCDEF`
+  (expect 200 HTML). In-app browser behaviour changes with app updates, so
+  the real test is a link in an Instagram story or DM on a phone, with and
+  without Tailspot installed.
 
 `.well-known` is a dot-directory, which `COPY public/ /usr/share/nginx/html/`
 in the Dockerfile does include (a directory source copies its contents,
