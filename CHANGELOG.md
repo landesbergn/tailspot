@@ -5,6 +5,13 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-11-26 — CI skips the iOS suite on web-only PRs, with a full run on main (branch `ci/skip-ios-tests-web-only`)
+
+- Noah asked for faster CI on website PRs. A PR whose every changed file is under `web/` or is a top-level Markdown doc no longer runs the simulator suite; anything else, including backend-only PRs, runs it as before.
+- This revisits the path-gated skip reverted on 2026-08-15 ([PR #191](https://github.com/landesbergn/tailspot/pull/191)), whose risk was a silent green check with no tests run. The new version: the rule is an allowlist that falls back to running (an empty file list or a git error runs everything); a skip posts a notice and a job summary listing the files; and every push to `main` now runs the full suite, so a skip that hid a break turns `main` red on the merge.
+- The required check keeps its name, **Unit tests**, and still reports on every PR. Runs on `main` are no longer cancelled by the next merge, so each merge gets its own result.
+- The rule was tested locally under bash and zsh against web-only, mixed, docs, workflow and empty changes. An early version that used `! pipeline` gave the wrong answer under zsh for a mixed web and iOS change; it was rewritten to read the same in any shell.
+
 ## 2026-11-26 — Challenge invite links work inside Instagram ([PR #442](https://github.com/landesbergn/tailspot/pull/442), deployed)
 
 - A challenge invite (`tailspot.app/c/CODE`) tapped inside Instagram did nothing. Its in-app browser never hands the tap to iOS, so the universal link can't open Tailspot, and it drops the 302 to the App Store.

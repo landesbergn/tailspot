@@ -77,10 +77,14 @@ user, so merge freely and often.
 - One feature per branch, short-lived — merge in days, not weeks. Long-lived
   branches are the main way a solo dev accidentally ships an untested batch.
 - `git push -u origin <branch>` then `gh pr create --fill --base main`.
-- GitHub Actions runs `TailspotTests` on every PR — deliberately including
-  web-/backend-only ones (a path-gated skip was tried and reverted 2026-08-15;
-  see the comment atop `tests.yml`). The **Unit tests** check must pass before
-  merge. Branch protection enforces PR + green check for everyone, admins
+- GitHub Actions runs `TailspotTests` on every PR, except one whose every
+  changed file is under `web/` or is a top-level Markdown doc: there the
+  **Unit tests** check still runs and passes in about a minute, with a notice
+  and job summary saying the iOS suite was skipped (since 2026-11-26). The
+  backstop is a full run on every push to `main`, so a red `main` is the
+  signal that a skip hid something. Backend-only PRs still run the full
+  suite. History and reasoning: the comment atop `tests.yml`. The
+  **Unit tests** check must pass before merge. Branch protection enforces PR + green check for everyone, admins
   included. Backend PRs additionally run **Backend tests** (typecheck, lint,
   vitest) — that job only triggers on `backend/**` changes.
 - Prefer `gh pr merge --auto --squash --delete-branch`.
