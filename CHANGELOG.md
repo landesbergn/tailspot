@@ -12,6 +12,14 @@ Git history + PLAN.md §9 remain the authoritative record.
 - The required check keeps its name, **Unit tests**, and still reports on every PR. Each push to `main` runs in its own concurrency group, so a later merge can't cancel an earlier one's run and each merge gets its own result. Renames are listed under both paths (`--no-renames`), so moving a file out of `ios/` into `web/` still runs the suite.
 - The rule was tested locally under bash and zsh against web-only, mixed, docs, workflow and empty changes. An early version that used `! pipeline` gave the wrong answer under zsh for a mixed web and iOS change; it was rewritten to read the same in any shell.
 
+## 2026-11-26 — Invite page shows the challenge and fits one screen ([PR #444](https://github.com/landesbergn/tailspot/pull/444), deployed)
+
+- After Noah's first Instagram test of [PR #442](https://github.com/landesbergn/tailspot/pull/442) (the page appeared): the title is now the challenge's own name, with a line under it for the creator, how many have joined and when it ends ("From @noah · 4 of 10 in · Ends in 23h"). It comes from the existing public `GET /v1/invites/:code/preview`, so there is no backend change.
+- Copy cut: the tagline and the "Have Tailspot? Open it, go to Challenges..." help text are gone. The code sits in one row with its Copy button under "Or join with code".
+- The page now fits one Instagram browser screen (rendered at 393 × 650): Open in Tailspot comes first, then the code, then Get Tailspot.
+- Ended or cancelled challenges show a note and keep only Get Tailspot; a full one shows a note. If the preview request fails, the generic title stays and the rest works.
+- Deployed to tailspot-www as release v32 (rollback target v31) before the merge, at Noah's request to test it in Instagram; the merged `web/` files match production. Web only. Not verified yet: the real page in Instagram, and whether Open in Tailspot opens the app.
+
 ## 2026-11-26 — Challenge invite links work inside Instagram ([PR #442](https://github.com/landesbergn/tailspot/pull/442), deployed)
 
 - A challenge invite (`tailspot.app/c/CODE`) tapped inside Instagram did nothing. Its in-app browser never hands the tap to iOS, so the universal link can't open Tailspot, and it drops the 302 to the App Store.

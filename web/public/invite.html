@@ -40,7 +40,7 @@
   <link rel="stylesheet" href="/style.css">
   <script src="/analytics.js" defer></script>
 </head>
-<body>
+<body class="invite-body">
 
 <nav class="site-nav">
   <a class="wordmark" href="/"><img class="wordmark-icon" src="/img/app-icon.png" alt="" width="28" height="28">Tailspot</a>
@@ -48,24 +48,27 @@
 
 <main class="invite-page">
   <span class="invite-label">Challenge invite</span>
-  <h1 class="invite-title">You're invited to a Tailspot challenge</h1>
-  <p class="invite-msg">A plane-spotting race. Catch the most planes before time runs out.</p>
+  <!-- The challenge's own name replaces this once the preview loads. -->
+  <h1 class="invite-title" id="invite-title">Join my Tailspot challenge</h1>
+  <p class="invite-meta" id="invite-meta" hidden></p>
 
-  <!-- Shown by the script when the app didn't open from the button below. -->
-  <p class="invite-tried" id="invite-tried" hidden>This browser wouldn't hand the link to Tailspot. Join with the code instead.</p>
+  <!-- Set by the script: the challenge has ended or is full, or the app
+       didn't open from the button below. -->
+  <p class="invite-note" id="invite-note" hidden></p>
+
+  <a class="btn btn-primary btn-lg invite-open" id="invite-open" href="#" hidden>Open in Tailspot</a>
 
   <div class="invite-code-block" id="invite-code-block" hidden>
-    <span class="invite-code" id="invite-code"></span>
-    <button class="btn btn-ghost" id="invite-copy" type="button">Copy code</button>
-    <p class="invite-help">Have Tailspot? Open it, go to Challenges, tap Join with code.</p>
+    <span class="invite-code-label">Or join with code</span>
+    <div class="invite-code-row">
+      <span class="invite-code" id="invite-code"></span>
+      <button class="btn btn-ghost" id="invite-copy" type="button">Copy</button>
+    </div>
   </div>
 
-  <div class="invite-actions">
-    <a class="btn btn-primary btn-lg" id="invite-open" href="#" hidden>Open in Tailspot</a>
-    <a class="btn btn-ghost btn-lg" id="invite-store" href="https://apps.apple.com/app/apple-store/id6773470079?pt=119286625&amp;ct=Challenge%20Invite&amp;mt=8">Get Tailspot</a>
-  </div>
+  <a class="btn btn-ghost btn-lg invite-store" id="invite-store" href="https://apps.apple.com/app/apple-store/id6773470079?pt=119286625&amp;ct=Challenge%20Invite&amp;mt=8">Get Tailspot</a>
 
-  <a class="invite-safari" id="invite-safari" href="x-safari-https://apps.apple.com/app/apple-store/id6773470079?pt=119286625&amp;ct=Challenge%20Invite&amp;mt=8" hidden>App Store not opening? Try it in Safari</a>
+  <a class="invite-safari" id="invite-safari" href="x-safari-https://apps.apple.com/app/apple-store/id6773470079?pt=119286625&amp;ct=Challenge%20Invite&amp;mt=8" hidden>App Store not opening? Try Safari</a>
 </main>
 
 <script>
@@ -84,12 +87,16 @@
   if (!match) return;               // opened as /invite.html: App Store link only
   var code = match[1].toUpperCase();
 
+  var title = document.getElementById('invite-title');
+  var meta = document.getElementById('invite-meta');
+  var note = document.getElementById('invite-note');
+  var open = document.getElementById('invite-open');
   var block = document.getElementById('invite-code-block');
   var codeEl = document.getElementById('invite-code');
   var copy = document.getElementById('invite-copy');
-  var open = document.getElementById('invite-open');
-  var tried = document.getElementById('invite-tried');
   var safari = document.getElementById('invite-safari');
+
+  function showNote(text) { note.textContent = text; note.hidden = false; }
 
   codeEl.textContent = code;
   block.hidden = false;
@@ -97,9 +104,8 @@
   // "#tried" marks the hop: if the app didn't take the tap, the browser loads
   // this same page from the other host, and the fragment says so. Fragments
   // never reach the server and InviteCode.parse reads only host and path.
-  var alreadyTried = location.hash === '#tried';
-  if (alreadyTried) {
-    tried.hidden = false;
+  if (location.hash === '#tried') {
+    showNote("Tailspot didn't open from here.");
   } else {
     var otherHost = location.hostname === 'www.tailspot.app' ? 'tailspot.app' : 'www.tailspot.app';
     open.href = 'https://' + otherHost + '/c/' + code + '#tried';
@@ -110,10 +116,45 @@
   // App Store; some in-app browsers refuse to.
   if (/iPhone|iPad|iPod/.test(navigator.userAgent)) safari.hidden = false;
 
+  // The challenge's name and state. GET /v1/invites/:code/preview needs no
+  // auth but answers only allowlisted Origins (tailspot.app, www and the
+  // preview app; backend statsOriginsFromEnv). Any failure keeps the generic
+  // title: the code and buttons work without it.
+  function untilText(iso) {
+    var mins = Math.round((new Date(iso).getTime() - Date.now()) / 60000);
+    if (!(mins > 0)) return null;
+    if (mins < 60) return mins + 'm';
+    var hours = Math.round(mins / 60);
+    if (hours < 48) return hours + 'h';
+    return Math.round(hours / 24) + 'd';
+  }
+  fetch('https://api.tailspot.app/v1/invites/' + code + '/preview')
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (p) {
+      if (!p || !p.name) return;
+      title.textContent = p.name;
+      document.title = p.name + ' · Tailspot';
+      if (p.status === 'cancelled' || p.status === 'finished') {
+        showNote(p.status === 'cancelled' ? 'This challenge was cancelled.' : 'This challenge has ended.');
+        open.hidden = true;
+        block.hidden = true;
+        document.getElementById('invite-store').style.marginTop = '1.25rem';
+        return;
+      }
+      var parts = [];
+      if (p.creatorHandle) parts.push('From @' + p.creatorHandle);
+      if (p.participantCount != null && p.maxParticipants) parts.push(p.participantCount + ' of ' + p.maxParticipants + ' in');
+      var when = p.status === 'upcoming' ? untilText(p.startsAt) : untilText(p.endsAt);
+      if (when) parts.push((p.status === 'upcoming' ? 'Starts in ' : 'Ends in ') + when);
+      if (parts.length) { meta.textContent = parts.join(' · '); meta.hidden = false; }
+      if (p.participantCount >= p.maxParticipants) showNote('This challenge is full.');
+    })
+    .catch(function () { /* keep the generic title */ });
+
   copy.addEventListener('click', function () {
     function done() {
       copy.textContent = 'Copied';
-      setTimeout(function () { copy.textContent = 'Copy code'; }, 2000);
+      setTimeout(function () { copy.textContent = 'Copy'; }, 2000);
     }
     function fallback() {
       // In-app browsers often block the async clipboard API.
