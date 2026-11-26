@@ -84,8 +84,8 @@ user, so merge freely and often.
   backstop is a full run on every push to `main`, so a red `main` is the
   signal that a skip hid something. Backend-only PRs still run the full
   suite. History and reasoning: the comment atop `tests.yml`. The
-  **Unit tests** check must pass before merge. Branch protection enforces PR + green check for everyone, admins
-  included. Backend PRs additionally run **Backend tests** (typecheck, lint,
+  **Unit tests** check must pass before merge. Branch protection enforces
+  PR + green check for everyone, admins included. Backend PRs additionally run **Backend tests** (typecheck, lint,
   vitest) — that job only triggers on `backend/**` changes.
 - Prefer `gh pr merge --auto --squash --delete-branch`.
 - Update `PLAN.md` §9 and `CHANGELOG.md` **in the feature's PR**, so code and
