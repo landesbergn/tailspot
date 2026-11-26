@@ -5,6 +5,14 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-11-26 — Invite page shows the challenge and fits one screen (branch `web/invite-page-polish`)
+
+- After Noah's first Instagram test of [PR #442](https://github.com/landesbergn/tailspot/pull/442) (the page appeared): the title is now the challenge's own name, with a line under it for the creator, how many have joined and when it ends ("From @noah · 4 of 10 in · Ends in 23h"). It comes from the existing public `GET /v1/invites/:code/preview`, so there is no backend change.
+- Copy cut: the tagline and the "Have Tailspot? Open it, go to Challenges..." help text are gone. The code sits in one row with its Copy button under "Or join with code".
+- The page now fits one Instagram browser screen (rendered at 393 × 650): Open in Tailspot comes first, then the code, then Get Tailspot.
+- Ended or cancelled challenges show a note and keep only Get Tailspot; a full one shows a note. If the preview request fails, the generic title stays and the rest works.
+- Web only. Not verified yet: the real page in Instagram, and whether Open in Tailspot opens the app.
+
 ## 2026-11-26 — Challenge invite links work inside Instagram ([PR #442](https://github.com/landesbergn/tailspot/pull/442), deployed)
 
 - A challenge invite (`tailspot.app/c/CODE`) tapped inside Instagram did nothing. Its in-app browser never hands the tap to iOS, so the universal link can't open Tailspot, and it drops the 302 to the App Store.

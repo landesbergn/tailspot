@@ -143,8 +143,11 @@ app shares:
   sees the tap, so the universal link cannot open Tailspot even when it is
   installed, and Instagram's browser drops the 302 to the App Store: the
   person taps the invite and nothing happens. These browsers get
-  `invite.html` as well, for its body. It reads the code from the path and
-  shows:
+  `invite.html` as well, for its body. It reads the code from the path,
+  fetches the challenge's name, creator, head count and end time from
+  `GET https://api.tailspot.app/v1/invites/CODE/preview` (no auth; answers
+  only allowlisted Origins, so a new site host needs adding to the backend's
+  `STATS_ALLOWED_ORIGINS`), and shows:
   - **Open in Tailspot**, a link to the same `/c/CODE` on the *other*
     associated host (`tailspot.app` ↔ `www.tailspot.app`). A universal link
     only fires on a tap that crosses hosts, which is why both hosts are in
@@ -156,6 +159,11 @@ app shares:
   - **Get Tailspot on the App Store**, plus an `x-safari-https://` link
     (iOS 17+) that reopens the listing in Safari if the in-app browser
     refuses to.
+
+  An ended, cancelled or full challenge gets a note instead; ended and
+  cancelled ones also lose the open button and the code. If the preview
+  request fails, the page keeps a generic title and everything else works.
+  It is sized to fit one Instagram browser screen (about 393 × 650 pt).
 
   Check with
   `curl -A 'Mozilla/5.0 (iPhone) Instagram 390.0' https://tailspot.app/c/ABCDEF`
