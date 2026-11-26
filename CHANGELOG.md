@@ -5,12 +5,13 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
-## 2026-11-26 — Challenge invite links work inside Instagram (branch `fix/instagram-invite-links`)
+## 2026-11-26 — Challenge invite links work inside Instagram ([PR #442](https://github.com/landesbergn/tailspot/pull/442), deployed)
 
 - A challenge invite (`tailspot.app/c/CODE`) tapped inside Instagram did nothing. Its in-app browser never hands the tap to iOS, so the universal link can't open Tailspot, and it drops the 302 to the App Store.
 - nginx now serves `invite.html` at `/c/CODE` to in-app browsers (Instagram, Facebook, Threads, TikTok, Snapchat, X, LinkedIn; the new `$in_app_browser` map) as well as to link-preview bots. Everyone else still gets the 302.
 - `invite.html` gained a body: an Open in Tailspot button that links to the other associated host (`tailspot.app` and `www.tailspot.app`), since a universal link only fires on a cross-host tap; the code with a Copy button for Challenges → Join with code; the App Store link; and on iPhone an `x-safari-https://` link to open the listing in Safari.
 - Web only. No app or backend change. The PR preview deploy confirmed the nginx config loads.
+- Merged as 05d0c7e and deployed to tailspot-www (release v31; rollback target v30) the same day, on Noah's go. Checked on both hosts: a plain request still gets the 302, an Instagram user agent gets the page, preview bots get the Open Graph tags, and the association file is still 200 JSON.
 - Not verified: a real tap in an Instagram story or DM, with and without Tailspot installed. Whether Instagram lets the cross-host button open the app is unknown; if it doesn't, the page falls back to the code.
 
 ## 2026-11-23 — Notable planes merged; 1.2.7 build 126 on TestFlight
